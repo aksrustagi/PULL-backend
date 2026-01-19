@@ -1,32 +1,11 @@
 /**
- * @pull/core
- *
- * Core business logic, workflows, and services for the PULL Super App.
+ * PULL Core - Shared business logic
  */
 
-// Workflows
-export * from "./workflows/kyc/account-creation.workflow";
-export * from "./workflows/trading/order-execution.workflow";
-export * from "./workflows/rewards/points-system.workflow";
-
 // Services
-export * from "./services/massive-client";
-export * from "./services/dome-intelligence";
+export * from "./services/kalshi";
+export * from "./services/massive";
 
-// Re-export types
-export type {
-  OnboardingInput,
-  OnboardingStatus,
-} from "./workflows/kyc/account-creation.workflow";
-
-export type {
-  OrderInput,
-  OrderStatus,
-} from "./workflows/trading/order-execution.workflow";
-
-export type {
-  PointsAction,
-  PointsEarned,
-  RedemptionInput,
-  RedemptionResult,
-} from "./workflows/rewards/points-system.workflow";
+// Utils
+export * from "./utils/validation";
+export * from "./utils/format";

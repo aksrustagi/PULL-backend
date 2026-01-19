@@ -1,0 +1,10 @@
+# Temporal dynamic configuration for development
+frontend.enableClientVersionCheck:
+  - value: true
+    constraints: {}
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}
+history.MaxAutoResetPoints:
+  - value: 10
+    constraints: {}

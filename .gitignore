@@ -41,26 +41,17 @@ temp/
 *.tmp
 *.temp
 
-# Contracts
-packages/contracts/cache/
-packages/contracts/artifacts/
-packages/contracts/typechain-types/
-
 # Convex
-convex/.generated/
+packages/db/convex/_generated/
+
+# Docker
+.docker/
 
 # Secrets (never commit)
 *.pem
 *.key
 secrets/
 credentials/
-
-# Mobile
-apps/mobile/.expo/
-apps/mobile/ios/Pods/
-*.ipa
-*.apk
-*.aab
 
 # Misc
 .cache/

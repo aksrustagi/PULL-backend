@@ -1,34 +1,18 @@
 {
+  "extends": "./packages/config/tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
     "baseUrl": ".",
     "paths": {
+      "@pull/types": ["packages/types/src"],
+      "@pull/types/*": ["packages/types/src/*"],
       "@pull/core": ["packages/core/src"],
       "@pull/core/*": ["packages/core/src/*"],
-      "@pull/api": ["packages/api/src"],
-      "@pull/api/*": ["packages/api/src/*"],
-      "@pull/shared": ["packages/shared/src"],
-      "@pull/shared/*": ["packages/shared/src/*"],
-      "@pull/contracts": ["packages/contracts/src"],
-      "@pull/contracts/*": ["packages/contracts/src/*"]
+      "@pull/db": ["packages/db"],
+      "@pull/db/*": ["packages/db/*"],
+      "@pull/ui": ["packages/ui/src"],
+      "@pull/ui/*": ["packages/ui/src/*"],
+      "@pull/config": ["packages/config"],
+      "@pull/config/*": ["packages/config/*"]
     }
   },
   "exclude": ["node_modules", "dist", ".next", "coverage"]

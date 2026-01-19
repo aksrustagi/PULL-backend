@@ -1,46 +1,47 @@
 {
-  "name": "pull-super-app",
+  "name": "pull-monorepo",
   "version": "0.1.0",
   "private": true,
-  "description": "PULL - The Super App for Trading, Messaging, and Rewards",
+  "description": "PULL - Super App for Prediction Markets, Trading, RWAs, Messaging & Email Intelligence",
   "author": "PULL Team",
   "license": "PROPRIETARY",
-  "workspaces": [
-    "packages/*",
-    "apps/*",
-    "convex"
-  ],
-  "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck",
-    "clean": "turbo run clean && rm -rf node_modules",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "db:push": "pnpm --filter convex run push",
-    "db:dev": "pnpm --filter convex run dev",
-    "temporal:dev": "temporal server start-dev",
-    "contracts:compile": "pnpm --filter @pull/contracts run compile",
-    "contracts:deploy": "pnpm --filter @pull/contracts run deploy",
-    "api:dev": "pnpm --filter @pull/api run dev",
-    "web:dev": "pnpm --filter @pull/web run dev",
-    "prepare": "husky install"
-  },
-  "devDependencies": {
-    "@changesets/cli": "^2.27.1",
-    "@types/node": "^20.11.0",
-    "husky": "^8.0.3",
-    "lint-staged": "^15.2.0",
-    "prettier": "^3.2.4",
-    "turbo": "^1.12.0",
-    "typescript": "^5.3.3"
-  },
+  "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">=8.0.0"
+    "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@8.14.0",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "dev:api": "turbo dev --filter=@pull/api",
+    "dev:web": "turbo dev --filter=@pull/web",
+    "dev:workers": "turbo dev --filter=@pull/workers",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint -- --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "clean": "turbo clean && rm -rf node_modules",
+    "db:push": "pnpm --filter @pull/db db:push",
+    "db:dev": "pnpm --filter @pull/db dev",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "temporal:dev": "temporal server start-dev",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "@types/node": "^20.11.0",
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
   "lint-staged": {
     "*.{ts,tsx}": [
       "eslint --fix",

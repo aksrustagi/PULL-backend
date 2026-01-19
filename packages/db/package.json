@@ -1,0 +1,22 @@
+{
+  "name": "@pull/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./convex/_generated/api.js",
+  "types": "./convex/_generated/api.d.ts",
+  "scripts": {
+    "dev": "convex dev",
+    "db:push": "convex deploy",
+    "codegen": "convex codegen",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "convex": "^1.10.0"
+  },
+  "devDependencies": {
+    "@pull/config": "workspace:*",
+    "@pull/types": "workspace:*",
+    "typescript": "^5.4.0"
+  }
+}
