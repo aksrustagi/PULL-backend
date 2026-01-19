@@ -1,0 +1,42 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "globalEnv": [
+    "NODE_ENV",
+    "CONVEX_URL",
+    "CONVEX_DEPLOY_KEY",
+    "TEMPORAL_ADDRESS",
+    "TEMPORAL_NAMESPACE"
+  ],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    },
+    "db:dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

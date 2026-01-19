@@ -1,0 +1,53 @@
+{
+  "name": "pull-super-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PULL - The Super App for Trading, Messaging, and Rewards",
+  "author": "PULL Team",
+  "license": "PROPRIETARY",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "convex"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "db:push": "pnpm --filter convex run push",
+    "db:dev": "pnpm --filter convex run dev",
+    "temporal:dev": "temporal server start-dev",
+    "contracts:compile": "pnpm --filter @pull/contracts run compile",
+    "contracts:deploy": "pnpm --filter @pull/contracts run deploy",
+    "api:dev": "pnpm --filter @pull/api run dev",
+    "web:dev": "pnpm --filter @pull/web run dev",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "@types/node": "^20.11.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.4",
+    "turbo": "^1.12.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.14.0",
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  }
+}

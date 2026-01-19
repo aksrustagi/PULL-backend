@@ -1,0 +1,31 @@
+{
+  "name": "@pull/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "build": "tsc",
+    "start": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.8.0",
+    "@hono/trpc-server": "^0.3.2",
+    "@hono/zod-validator": "^0.2.0",
+    "@temporalio/client": "^1.9.0",
+    "@trpc/server": "^10.45.0",
+    "convex": "^1.10.0",
+    "hono": "^4.0.0",
+    "inngest": "^3.12.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "bun-types": "^1.0.25",
+    "typescript": "^5.3.3"
+  }
+}

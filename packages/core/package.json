@@ -1,0 +1,43 @@
+{
+  "name": "@pull/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./workflows/*": {
+      "types": "./dist/workflows/*.d.ts",
+      "import": "./dist/workflows/*.js"
+    },
+    "./services/*": {
+      "types": "./dist/services/*.d.ts",
+      "import": "./dist/services/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.18.0",
+    "@temporalio/activity": "^1.9.0",
+    "@temporalio/client": "^1.9.0",
+    "@temporalio/worker": "^1.9.0",
+    "@temporalio/workflow": "^1.9.0",
+    "convex": "^1.10.0",
+    "inngest": "^3.12.0",
+    "openai": "^4.28.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
