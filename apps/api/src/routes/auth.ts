@@ -2,8 +2,11 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { hash, compare } from "bcryptjs";
+import * as jose from "jose";
 import { generateToken, verifyToken } from "../middleware/auth";
 import { convex, api } from "../lib/convex";
+import { blacklistToken } from "../lib/redis";
+import { resendClient } from "@pull/core/src/services/resend";
 import type { Env } from "../index";
 
 const app = new Hono<Env>();
@@ -32,6 +35,17 @@ const loginSchema = z.object({
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+    ),
 });
 
 // ============================================================================
@@ -463,45 +477,42 @@ app.post("/logout", async (c) => {
   const requestId = c.get("requestId");
   const authHeader = c.req.header("Authorization");
 
-  // TODO: Implement token blacklisting with Redis for enhanced security
-  // When implementing:
-  // 1. Add token to Redis blacklist with TTL matching token expiry
-  // 2. Check blacklist in authMiddleware before validating token
-  // 3. Consider using Redis SET with EXPIRE for efficient storage
-  // Example implementation:
-  // ```
-  // import { redis } from "../lib/redis";
-  // const token = authHeader?.substring(7);
-  // if (token) {
-  //   const payload = await verifyToken(token);
-  //   if (payload) {
-  //     const ttl = Math.max(0, payload.exp - Math.floor(Date.now() / 1000));
-  //     await redis.set(`blacklist:${token}`, "1", { ex: ttl });
-  //   }
-  // }
-  // ```
-
-  // For stateless JWT, logout is primarily handled client-side by removing the token
-  // Server acknowledges the request for a consistent API experience
-
-  // Optionally log the logout event if we have a valid token
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
-    const payload = await verifyToken(token);
 
-    if (payload) {
-      try {
-        await convex.mutation(api.auth.recordLoginAttempt, {
-          userId: payload.userId as any,
-          email: "", // We don't have email in the token payload
-          success: true,
-          ipAddress:
-            c.req.header("X-Forwarded-For") ?? c.req.header("X-Real-IP"),
-          userAgent: c.req.header("User-Agent"),
-        });
-      } catch {
-        // Non-critical, don't fail the logout
+    try {
+      // Decode the token to get the expiration time
+      const decoded = jose.decodeJwt(token);
+
+      if (decoded.exp) {
+        // Calculate TTL (time remaining until token expires)
+        const ttl = Math.max(0, decoded.exp - Math.floor(Date.now() / 1000));
+
+        if (ttl > 0) {
+          // Blacklist the token with TTL matching remaining expiry
+          await blacklistToken(token, ttl);
+        }
       }
+
+      // Log the logout event
+      const payload = await verifyToken(token);
+      if (payload) {
+        try {
+          await convex.mutation(api.auth.recordLoginAttempt, {
+            userId: payload.userId as any,
+            email: "", // We don't have email in the token payload
+            success: true,
+            ipAddress:
+              c.req.header("X-Forwarded-For") ?? c.req.header("X-Real-IP"),
+            userAgent: c.req.header("User-Agent"),
+          });
+        } catch {
+          // Non-critical, don't fail the logout
+        }
+      }
+    } catch (error) {
+      // Token might be invalid or already expired, but we still acknowledge logout
+      console.error(`[${requestId}] Error during logout:`, error);
     }
   }
 
@@ -545,30 +556,11 @@ app.post(
           expiresAt,
         });
 
-        // TODO: Send password reset email via Resend
-        // Implementation:
-        // ```
-        // import { Resend } from "resend";
-        //
-        // const resend = new Resend(process.env.RESEND_API_KEY);
-        //
-        // const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-        //
-        // await resend.emails.send({
-        //   from: "PULL <noreply@pull.app>",
-        //   to: email,
-        //   subject: "Reset your PULL password",
-        //   html: `
-        //     <h1>Password Reset Request</h1>
-        //     <p>Click the link below to reset your password. This link expires in 1 hour.</p>
-        //     <a href="${resetUrl}">Reset Password</a>
-        //     <p>If you didn't request this, you can safely ignore this email.</p>
-        //   `,
-        // });
-        // ```
+        // Send password reset email via Resend
+        await resendClient.sendPasswordResetEmail(email, resetToken);
 
         console.log(
-          `[${requestId}] Password reset requested for ${email}, token: ${resetToken}`
+          `[${requestId}] Password reset email sent to ${email}`
         );
       } else {
         // Log attempt for non-existent user (for security monitoring)
@@ -600,6 +592,90 @@ app.post(
         requestId,
         timestamp: new Date().toISOString(),
       });
+    }
+  }
+);
+
+/**
+ * Reset password with token
+ * POST /api/auth/reset-password
+ */
+app.post(
+  "/reset-password",
+  zValidator("json", resetPasswordSchema),
+  async (c) => {
+    const { token, password } = c.req.valid("json");
+    const requestId = c.get("requestId");
+
+    try {
+      // Validate the reset token in Convex
+      const validationResult = await convex.mutation(
+        api.auth.validatePasswordResetToken,
+        { token }
+      );
+
+      if (!validationResult.valid) {
+        return c.json(
+          {
+            success: false,
+            error: {
+              code: "INVALID_TOKEN",
+              message:
+                validationResult.error === "Token expired"
+                  ? "This password reset link has expired. Please request a new one."
+                  : validationResult.error === "Token already used"
+                  ? "This password reset link has already been used. Please request a new one."
+                  : "Invalid password reset token. Please request a new one.",
+            },
+            requestId,
+            timestamp: new Date().toISOString(),
+          },
+          400
+        );
+      }
+
+      // Hash the new password
+      const passwordHash = await hash(password, BCRYPT_SALT_ROUNDS);
+
+      // Update the user's password in Convex
+      await convex.mutation(api.auth.updatePassword, {
+        userId: validationResult.userId,
+        passwordHash,
+      });
+
+      // Optionally blacklist all existing sessions for this user
+      // This ensures the user has to log in again with the new password
+      // Note: This would require fetching all active tokens for the user
+      // For now, we just log the password change
+
+      console.log(
+        `[${requestId}] Password reset completed for user ${validationResult.userId}`
+      );
+
+      return c.json({
+        success: true,
+        data: {
+          message:
+            "Your password has been reset successfully. You can now log in with your new password.",
+        },
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error(`[${requestId}] Password reset error:`, error);
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "RESET_FAILED",
+            message: "Failed to reset password. Please try again.",
+          },
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+        500
+      );
     }
   }
 );

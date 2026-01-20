@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Env } from "../index";
 import { parseIntSafe } from "../utils/validation";
 import { convex, api } from "../lib/convex";
+import { startOrderWorkflow } from "../lib/temporal";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
 
 const app = new Hono<Env>();
@@ -117,12 +118,27 @@ app.post("/orders", zValidator("json", createOrderSchema), async (c) => {
       metadata: body.metadata,
     });
 
-    // TODO: Start Temporal workflow for order execution
-    // const workflowId = await temporalClient.workflow.start(executeOrder, {
-    //   taskQueue: "trading",
-    //   workflowId: `order-${orderId}`,
-    //   args: [{ orderId, userId: auth.userId }],
-    // });
+    // Start Temporal workflow for order execution
+    let workflowId: string | undefined;
+    try {
+      // Estimate cost for the workflow (use price * quantity for limit orders, or a placeholder for market orders)
+      const estimatedCost = body.price
+        ? body.price * body.quantity
+        : body.quantity * 100; // Placeholder for market orders
+
+      workflowId = await startOrderWorkflow(
+        orderId,
+        auth.userId,
+        estimatedCost
+      );
+    } catch (workflowError) {
+      // Log workflow error but don't fail the order creation
+      // The order is already persisted in Convex
+      console.error(
+        `Failed to start order workflow for order ${orderId}:`,
+        workflowError
+      );
+    }
 
     // Fetch the created order to return full details
     const order = await convex.query(api.orders.getById, { id: orderId });
@@ -131,6 +147,7 @@ app.post("/orders", zValidator("json", createOrderSchema), async (c) => {
       success: true,
       data: {
         id: orderId,
+        workflowId,
         ...order,
       },
       timestamp: new Date().toISOString(),

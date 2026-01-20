@@ -1,6 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import * as jose from "jose";
 import type { Env } from "../index";
+import { isTokenBlacklisted } from "../lib/redis";
 
 const JWT_SECRET_STRING = process.env.JWT_SECRET;
 if (!JWT_SECRET_STRING) {
@@ -47,6 +48,23 @@ export const authMiddleware = createMiddleware<Env>(async (c, next) => {
   }
 
   try {
+    // Check if token is blacklisted (logged out)
+    const blacklisted = await isTokenBlacklisted(token);
+    if (blacklisted) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "UNAUTHORIZED",
+            message: "Token has been revoked",
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        401
+      );
+    }
+
     const { payload } = await jose.jwtVerify(token, JWT_SECRET, {
       algorithms: ["HS256"],
     });

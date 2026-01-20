@@ -1,5 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import type { Env } from "../index";
+import { captureException } from "../lib/sentry";
 
 export class AppError extends Error {
   constructor(
@@ -22,11 +23,12 @@ export const errorHandler = createMiddleware<Env>(async (c, next) => {
     // Log error
     console.error(`[${requestId}] Error:`, error);
 
-    // Send to Sentry if configured
-    if (process.env.SENTRY_DSN) {
-      // TODO: Implement Sentry integration
-      // Sentry.captureException(error, { extra: { requestId } });
-    }
+    // Send to Sentry for error tracking
+    captureException(error as Error, {
+      requestId,
+      path: c.req.path,
+      method: c.req.method,
+    });
 
     if (error instanceof AppError) {
       return c.json(

@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { trpcServer } from "@hono/trpc-server";
 
+import { initSentry, captureException } from "./lib/sentry";
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import {
@@ -12,6 +13,7 @@ import {
   requestTiming,
 } from "./middleware/security";
 import { errorHandler } from "./middleware/error-handler";
+import { sentryMiddleware } from "./middleware/sentry";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { tradingRoutes } from "./routes/trading";
@@ -19,8 +21,13 @@ import { predictionsRoutes } from "./routes/predictions";
 import { rwaRoutes } from "./routes/rwa";
 import { rewardsRoutes } from "./routes/rewards";
 import { webhookRoutes } from "./routes/webhooks";
+import { adminRoutes } from "./routes/admin";
+import { docsRoutes } from "./routes/docs";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
+
+// Initialize Sentry for error tracking
+initSentry();
 
 // Types
 export type Env = {
@@ -46,13 +53,16 @@ app.use("*", securityHeaders);
 // 4. CSRF protection for state-changing requests
 app.use("*", csrfProtection);
 
-// 5. Error handler wraps entire app
+// 5. Sentry middleware for error tracking
+app.use("*", sentryMiddleware);
+
+// 6. Error handler wraps entire app
 app.use("*", errorHandler);
 
-// 6. Logging
+// 7. Logging
 app.use("*", logger());
 
-// 7. CORS configuration
+// 8. CORS configuration
 app.use(
   "*",
   cors({
@@ -76,6 +86,7 @@ app.use("/api/*", rateLimitMiddleware);
 app.route("/health", healthRoutes);
 app.route("/api/auth", authRoutes);
 app.route("/webhooks", webhookRoutes);
+app.route("/docs", docsRoutes);
 
 // Protected routes (require auth)
 app.use("/api/v1/*", authMiddleware);
@@ -83,6 +94,10 @@ app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
 app.route("/api/v1/rwa", rwaRoutes);
 app.route("/api/v1/rewards", rewardsRoutes);
+
+// Admin routes (require auth + admin role)
+app.use("/api/admin/*", authMiddleware);
+app.route("/api/admin", adminRoutes);
 
 // tRPC endpoint
 app.use(
@@ -111,7 +126,15 @@ app.notFound((c) => {
 
 // Error handler
 app.onError((err, c) => {
-  console.error(`[${c.get("requestId")}] Error:`, err);
+  const requestId = c.get("requestId");
+  console.error(`[${requestId}] Error:`, err);
+
+  // Capture error with Sentry
+  captureException(err, {
+    requestId,
+    path: c.req.path,
+    method: c.req.method,
+  });
 
   const status = "status" in err ? (err.status as number) : 500;
 
@@ -125,7 +148,7 @@ app.onError((err, c) => {
             ? "An unexpected error occurred"
             : err.message,
       },
-      requestId: c.get("requestId"),
+      requestId,
       timestamp: new Date().toISOString(),
     },
     status

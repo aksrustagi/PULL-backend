@@ -11,10 +11,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.5.3",
+    "@hono/trpc-server": "^0.3.0",
+    "@hono/zod-openapi": "^1.2.0",
+    "@hono/zod-validator": "^0.2.0",
     "@pull/db": "workspace:*",
     "@pull/types": "workspace:*",
-    "@hono/trpc-server": "^0.3.0",
-    "@hono/zod-validator": "^0.2.0",
+    "@sentry/node": "^7.100.0",
+    "@temporalio/client": "^1.14.1",
     "@trpc/server": "^10.45.0",
     "@upstash/ratelimit": "^1.0.0",
     "@upstash/redis": "^1.28.0",

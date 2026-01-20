@@ -1,6 +1,11 @@
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { Context } from "./context";
+import { convex, api } from "../lib/convex";
+
+// Type helper for Convex IDs - these are strings that reference documents
+// When Convex codegen is run, proper Id<TableName> types will be available
+type ConvexId<T extends string> = string & { __tableName: T };
 
 const t = initTRPC.context<Context>().create();
 
@@ -8,7 +13,7 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   if (!ctx.userId) {
-    throw new Error("Unauthorized");
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
   }
   return next({ ctx: { ...ctx, userId: ctx.userId } });
 });
@@ -22,8 +27,24 @@ export const appRouter = router({
   // User procedures
   user: router({
     me: protectedProcedure.query(async ({ ctx }) => {
-      // TODO: Fetch user from Convex
-      return { id: ctx.userId, email: "user@example.com" };
+      try {
+        const user = await convex.query(api.users.getById, {
+          id: ctx.userId as ConvexId<"users">,
+        });
+
+        if (!user) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        }
+
+        return user;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch user",
+          cause: error,
+        });
+      }
     }),
 
     updateProfile: protectedProcedure
@@ -34,8 +55,21 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // TODO: Update via Convex
-        return { success: true };
+        try {
+          await convex.mutation(api.users.update, {
+            id: ctx.userId as ConvexId<"users">,
+            displayName: input.displayName,
+            avatarUrl: input.avatarUrl,
+          });
+
+          return { success: true };
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to update profile",
+            cause: error,
+          });
+        }
       }),
   }),
 
@@ -49,11 +83,41 @@ export const appRouter = router({
           type: z.enum(["market", "limit"]),
           quantity: z.number().positive(),
           price: z.number().positive().optional(),
+          assetClass: z.enum(["crypto", "prediction", "rwa"]).default("crypto"),
+          timeInForce: z.enum(["day", "gtc", "ioc", "fok"]).default("gtc"),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // TODO: Create order via Convex + Temporal
-        return { orderId: crypto.randomUUID(), status: "pending" };
+        try {
+          // Validate limit orders have price
+          if (input.type === "limit" && !input.price) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Limit orders require a price",
+            });
+          }
+
+          const orderId = await convex.mutation(api.orders.create, {
+            userId: ctx.userId as ConvexId<"users">,
+            symbol: input.symbol,
+            side: input.side,
+            type: input.type,
+            quantity: input.quantity,
+            price: input.price,
+            assetClass: input.assetClass,
+            timeInForce: input.timeInForce,
+          });
+
+          return { orderId, status: "pending" };
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          const message = error instanceof Error ? error.message : "Failed to create order";
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message,
+            cause: error,
+          });
+        }
       }),
 
     getOrders: protectedProcedure
@@ -64,13 +128,44 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
-        // TODO: Fetch from Convex
-        return { orders: [], total: 0 };
+        try {
+          const orders = await convex.query(api.orders.getByUser, {
+            userId: ctx.userId as ConvexId<"users">,
+            limit: input.limit,
+          });
+
+          // Filter by status if provided
+          const filteredOrders = input.status
+            ? orders.filter((order) => order.status === input.status)
+            : orders;
+
+          return {
+            orders: filteredOrders,
+            total: filteredOrders.length,
+          };
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to fetch orders",
+            cause: error,
+          });
+        }
       }),
 
     getPortfolio: protectedProcedure.query(async ({ ctx }) => {
-      // TODO: Fetch from Convex
-      return { positions: [], summary: {} };
+      try {
+        const portfolio = await convex.query(api.positions.getPortfolioPositions, {
+          userId: ctx.userId as ConvexId<"users">,
+        });
+
+        return portfolio;
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch portfolio",
+          cause: error,
+        });
+      }
     }),
   }),
 
@@ -85,23 +180,61 @@ export const appRouter = router({
         })
       )
       .query(async ({ input }) => {
-        // TODO: Fetch from Convex
-        return { events: [], total: 0 };
+        try {
+          const events = await convex.query(api.predictions.getEvents, {
+            status: input.status,
+            category: input.category,
+            limit: input.limit,
+          });
+
+          return {
+            events,
+            total: events.length,
+          };
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to fetch prediction events",
+            cause: error,
+          });
+        }
       }),
 
     getEvent: publicProcedure
       .input(z.object({ ticker: z.string() }))
       .query(async ({ input }) => {
-        // TODO: Fetch from Convex
-        return null;
+        try {
+          const event = await convex.query(api.predictions.getEventByTicker, {
+            ticker: input.ticker,
+          });
+
+          return event;
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to fetch prediction event",
+            cause: error,
+          });
+        }
       }),
   }),
 
   // Rewards procedures
   rewards: router({
     getBalance: protectedProcedure.query(async ({ ctx }) => {
-      // TODO: Fetch from Convex
-      return { available: 0, tier: "bronze" };
+      try {
+        const balance = await convex.query(api.rewards.getBalance, {
+          userId: ctx.userId as ConvexId<"users">,
+        });
+
+        return balance;
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch rewards balance",
+          cause: error,
+        });
+      }
     }),
 
     redeem: protectedProcedure
@@ -112,8 +245,22 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // TODO: Process via Convex
-        return { redemptionId: crypto.randomUUID() };
+        try {
+          const result = await convex.mutation(api.rewards.redeem, {
+            userId: ctx.userId as ConvexId<"users">,
+            rewardId: input.rewardId as ConvexId<"rewards">,
+            quantity: input.quantity,
+          });
+
+          return result;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to redeem reward";
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message,
+            cause: error,
+          });
+        }
       }),
   }),
 });

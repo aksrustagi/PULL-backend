@@ -1,0 +1,2452 @@
+openapi: 3.1.0
+info:
+  title: PULL Super App API
+  version: 1.0.0
+  description: |
+    # PULL Super App API
+
+    Complete API for the PULL Super App platform, providing endpoints for:
+
+    - **Authentication**: User registration, login, token refresh, and password management
+    - **Trading**: Order management, portfolio tracking, and buying power
+    - **Predictions**: Prediction market events, positions, and market data
+    - **RWA (Real-World Assets)**: Asset browsing, ownership, and purchases
+    - **Rewards**: Points system, leaderboards, and reward redemption
+
+    ## Authentication
+
+    Most endpoints require authentication via Bearer token. Include the token in the `Authorization` header:
+
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+
+    Tokens are obtained through the `/api/auth/login` or `/api/auth/register` endpoints.
+
+    ## Rate Limiting
+
+    API requests are rate-limited. Current limits are returned in response headers:
+    - `X-RateLimit-Limit`: Maximum requests per window
+    - `X-RateLimit-Remaining`: Remaining requests in current window
+
+    ## Error Handling
+
+    All errors follow a consistent format with a `success: false` flag and an `error` object containing:
+    - `code`: Machine-readable error code
+    - `message`: Human-readable error description
+
+    ## Request Tracking
+
+    All responses include a `requestId` for debugging and support purposes.
+  contact:
+    name: PULL Support
+    email: support@pull.app
+    url: https://pull.app/support
+  license:
+    name: Proprietary
+    url: https://pull.app/terms
+  termsOfService: https://pull.app/terms
+
+servers:
+  - url: http://localhost:3001
+    description: Development Server
+  - url: https://api.staging.pull.app
+    description: Staging Server
+  - url: https://api.pull.app
+    description: Production Server
+
+tags:
+  - name: Auth
+    description: Authentication and user session management
+  - name: Trading
+    description: Order and portfolio management for crypto, predictions, and RWA
+  - name: Predictions
+    description: Prediction market events, markets, and positions
+  - name: RWA
+    description: Real-world asset management and trading
+  - name: Rewards
+    description: Points system, leaderboards, and reward redemption
+  - name: Health
+    description: API health and status checks
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT authentication token obtained from login or register endpoints
+
+  schemas:
+    # ========================================
+    # Common Schemas
+    # ========================================
+    Error:
+      type: object
+      required:
+        - success
+        - error
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+          description: Always false for error responses
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable error message
+              example: Invalid email address
+        requestId:
+          type: string
+          format: uuid
+          description: Request tracking ID for debugging
+          example: 550e8400-e29b-41d4-a716-446655440000
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+          example: "2024-01-15T10:30:00.000Z"
+
+    Pagination:
+      type: object
+      required:
+        - page
+        - pageSize
+        - totalItems
+        - totalPages
+        - hasNextPage
+        - hasPreviousPage
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          description: Current page number (1-indexed)
+          example: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Number of items per page
+          example: 50
+        totalItems:
+          type: integer
+          minimum: 0
+          description: Total number of items
+          example: 150
+        totalPages:
+          type: integer
+          minimum: 0
+          description: Total number of pages
+          example: 3
+        hasNextPage:
+          type: boolean
+          description: Whether there is a next page
+          example: true
+        hasPreviousPage:
+          type: boolean
+          description: Whether there is a previous page
+          example: false
+
+    # ========================================
+    # Auth Schemas
+    # ========================================
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          minLength: 8
+          description: Password (min 8 chars, must include uppercase, lowercase, and number)
+          example: SecurePass123
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 50
+          description: Optional display name
+          example: John Doe
+        referralCode:
+          type: string
+          description: Optional referral code from another user
+          example: PULL2024ABC
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          description: User password
+          example: SecurePass123
+
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email address associated with the account
+          example: user@example.com
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+      properties:
+        id:
+          type: string
+          description: Unique user ID
+          example: usr_abc123def456
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        displayName:
+          type: string
+          description: User display name
+          example: John Doe
+        username:
+          type: string
+          description: Unique username
+          example: johndoe
+        avatarUrl:
+          type: string
+          format: uri
+          description: URL to user avatar image
+          example: https://cdn.pull.app/avatars/abc123.jpg
+        emailVerified:
+          type: boolean
+          description: Whether email has been verified
+          example: true
+        kycStatus:
+          type: string
+          enum: [none, pending, approved, rejected]
+          description: KYC verification status
+          example: approved
+        kycTier:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: KYC tier level (0-3)
+          example: 2
+        referralCode:
+          type: string
+          description: User's referral code for inviting others
+          example: PULL2024ABC
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last login timestamp
+          example: "2024-01-15T10:30:00.000Z"
+        createdAt:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+          example: "2024-01-01T00:00:00.000Z"
+
+    AuthResponse:
+      type: object
+      required:
+        - success
+        - data
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          required:
+            - user
+            - token
+          properties:
+            user:
+              $ref: "#/components/schemas/User"
+            token:
+              type: string
+              description: JWT authentication token
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        requestId:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+
+    # ========================================
+    # Trading Schemas
+    # ========================================
+    CreateOrderRequest:
+      type: object
+      required:
+        - assetClass
+        - symbol
+        - side
+        - type
+        - quantity
+      properties:
+        assetClass:
+          type: string
+          enum: [crypto, prediction, rwa]
+          description: Asset class for the order
+          example: crypto
+        symbol:
+          type: string
+          description: Trading symbol/ticker
+          example: BTC-USD
+        side:
+          type: string
+          enum: [buy, sell]
+          description: Order side
+          example: buy
+        type:
+          type: string
+          enum: [market, limit, stop, stop_limit]
+          description: Order type
+          example: limit
+        quantity:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          description: Order quantity
+          example: 0.5
+        price:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          description: Limit price (required for limit and stop_limit orders)
+          example: 45000.00
+        stopPrice:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          description: Stop trigger price (required for stop and stop_limit orders)
+          example: 44000.00
+        timeInForce:
+          type: string
+          enum: [day, gtc, ioc, fok]
+          default: gtc
+          description: "Time in force: day, good-til-cancelled, immediate-or-cancel, fill-or-kill"
+          example: gtc
+        clientOrderId:
+          type: string
+          description: Client-provided order ID for tracking
+          example: my-order-123
+        expiresAt:
+          type: integer
+          description: Unix timestamp when the order should expire
+          example: 1705331400000
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata for the order
+
+    Order:
+      type: object
+      required:
+        - id
+        - userId
+        - assetClass
+        - symbol
+        - side
+        - type
+        - quantity
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+          description: Unique order ID
+          example: ord_abc123def456
+        userId:
+          type: string
+          description: User ID who placed the order
+          example: usr_abc123def456
+        assetClass:
+          type: string
+          enum: [crypto, prediction, rwa]
+          description: Asset class
+          example: crypto
+        symbol:
+          type: string
+          description: Trading symbol
+          example: BTC-USD
+        side:
+          type: string
+          enum: [buy, sell]
+          description: Order side
+          example: buy
+        type:
+          type: string
+          enum: [market, limit, stop, stop_limit]
+          description: Order type
+          example: limit
+        quantity:
+          type: number
+          description: Order quantity
+          example: 0.5
+        price:
+          type: number
+          nullable: true
+          description: Limit price
+          example: 45000.00
+        stopPrice:
+          type: number
+          nullable: true
+          description: Stop price
+        timeInForce:
+          type: string
+          enum: [day, gtc, ioc, fok]
+          description: Time in force
+          example: gtc
+        status:
+          type: string
+          enum: [pending, submitted, accepted, partial_fill, filled, cancelled, rejected, expired]
+          description: Current order status
+          example: filled
+        filledQuantity:
+          type: number
+          description: Quantity that has been filled
+          example: 0.5
+        averagePrice:
+          type: number
+          nullable: true
+          description: Average fill price
+          example: 44950.00
+        clientOrderId:
+          type: string
+          nullable: true
+          description: Client-provided order ID
+          example: my-order-123
+        createdAt:
+          type: string
+          format: date-time
+          description: Order creation timestamp
+          example: "2024-01-15T10:30:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2024-01-15T10:30:05.000Z"
+
+    OrderFill:
+      type: object
+      properties:
+        id:
+          type: string
+        price:
+          type: number
+        quantity:
+          type: number
+        fee:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+
+    Portfolio:
+      type: object
+      required:
+        - positions
+        - summary
+      properties:
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Position"
+          description: List of portfolio positions
+        summary:
+          type: object
+          required:
+            - totalValue
+            - totalCost
+            - totalUnrealizedPnL
+            - totalRealizedPnL
+            - totalPnLPercent
+            - positionCount
+          properties:
+            totalValue:
+              type: number
+              description: Total portfolio value
+              example: 125000.00
+            totalCost:
+              type: number
+              description: Total cost basis
+              example: 100000.00
+            totalUnrealizedPnL:
+              type: number
+              description: Total unrealized profit/loss
+              example: 25000.00
+            totalRealizedPnL:
+              type: number
+              description: Total realized profit/loss
+              example: 5000.00
+            totalPnLPercent:
+              type: number
+              description: Total P&L percentage
+              example: 25.0
+            positionCount:
+              type: integer
+              description: Number of open positions
+              example: 5
+
+    Position:
+      type: object
+      required:
+        - symbol
+        - assetClass
+        - quantity
+        - averageCost
+        - currentPrice
+        - marketValue
+      properties:
+        symbol:
+          type: string
+          description: Position symbol
+          example: BTC-USD
+        assetClass:
+          type: string
+          enum: [crypto, prediction, rwa]
+          description: Asset class
+          example: crypto
+        quantity:
+          type: number
+          description: Position quantity
+          example: 1.5
+        averageCost:
+          type: number
+          description: Average cost per unit
+          example: 42000.00
+        currentPrice:
+          type: number
+          description: Current market price
+          example: 45000.00
+        marketValue:
+          type: number
+          description: Current market value
+          example: 67500.00
+        unrealizedPnL:
+          type: number
+          description: Unrealized profit/loss
+          example: 4500.00
+        unrealizedPnLPercent:
+          type: number
+          description: Unrealized P&L percentage
+          example: 7.14
+
+    BuyingPower:
+      type: object
+      required:
+        - available
+        - held
+        - pending
+        - total
+      properties:
+        available:
+          type: number
+          description: Available buying power
+          example: 50000.00
+        held:
+          type: number
+          description: Amount held in open orders
+          example: 10000.00
+        pending:
+          type: number
+          description: Pending deposits/withdrawals
+          example: 5000.00
+        total:
+          type: number
+          description: Total buying power
+          example: 65000.00
+
+    # ========================================
+    # Prediction Schemas
+    # ========================================
+    PredictionEvent:
+      type: object
+      required:
+        - id
+        - ticker
+        - title
+        - status
+        - category
+      properties:
+        id:
+          type: string
+          description: Unique event ID
+          example: evt_abc123
+        ticker:
+          type: string
+          description: Event ticker symbol
+          example: PRES2024
+        title:
+          type: string
+          description: Event title
+          example: 2024 Presidential Election Winner
+        description:
+          type: string
+          description: Detailed event description
+          example: Who will win the 2024 US Presidential Election?
+        status:
+          type: string
+          enum: [upcoming, active, resolved, cancelled]
+          description: Event status
+          example: active
+        category:
+          type: string
+          description: Event category
+          example: politics
+        imageUrl:
+          type: string
+          format: uri
+          description: Event image URL
+        startDate:
+          type: string
+          format: date-time
+          description: Event start date
+        endDate:
+          type: string
+          format: date-time
+          description: Event end date
+        resolutionDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Resolution date
+        markets:
+          type: array
+          items:
+            $ref: "#/components/schemas/PredictionMarket"
+          description: Associated markets
+        volume:
+          type: number
+          description: Total trading volume
+          example: 1500000.00
+
+    PredictionMarket:
+      type: object
+      required:
+        - id
+        - ticker
+        - question
+        - yesPrice
+        - noPrice
+      properties:
+        id:
+          type: string
+          description: Market ID
+          example: mkt_abc123
+        ticker:
+          type: string
+          description: Market ticker
+          example: PRES2024-BIDEN
+        question:
+          type: string
+          description: Market question
+          example: Will Biden win?
+        yesPrice:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Current YES price (0-1)
+          example: 0.45
+        noPrice:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Current NO price (0-1)
+          example: 0.55
+        volume:
+          type: number
+          description: Market trading volume
+          example: 500000.00
+        liquidity:
+          type: number
+          description: Market liquidity
+          example: 100000.00
+
+    PredictionPosition:
+      type: object
+      required:
+        - marketId
+        - ticker
+        - side
+        - quantity
+        - averageCost
+      properties:
+        marketId:
+          type: string
+          description: Market ID
+        ticker:
+          type: string
+          description: Market ticker
+        side:
+          type: string
+          enum: [yes, no]
+          description: Position side
+        quantity:
+          type: number
+          description: Number of contracts
+        averageCost:
+          type: number
+          description: Average cost per contract
+        currentPrice:
+          type: number
+          description: Current market price
+        unrealizedPnL:
+          type: number
+          description: Unrealized P&L
+
+    Category:
+      type: object
+      required:
+        - id
+        - name
+        - count
+      properties:
+        id:
+          type: string
+          description: Category ID
+          example: politics
+        name:
+          type: string
+          description: Category display name
+          example: Politics
+        count:
+          type: integer
+          description: Number of events in category
+          example: 25
+
+    # ========================================
+    # RWA Schemas
+    # ========================================
+    RWAAsset:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - status
+        - totalShares
+        - pricePerShare
+      properties:
+        id:
+          type: string
+          description: Asset ID
+          example: rwa_abc123
+        name:
+          type: string
+          description: Asset name
+          example: Manhattan Office Building
+        description:
+          type: string
+          description: Asset description
+        type:
+          type: string
+          enum: [real_estate, art, collectibles, commodities, equipment]
+          description: Asset type
+          example: real_estate
+        status:
+          type: string
+          enum: [draft, listed, funded, active, liquidated]
+          description: Asset status
+          example: listed
+        totalShares:
+          type: integer
+          description: Total number of shares
+          example: 10000
+        availableShares:
+          type: integer
+          description: Available shares for purchase
+          example: 2500
+        pricePerShare:
+          type: number
+          description: Current price per share
+          example: 100.00
+        totalValue:
+          type: number
+          description: Total asset value
+          example: 1000000.00
+        annualYield:
+          type: number
+          description: Expected annual yield percentage
+          example: 8.5
+        imageUrl:
+          type: string
+          format: uri
+          description: Asset image URL
+        documents:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              url:
+                type: string
+                format: uri
+
+    RWAListing:
+      type: object
+      required:
+        - id
+        - assetId
+        - shares
+        - pricePerShare
+        - status
+      properties:
+        id:
+          type: string
+          description: Listing ID
+        assetId:
+          type: string
+          description: Associated asset ID
+        sellerId:
+          type: string
+          description: Seller user ID
+        shares:
+          type: integer
+          description: Number of shares listed
+        pricePerShare:
+          type: number
+          description: Price per share
+        status:
+          type: string
+          enum: [active, sold, cancelled]
+          description: Listing status
+
+    RWAOwnership:
+      type: object
+      required:
+        - assetId
+        - shares
+        - averageCost
+      properties:
+        assetId:
+          type: string
+          description: Asset ID
+        asset:
+          $ref: "#/components/schemas/RWAAsset"
+        shares:
+          type: integer
+          description: Number of shares owned
+        averageCost:
+          type: number
+          description: Average cost per share
+        currentValue:
+          type: number
+          description: Current value of holdings
+        unrealizedPnL:
+          type: number
+          description: Unrealized profit/loss
+
+    PurchaseRequest:
+      type: object
+      required:
+        - listingId
+        - shares
+      properties:
+        listingId:
+          type: string
+          description: Listing ID to purchase from
+          example: lst_abc123
+        shares:
+          type: integer
+          minimum: 1
+          description: Number of shares to purchase
+          example: 10
+
+    # ========================================
+    # Rewards Schemas
+    # ========================================
+    RewardsBalance:
+      type: object
+      required:
+        - available
+        - pending
+        - lifetime
+      properties:
+        available:
+          type: integer
+          description: Available points balance
+          example: 15000
+        pending:
+          type: integer
+          description: Pending points (not yet available)
+          example: 500
+        lifetime:
+          type: integer
+          description: Total lifetime points earned
+          example: 50000
+        tier:
+          type: string
+          enum: [bronze, silver, gold, platinum]
+          description: Current rewards tier
+          example: gold
+        nextTierProgress:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Progress to next tier (percentage)
+          example: 75.5
+
+    PointsTransaction:
+      type: object
+      required:
+        - id
+        - type
+        - amount
+        - timestamp
+      properties:
+        id:
+          type: string
+          description: Transaction ID
+        type:
+          type: string
+          enum: [earned, spent, bonus, referral, adjustment]
+          description: Transaction type
+        amount:
+          type: integer
+          description: Points amount (positive for credit, negative for debit)
+        description:
+          type: string
+          description: Transaction description
+        referenceId:
+          type: string
+          description: Reference ID (order, redemption, etc.)
+        timestamp:
+          type: string
+          format: date-time
+          description: Transaction timestamp
+
+    Reward:
+      type: object
+      required:
+        - id
+        - name
+        - pointsCost
+        - category
+        - status
+      properties:
+        id:
+          type: string
+          description: Reward ID
+        name:
+          type: string
+          description: Reward name
+          example: Amazon Gift Card
+        description:
+          type: string
+          description: Reward description
+        pointsCost:
+          type: integer
+          description: Points required to redeem
+          example: 10000
+        category:
+          type: string
+          description: Reward category
+          example: gift_cards
+        imageUrl:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum: [active, inactive, out_of_stock]
+        featured:
+          type: boolean
+        stock:
+          type: integer
+          nullable: true
+          description: Available stock (null for unlimited)
+
+    ShippingAddress:
+      type: object
+      required:
+        - name
+        - addressLine1
+        - city
+        - state
+        - postalCode
+        - country
+      properties:
+        name:
+          type: string
+          example: John Doe
+        addressLine1:
+          type: string
+          example: 123 Main St
+        addressLine2:
+          type: string
+          example: Apt 4B
+        city:
+          type: string
+          example: New York
+        state:
+          type: string
+          example: NY
+        postalCode:
+          type: string
+          example: "10001"
+        country:
+          type: string
+          example: US
+
+    RedeemRequest:
+      type: object
+      required:
+        - rewardId
+      properties:
+        rewardId:
+          type: string
+          description: ID of the reward to redeem
+          example: rwd_abc123
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Quantity to redeem
+          example: 1
+        shippingAddress:
+          $ref: "#/components/schemas/ShippingAddress"
+
+    LeaderboardEntry:
+      type: object
+      required:
+        - rank
+        - userId
+        - displayName
+        - points
+      properties:
+        rank:
+          type: integer
+          description: Leaderboard rank
+          example: 1
+        userId:
+          type: string
+          description: User ID
+        displayName:
+          type: string
+          description: User display name
+          example: TopTrader
+        avatarUrl:
+          type: string
+          format: uri
+        points:
+          type: integer
+          description: Points earned in period
+          example: 50000
+        tier:
+          type: string
+          description: User tier
+
+    DailyStreakResponse:
+      type: object
+      required:
+        - bonusAmount
+        - streakDays
+      properties:
+        bonusAmount:
+          type: integer
+          description: Points earned from streak bonus
+          example: 100
+        streakDays:
+          type: integer
+          description: Current streak in days
+          example: 7
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: Missing or invalid authorization header
+            requestId: 550e8400-e29b-41d4-a716-446655440000
+            timestamp: "2024-01-15T10:30:00.000Z"
+
+    ForbiddenError:
+      description: Access denied to the requested resource
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error:
+              code: FORBIDDEN
+              message: You do not have access to this resource
+            requestId: 550e8400-e29b-41d4-a716-446655440000
+            timestamp: "2024-01-15T10:30:00.000Z"
+
+    NotFoundError:
+      description: Requested resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error:
+              code: NOT_FOUND
+              message: The requested resource was not found
+            requestId: 550e8400-e29b-41d4-a716-446655440000
+            timestamp: "2024-01-15T10:30:00.000Z"
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error:
+              code: VALIDATION_ERROR
+              message: Invalid request parameters
+            requestId: 550e8400-e29b-41d4-a716-446655440000
+            timestamp: "2024-01-15T10:30:00.000Z"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            success: false
+            error:
+              code: INTERNAL_SERVER_ERROR
+              message: An unexpected error occurred
+            requestId: 550e8400-e29b-41d4-a716-446655440000
+            timestamp: "2024-01-15T10:30:00.000Z"
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page number (1-indexed)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+
+    OffsetParam:
+      name: offset
+      in: query
+      description: Number of items to skip
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+paths:
+  # ========================================
+  # Health Endpoints
+  # ========================================
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the API is running and healthy
+      operationId: healthCheck
+      responses:
+        "200":
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    example: 1.0.0
+
+  # ========================================
+  # Auth Endpoints
+  # ========================================
+  /api/auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register new user
+      description: Create a new user account with email and password
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "409":
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error:
+                  code: USER_EXISTS
+                  message: An account with this email already exists
+                timestamp: "2024-01-15T10:30:00.000Z"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: User login
+      description: Authenticate user with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error:
+                  code: INVALID_CREDENTIALS
+                  message: Invalid email or password
+                timestamp: "2024-01-15T10:30:00.000Z"
+        "403":
+          description: Account suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error:
+                  code: ACCOUNT_SUSPENDED
+                  message: Your account has been suspended. Please contact support.
+                timestamp: "2024-01-15T10:30:00.000Z"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh token
+      description: Get a new JWT token using an existing valid token
+      operationId: refreshToken
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      expiresIn:
+                        type: string
+                        example: 30d
+                  requestId:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: Account inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout
+      description: Invalidate the current session (client should discard token)
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Logged out successfully
+                  requestId:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /api/auth/forgot-password:
+    post:
+      tags:
+        - Auth
+      summary: Request password reset
+      description: Send a password reset email to the user (always returns success to prevent email enumeration)
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Password reset email sent (if account exists)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: If an account exists with this email, you will receive a password reset link shortly.
+                  requestId:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  # ========================================
+  # Trading Endpoints
+  # ========================================
+  /api/v1/trading/orders:
+    get:
+      tags:
+        - Trading
+      summary: List orders
+      description: Get a paginated list of user's orders with optional status filter
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by order status
+          schema:
+            type: string
+            enum: [pending, submitted, accepted, partial_fill, filled, cancelled, rejected, expired]
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags:
+        - Trading
+      summary: Create order
+      description: Place a new trading order
+      operationId: createOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "200":
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "400":
+          description: Invalid order or insufficient funds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/trading/orders/{orderId}:
+    get:
+      tags:
+        - Trading
+      summary: Get order details
+      description: Get detailed information about a specific order including fills
+      operationId: getOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: Order ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/Order"
+                      - type: object
+                        properties:
+                          fills:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/OrderFill"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    delete:
+      tags:
+        - Trading
+      summary: Cancel order
+      description: Cancel an open order
+      operationId: cancelOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: Order ID to cancel
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/Order"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "400":
+          description: Order cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/trading/portfolio:
+    get:
+      tags:
+        - Trading
+      summary: Get portfolio
+      description: Get user's portfolio positions and summary
+      operationId: getPortfolio
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assetClass
+          in: query
+          description: Filter by asset class
+          schema:
+            type: string
+            enum: [crypto, prediction, rwa]
+      responses:
+        "200":
+          description: Portfolio data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/Portfolio"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/trading/buying-power:
+    get:
+      tags:
+        - Trading
+      summary: Get buying power
+      description: Get user's available buying power and held funds
+      operationId: getBuyingPower
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Buying power information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/BuyingPower"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ========================================
+  # Predictions Endpoints
+  # ========================================
+  /api/v1/predictions/events:
+    get:
+      tags:
+        - Predictions
+      summary: List prediction events
+      description: Get a list of prediction market events
+      operationId: listPredictionEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by event status
+          schema:
+            type: string
+            enum: [upcoming, active, resolved, cancelled]
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: List of prediction events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PredictionEvent"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/predictions/events/{ticker}:
+    get:
+      tags:
+        - Predictions
+      summary: Get event by ticker
+      description: Get detailed information about a specific prediction event
+      operationId: getPredictionEvent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          description: Event ticker symbol
+          schema:
+            type: string
+          example: PRES2024
+      responses:
+        "200":
+          description: Event details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/PredictionEvent"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/predictions/events/{ticker}/markets:
+    get:
+      tags:
+        - Predictions
+      summary: Get event markets
+      description: Get all markets for a specific prediction event
+      operationId: getEventMarkets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          description: Event ticker symbol
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of markets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PredictionMarket"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/predictions/markets/{ticker}:
+    get:
+      tags:
+        - Predictions
+      summary: Get market by ticker
+      description: Get detailed information about a specific market
+      operationId: getPredictionMarket
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          description: Market ticker symbol
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Market details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/PredictionMarket"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/predictions/search:
+    get:
+      tags:
+        - Predictions
+      summary: Search events
+      description: Search prediction events by query string
+      operationId: searchPredictionEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+            minLength: 1
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PredictionEvent"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/predictions/positions:
+    get:
+      tags:
+        - Predictions
+      summary: Get positions
+      description: Get user's prediction market positions
+      operationId: getPredictionPositions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User's prediction positions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PredictionPosition"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/predictions/categories:
+    get:
+      tags:
+        - Predictions
+      summary: Get categories
+      description: Get list of prediction event categories
+      operationId: getPredictionCategories
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Category"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ========================================
+  # RWA Endpoints
+  # ========================================
+  /api/v1/rwa/assets:
+    get:
+      tags:
+        - RWA
+      summary: List RWA assets
+      description: Get a list of real-world assets available on the platform
+      operationId: listRWAAssets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          description: Filter by asset type
+          schema:
+            type: string
+            enum: [real_estate, art, collectibles, commodities, equipment]
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [draft, listed, funded, active, liquidated]
+            default: listed
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: List of RWA assets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RWAAsset"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rwa/assets/{assetId}:
+    get:
+      tags:
+        - RWA
+      summary: Get asset details
+      description: Get detailed information about a specific RWA asset
+      operationId: getRWAAsset
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Asset details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/RWAAsset"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rwa/search:
+    get:
+      tags:
+        - RWA
+      summary: Search assets
+      description: Search RWA assets by query string
+      operationId: searchRWAAssets
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+            minLength: 1
+        - name: type
+          in: query
+          description: Filter by asset type
+          schema:
+            type: string
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RWAAsset"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rwa/listings:
+    get:
+      tags:
+        - RWA
+      summary: Get active listings
+      description: Get all active RWA share listings available for purchase
+      operationId: getRWAListings
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: List of active listings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RWAListing"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rwa/ownership:
+    get:
+      tags:
+        - RWA
+      summary: Get ownership
+      description: Get user's RWA ownership/holdings
+      operationId: getRWAOwnership
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User's RWA ownership
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RWAOwnership"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rwa/purchase:
+    post:
+      tags:
+        - RWA
+      summary: Purchase shares
+      description: Purchase shares from an active listing
+      operationId: purchaseRWAShares
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseRequest"
+      responses:
+        "200":
+          description: Purchase successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: object
+                    properties:
+                      listingId:
+                        type: string
+                      shares:
+                        type: integer
+                      totalCost:
+                        type: number
+                      status:
+                        type: string
+                        example: completed
+                  timestamp:
+                    type: string
+                    format: date-time
+        "400":
+          description: Insufficient funds or listing inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ========================================
+  # Rewards Endpoints
+  # ========================================
+  /api/v1/rewards/balance:
+    get:
+      tags:
+        - Rewards
+      summary: Get points balance
+      description: Get user's current points balance and tier status
+      operationId: getRewardsBalance
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Points balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/RewardsBalance"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rewards/history:
+    get:
+      tags:
+        - Rewards
+      summary: Get points history
+      description: Get paginated history of points transactions
+      operationId: getRewardsHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          description: Filter by transaction type
+          schema:
+            type: string
+            enum: [earned, spent, bonus, referral, adjustment]
+        - $ref: "#/components/parameters/LimitParam"
+        - $ref: "#/components/parameters/OffsetParam"
+        - $ref: "#/components/parameters/PageParam"
+      responses:
+        "200":
+          description: Points transaction history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PointsTransaction"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rewards/catalog:
+    get:
+      tags:
+        - Rewards
+      summary: Get rewards catalog
+      description: Get available rewards that can be redeemed with points
+      operationId: getRewardsCatalog
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+        - name: featured
+          in: query
+          description: Only show featured rewards
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Rewards catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Reward"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rewards/redeem:
+    post:
+      tags:
+        - Rewards
+      summary: Redeem reward
+      description: Redeem points for a reward from the catalog
+      operationId: redeemReward
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedeemRequest"
+      responses:
+        "200":
+          description: Redemption successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: object
+                    properties:
+                      redemptionId:
+                        type: string
+                      rewardId:
+                        type: string
+                      status:
+                        type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+        "400":
+          description: Insufficient points or reward unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rewards/leaderboard:
+    get:
+      tags:
+        - Rewards
+      summary: Get leaderboard
+      description: Get the points leaderboard for a specific time period
+      operationId: getLeaderboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          description: Time period for leaderboard
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, all_time]
+            default: weekly
+        - $ref: "#/components/parameters/LimitParam"
+      responses:
+        "200":
+          description: Leaderboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LeaderboardEntry"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/rewards/daily-streak:
+    post:
+      tags:
+        - Rewards
+      summary: Claim daily streak
+      description: Claim daily login streak bonus points
+      operationId: claimDailyStreak
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Streak bonus claimed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+                  data:
+                    $ref: "#/components/schemas/DailyStreakResponse"
+                  timestamp:
+                    type: string
+                    format: date-time
+        "400":
+          description: Already claimed today
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                success: false
+                error:
+                  code: ALREADY_CLAIMED
+                  message: You have already claimed your daily streak bonus today
+                timestamp: "2024-01-15T10:30:00.000Z"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
