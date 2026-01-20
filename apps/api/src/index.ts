@@ -11,6 +11,7 @@ import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { tradingRoutes } from "./routes/trading";
 import { predictionsRoutes } from "./routes/predictions";
+import { realEstateRoutes } from "./routes/realEstate";
 import { rwaRoutes } from "./routes/rwa";
 import { rewardsRoutes } from "./routes/rewards";
 import { webhookRoutes } from "./routes/webhooks";
@@ -68,6 +69,7 @@ app.route("/webhooks", webhookRoutes);
 app.use("/api/v1/*", authMiddleware);
 app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
+app.route("/api/v1/real-estate", realEstateRoutes);
 app.route("/api/v1/rwa", rwaRoutes);
 app.route("/api/v1/rewards", rewardsRoutes);
 
