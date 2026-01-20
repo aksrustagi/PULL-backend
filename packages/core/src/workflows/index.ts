@@ -9,3 +9,4 @@ export * from "./rwa";
 export * from "./rewards";
 export * from "./email";
 export * from "./messaging";
+export * from "./dataFlywheel";

@@ -1,9 +1,10 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { dataFlywheelTables } from "./dataFlywheel";
 
 /**
  * PULL Super App - Convex Database Schema
- * 26 tables covering all platform features
+ * 50+ tables covering all platform features including Data Flywheel
  */
 export default defineSchema({
   // ============================================================================
@@ -863,4 +864,9 @@ export default defineSchema({
       dimensions: 1536,
       filterFields: ["userId", "agentType"],
     }),
+
+  // ============================================================================
+  // DATA FLYWHEEL TABLES
+  // ============================================================================
+  ...dataFlywheelTables,
 });

@@ -14,6 +14,7 @@ import { predictionsRoutes } from "./routes/predictions";
 import { rwaRoutes } from "./routes/rwa";
 import { rewardsRoutes } from "./routes/rewards";
 import { webhookRoutes } from "./routes/webhooks";
+import { dataFlywheelRoutes } from "./routes/dataFlywheel";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -70,6 +71,7 @@ app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
 app.route("/api/v1/rwa", rwaRoutes);
 app.route("/api/v1/rewards", rewardsRoutes);
+app.route("/api/v1/data", dataFlywheelRoutes);
 
 // tRPC endpoint
 app.use(
