@@ -4,6 +4,19 @@
  */
 
 import { Context } from "@temporalio/activity";
+import { SumsubClient, type VerificationLevel } from '../../services/sumsub';
+import { PlaidClient, type PlaidProduct } from '../../services/plaid';
+import { CheckrClient, type CheckrPackage } from '../../services/checkr';
+import { ParallelMarketsClient, type AccreditationType } from '../../services/parallel-markets';
+import { SanctionsClient } from '../../services/sanctions';
+import type {
+  KYCUserData,
+  SumsubResult,
+  CheckrResult,
+  AccreditationResult,
+  SanctionsResult,
+  PlaidResult,
+} from './types';
 
 // ============================================================================
 // Types
@@ -748,4 +761,598 @@ export async function logAuditEvent(event: {
   console.log(`[KYC Activity] Audit log: ${event.action} for ${event.userId}`);
 
   // TODO: Call Convex mutation to log audit event
+}
+
+// ============================================================================
+// Service Client Factories
+// ============================================================================
+
+function getSumsubClient(): SumsubClient {
+  const appToken = process.env.SUMSUB_APP_TOKEN;
+  const secretKey = process.env.SUMSUB_SECRET_KEY;
+  const webhookSecret = process.env.SUMSUB_WEBHOOK_SECRET;
+
+  if (!appToken || !secretKey) {
+    throw new Error('Sumsub credentials not configured');
+  }
+
+  return new SumsubClient({
+    appToken,
+    secretKey,
+    webhookSecret,
+  });
+}
+
+function getPlaidClient(): PlaidClient {
+  const clientId = process.env.PLAID_CLIENT_ID;
+  const secret = process.env.PLAID_SECRET;
+  const env = (process.env.PLAID_ENV ?? 'sandbox') as 'sandbox' | 'development' | 'production';
+
+  if (!clientId || !secret) {
+    throw new Error('Plaid credentials not configured');
+  }
+
+  return new PlaidClient({
+    clientId,
+    secret,
+    env,
+  });
+}
+
+function getCheckrClient(): CheckrClient {
+  const apiKey = process.env.CHECKR_API_KEY;
+  const webhookSecret = process.env.CHECKR_WEBHOOK_SECRET;
+
+  if (!apiKey) {
+    throw new Error('Checkr credentials not configured');
+  }
+
+  return new CheckrClient({
+    apiKey,
+    webhookSecret,
+  });
+}
+
+function getParallelMarketsClient(): ParallelMarketsClient {
+  const apiKey = process.env.PARALLEL_API_KEY;
+  const webhookSecret = process.env.PARALLEL_WEBHOOK_SECRET;
+
+  if (!apiKey) {
+    throw new Error('Parallel Markets credentials not configured');
+  }
+
+  return new ParallelMarketsClient({
+    apiKey,
+    webhookSecret,
+  });
+}
+
+function getSanctionsClient(): SanctionsClient {
+  const apiKey = process.env.SANCTIONS_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('Sanctions.io credentials not configured');
+  }
+
+  return new SanctionsClient({
+    apiKey,
+  });
+}
+
+// ============================================================================
+// Sumsub Activities
+// ============================================================================
+
+/**
+ * Create a Sumsub applicant
+ */
+export async function createSumsubApplicant(
+  userId: string,
+  email: string,
+  tier: 'basic' | 'enhanced' | 'accredited',
+  userData?: KYCUserData
+): Promise<{ applicantId: string }> {
+  console.log(`[KYC Activity] Creating Sumsub applicant for user: ${userId}`);
+
+  const client = getSumsubClient();
+  const levelName = SumsubClient.getTierLevelName(tier);
+
+  const applicant = await client.createApplicant({
+    externalUserId: userId,
+    levelName,
+    email,
+    info: userData
+      ? {
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          middleName: userData.middleName,
+          dob: userData.dob,
+          phone: userData.phone,
+          country: userData.nationality,
+          addresses: userData.address
+            ? [
+                {
+                  country: userData.address.country,
+                  postCode: userData.address.postalCode,
+                  town: userData.address.city,
+                  street: userData.address.street,
+                  subStreet: userData.address.street2,
+                  state: userData.address.state,
+                },
+              ]
+            : undefined,
+        }
+      : undefined,
+  });
+
+  console.log(`[KYC Activity] Created Sumsub applicant: ${applicant.id}`);
+  return { applicantId: applicant.id };
+}
+
+/**
+ * Generate Sumsub SDK access token for frontend
+ */
+export async function generateSumsubToken(
+  applicantId: string,
+  tier: 'basic' | 'enhanced' | 'accredited'
+): Promise<{ accessToken: string; expiresAt: number }> {
+  console.log(`[KYC Activity] Generating Sumsub token for applicant: ${applicantId}`);
+
+  const client = getSumsubClient();
+  const ttlInSecs = 3600; // 1 hour
+
+  const response = await client.generateAccessTokenForApplicant(applicantId, ttlInSecs);
+
+  return {
+    accessToken: response.token,
+    expiresAt: Date.now() + ttlInSecs * 1000,
+  };
+}
+
+/**
+ * Get Sumsub applicant status
+ */
+export async function getSumsubStatus(
+  applicantId: string
+): Promise<{ status: string; reviewStatus?: string; reviewAnswer?: string }> {
+  console.log(`[KYC Activity] Getting Sumsub status for: ${applicantId}`);
+
+  const client = getSumsubClient();
+  const applicant = await client.getApplicant(applicantId);
+
+  return {
+    status: applicant.review?.reviewStatus ?? 'init',
+    reviewStatus: applicant.review?.reviewStatus,
+    reviewAnswer: applicant.review?.reviewResult?.reviewAnswer,
+  };
+}
+
+/**
+ * Reset Sumsub applicant for re-verification
+ */
+export async function resetSumsubApplicant(applicantId: string): Promise<void> {
+  console.log(`[KYC Activity] Resetting Sumsub applicant: ${applicantId}`);
+
+  const client = getSumsubClient();
+  await client.resetApplicant(applicantId);
+}
+
+// ============================================================================
+// Plaid Activities
+// ============================================================================
+
+/**
+ * Create Plaid Link token
+ */
+export async function createPlaidLinkToken(
+  userId: string,
+  products: string[]
+): Promise<{ linkToken: string; expiration: string }> {
+  console.log(`[KYC Activity] Creating Plaid link token for user: ${userId}`);
+
+  const client = getPlaidClient();
+  const response = await client.createLinkToken({
+    userId,
+    products: products as PlaidProduct[],
+  });
+
+  return {
+    linkToken: response.link_token,
+    expiration: response.expiration,
+  };
+}
+
+/**
+ * Create Plaid Identity Verification session
+ */
+export async function createPlaidIDV(
+  userId: string,
+  templateId: string
+): Promise<{ idvId: string; shareableUrl: string | null }> {
+  console.log(`[KYC Activity] Creating Plaid IDV for user: ${userId}`);
+
+  const client = getPlaidClient();
+  const response = await client.createIdentityVerification({
+    clientUserId: userId,
+    templateId,
+    isShareable: true,
+  });
+
+  return {
+    idvId: response.id,
+    shareableUrl: response.shareable_url,
+  };
+}
+
+/**
+ * Get Plaid Identity Verification status
+ */
+export async function getPlaidIDVStatus(
+  idvId: string
+): Promise<{ status: string; completedAt: string | null }> {
+  console.log(`[KYC Activity] Getting Plaid IDV status: ${idvId}`);
+
+  const client = getPlaidClient();
+  const response = await client.getIdentityVerification(idvId);
+
+  return {
+    status: response.status,
+    completedAt: response.completed_at,
+  };
+}
+
+/**
+ * Exchange Plaid public token for access token
+ */
+export async function exchangePlaidToken(
+  publicToken: string
+): Promise<{ accessToken: string; itemId: string }> {
+  console.log(`[KYC Activity] Exchanging Plaid public token`);
+
+  const client = getPlaidClient();
+  const response = await client.exchangePublicToken(publicToken);
+
+  return {
+    accessToken: response.accessToken,
+    itemId: response.itemId,
+  };
+}
+
+/**
+ * Get Plaid auth data (account and routing numbers)
+ */
+export async function getPlaidAuth(
+  accessToken: string
+): Promise<{ accounts: Array<{ accountId: string; mask: string; name: string }> }> {
+  console.log(`[KYC Activity] Getting Plaid auth data`);
+
+  const client = getPlaidClient();
+  const response = await client.getAuth(accessToken);
+
+  return {
+    accounts: response.accounts.map((account) => ({
+      accountId: account.account_id,
+      mask: account.mask ?? '',
+      name: account.name,
+    })),
+  };
+}
+
+/**
+ * Get Plaid identity data for matching
+ */
+export async function getPlaidIdentity(
+  accessToken: string
+): Promise<{ names: string[]; emails: string[]; phones: string[] }> {
+  console.log(`[KYC Activity] Getting Plaid identity data`);
+
+  const client = getPlaidClient();
+  const response = await client.getIdentity(accessToken);
+
+  const names: string[] = [];
+  const emails: string[] = [];
+  const phones: string[] = [];
+
+  for (const account of response.accounts) {
+    for (const owner of account.owners) {
+      names.push(...owner.names);
+      emails.push(...owner.emails.map((e) => e.data));
+      phones.push(...owner.phone_numbers.map((p) => p.data));
+    }
+  }
+
+  return {
+    names: [...new Set(names)],
+    emails: [...new Set(emails)],
+    phones: [...new Set(phones)],
+  };
+}
+
+// ============================================================================
+// Checkr Activities (Enhanced)
+// ============================================================================
+
+/**
+ * Create Checkr candidate and background check
+ */
+export async function createCheckrCandidateAndReport(
+  userId: string,
+  email: string,
+  userData: KYCUserData,
+  packageName: CheckrPackage = 'tasker_standard'
+): Promise<{ candidateId: string; reportId: string }> {
+  console.log(`[KYC Activity] Creating Checkr candidate and report for user: ${userId}`);
+
+  const client = getCheckrClient();
+
+  const candidate = await client.createCandidate({
+    firstName: userData.firstName,
+    lastName: userData.lastName,
+    email,
+    dob: userData.dob,
+    ssn: userData.ssn,
+    phone: userData.phone,
+    zipcode: userData.address?.postalCode,
+    customId: userId,
+  });
+
+  const report = await client.createReport({
+    candidateId: candidate.id,
+    package: packageName,
+  });
+
+  return {
+    candidateId: candidate.id,
+    reportId: report.id,
+  };
+}
+
+/**
+ * Get Checkr report status
+ */
+export async function getCheckrReportStatus(
+  reportId: string
+): Promise<CheckrResult> {
+  console.log(`[KYC Activity] Getting Checkr report status: ${reportId}`);
+
+  const client = getCheckrClient();
+  const report = await client.getReport(reportId);
+
+  return {
+    candidateId: report.candidate_id,
+    reportId: report.id,
+    status: report.status,
+    result: report.result,
+    completedAt: report.completed_at ? new Date(report.completed_at).getTime() : undefined,
+  };
+}
+
+// ============================================================================
+// Parallel Markets Activities
+// ============================================================================
+
+/**
+ * Create accreditation verification request
+ */
+export async function createAccreditationRequest(
+  userId: string,
+  email: string,
+  name: string,
+  type: AccreditationType = 'accredited_investor'
+): Promise<{ requestId: string; verificationUrl: string | null }> {
+  console.log(`[KYC Activity] Creating accreditation request for user: ${userId}`);
+
+  const client = getParallelMarketsClient();
+  const request = await client.createAccreditationRequest({
+    investorEmail: email,
+    investorName: name,
+    type,
+  });
+
+  return {
+    requestId: request.id,
+    verificationUrl: request.verification_url,
+  };
+}
+
+/**
+ * Get accreditation status
+ */
+export async function getAccreditationStatus(
+  requestId: string
+): Promise<AccreditationResult> {
+  console.log(`[KYC Activity] Getting accreditation status: ${requestId}`);
+
+  const client = getParallelMarketsClient();
+  const request = await client.getAccreditationStatus(requestId);
+
+  return {
+    requestId: request.id,
+    status: request.status,
+    method: request.method ?? undefined,
+    expiresAt: request.expires_at ? new Date(request.expires_at).getTime() : undefined,
+    completedAt: request.completed_at ? new Date(request.completed_at).getTime() : undefined,
+  };
+}
+
+/**
+ * Download accreditation certificate
+ */
+export async function downloadAccreditationCertificate(
+  requestId: string
+): Promise<{ certificateData: string }> {
+  console.log(`[KYC Activity] Downloading accreditation certificate: ${requestId}`);
+
+  const client = getParallelMarketsClient();
+  const pdfBuffer = await client.downloadAccreditationCertificate(requestId);
+
+  return {
+    certificateData: pdfBuffer.toString('base64'),
+  };
+}
+
+// ============================================================================
+// Sanctions.io Activities
+// ============================================================================
+
+/**
+ * Screen user against sanctions lists
+ */
+export async function screenUserSanctions(
+  userId: string,
+  name: string,
+  dob?: string,
+  country?: string,
+  nationality?: string
+): Promise<SanctionsResult> {
+  console.log(`[KYC Activity] Screening user against sanctions: ${userId}`);
+
+  const client = getSanctionsClient();
+  const result = await client.screenIndividual({
+    name,
+    dateOfBirth: dob,
+    country,
+    nationality,
+  });
+
+  return {
+    screeningId: result.id,
+    match: result.match,
+    riskScore: result.risk_score,
+    riskLevel: result.risk_level,
+    hitsCount: result.hits.length,
+    completedAt: Date.now(),
+  };
+}
+
+/**
+ * Screen crypto wallet address
+ */
+export async function screenWalletSanctions(
+  walletAddress: string,
+  chain: string
+): Promise<{ screeningId: string; match: boolean; riskScore: number }> {
+  console.log(`[KYC Activity] Screening wallet: ${walletAddress}`);
+
+  const client = getSanctionsClient();
+  const result = await client.screenEntity({
+    name: walletAddress,
+    country: undefined,
+    datasets: ['sanctions'],
+  });
+
+  return {
+    screeningId: result.id,
+    match: result.match,
+    riskScore: result.risk_score,
+  };
+}
+
+/**
+ * Add user to ongoing monitoring
+ */
+export async function addToOngoingMonitoring(
+  userId: string,
+  userData: { name: string; dob?: string; country?: string }
+): Promise<{ monitoringId: string }> {
+  console.log(`[KYC Activity] Adding user to ongoing monitoring: ${userId}`);
+
+  const client = getSanctionsClient();
+  const entity = await client.addToMonitoring({
+    name: userData.name,
+    type: 'individual',
+    dateOfBirth: userData.dob,
+    country: userData.country,
+    externalId: userId,
+    datasets: ['sanctions', 'pep'],
+    screeningFrequency: 'daily',
+  });
+
+  return { monitoringId: entity.id };
+}
+
+// ============================================================================
+// KYC Status Activities
+// ============================================================================
+
+/**
+ * Update KYC status in database
+ */
+export async function updateKYCStatusInDB(
+  userId: string,
+  updates: {
+    status?: string;
+    tier?: string;
+    sumsubApplicantId?: string;
+    sumsubResult?: SumsubResult;
+    checkrCandidateId?: string;
+    checkrReportId?: string;
+    checkrResult?: CheckrResult;
+    parallelRequestId?: string;
+    accreditationResult?: AccreditationResult;
+    sanctionsScreeningId?: string;
+    sanctionsResult?: SanctionsResult;
+    plaidItemId?: string;
+    plaidAccessToken?: string;
+    plaidAccountId?: string;
+    plaidResult?: PlaidResult;
+    rejectionReason?: string;
+    workflowId?: string;
+    completedAt?: number;
+    expiresAt?: number;
+  }
+): Promise<void> {
+  console.log(`[KYC Activity] Updating KYC status for user: ${userId}`);
+
+  // TODO: Implement actual Convex mutation call
+  // This would call the Convex function to update the KYC record
+}
+
+/**
+ * Create KYC record in database
+ */
+export async function createKYCRecord(
+  userId: string,
+  targetTier: 'basic' | 'enhanced' | 'accredited',
+  workflowId: string
+): Promise<{ recordId: string }> {
+  console.log(`[KYC Activity] Creating KYC record for user: ${userId}`);
+
+  // TODO: Implement actual Convex mutation call
+  return { recordId: `kyc_${crypto.randomUUID()}` };
+}
+
+/**
+ * Send KYC notification to user
+ */
+export async function sendKYCUserNotification(
+  userId: string,
+  email: string,
+  type: 'started' | 'approved' | 'rejected' | 'action_required' | 'expiring',
+  data?: Record<string, unknown>
+): Promise<void> {
+  console.log(`[KYC Activity] Sending KYC notification: ${type} to ${userId}`);
+
+  const notificationMessages: Record<typeof type, string> = {
+    started: 'Your KYC verification has started.',
+    approved: 'Congratulations! Your KYC verification has been approved.',
+    rejected: 'Your KYC verification was not approved. Please contact support.',
+    action_required: 'Additional action is required for your KYC verification.',
+    expiring: 'Your KYC verification is expiring soon. Please renew.',
+  };
+
+  // TODO: Integrate with email service (Resend, SendGrid, etc.)
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "PULL <kyc@pull.com>",
+      to: email,
+      subject: `PULL KYC: ${type.replace('_', ' ').toUpperCase()}`,
+      html: `<p>${notificationMessages[type]}</p>`,
+    }),
+  });
 }
