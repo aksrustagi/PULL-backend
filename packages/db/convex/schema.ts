@@ -798,6 +798,147 @@ export default defineSchema({
     .index("by_pool", ["poolId"]),
 
   // ============================================================================
+  // SOCIAL TRADING TABLES
+  // ============================================================================
+
+  /**
+   * Follows - Social follow relationships between traders
+   */
+  follows: defineTable({
+    followerId: v.id("users"),
+    followedId: v.id("users"),
+    notifications: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_follower", ["followerId"])
+    .index("by_followed", ["followedId"])
+    .index("by_relationship", ["followerId", "followedId"]),
+
+  /**
+   * Copy Settings - Copy trading configuration
+   */
+  copySettings: defineTable({
+    copierId: v.id("users"), // user who copies
+    traderId: v.id("users"), // trader being copied
+    allocationPercent: v.number(), // % of portfolio to mirror
+    maxPositionSize: v.number(),
+    minPositionSize: v.number(),
+    excludeMarketTypes: v.array(v.string()),
+    active: v.boolean(),
+    totalCopied: v.number(), // running total USD copied
+    totalPnL: v.number(), // running P&L from copies
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_copier", ["copierId"])
+    .index("by_trader", ["traderId"])
+    .index("by_active", ["active"])
+    .index("by_copier_trader", ["copierId", "traderId"]),
+
+  /**
+   * Trader Stats - Aggregated trading performance metrics
+   */
+  traderStats: defineTable({
+    userId: v.id("users"),
+    // Returns
+    totalReturn: v.number(), // all-time %
+    return30d: v.number(),
+    return7d: v.number(),
+    return24h: v.number(),
+    // Risk metrics
+    sharpeRatio: v.number(),
+    sortinoRatio: v.number(),
+    maxDrawdown: v.number(),
+    currentDrawdown: v.number(),
+    // Win/loss stats
+    winRate: v.number(),
+    avgWin: v.number(),
+    avgLoss: v.number(),
+    // Trade counts
+    totalTrades: v.number(),
+    profitableTrades: v.number(),
+    avgHoldingPeriod: v.number(), // in hours
+    // Social stats
+    followerCount: v.number(),
+    copierCount: v.number(),
+    // Metadata
+    lastCalculated: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_return30d", ["return30d"])
+    .index("by_sharpeRatio", ["sharpeRatio"])
+    .index("by_followers", ["followerCount"])
+    .index("by_winRate", ["winRate"]),
+
+  /**
+   * Copy Trades - Individual copied trade records
+   */
+  copyTrades: defineTable({
+    copySettingsId: v.id("copySettings"),
+    copierId: v.id("users"),
+    traderId: v.id("users"),
+    originalOrderId: v.id("orders"),
+    copiedOrderId: v.optional(v.id("orders")),
+    symbol: v.string(),
+    side: v.union(v.literal("buy"), v.literal("sell")),
+    originalQuantity: v.number(),
+    copiedQuantity: v.number(),
+    originalPrice: v.number(),
+    copiedPrice: v.optional(v.number()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("executed"),
+      v.literal("partial"),
+      v.literal("failed"),
+      v.literal("skipped")
+    ),
+    skipReason: v.optional(v.string()),
+    pnl: v.optional(v.number()),
+    createdAt: v.number(),
+    executedAt: v.optional(v.number()),
+  })
+    .index("by_copier", ["copierId"])
+    .index("by_trader", ["traderId"])
+    .index("by_settings", ["copySettingsId"])
+    .index("by_original_order", ["originalOrderId"]),
+
+  /**
+   * Fraud Flags - Suspicious activity tracking
+   */
+  fraudFlags: defineTable({
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("wash_trading"),
+      v.literal("circular_copying"),
+      v.literal("pump_and_dump"),
+      v.literal("fake_followers"),
+      v.literal("other")
+    ),
+    severity: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("critical")
+    ),
+    status: v.union(
+      v.literal("detected"),
+      v.literal("under_review"),
+      v.literal("confirmed"),
+      v.literal("dismissed")
+    ),
+    evidence: v.any(),
+    detectedAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+    reviewedBy: v.optional(v.id("users")),
+    resolution: v.optional(v.string()),
+    actionTaken: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_type", ["type"])
+    .index("by_status", ["status"])
+    .index("by_severity", ["severity", "status"]),
+
+  // ============================================================================
   // SYSTEM TABLES
   // ============================================================================
 
