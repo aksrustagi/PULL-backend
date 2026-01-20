@@ -1,0 +1,937 @@
+{
+  "info": {
+    "_postman_id": "pull-api-collection",
+    "name": "PULL Super App API",
+    "description": "Complete API collection for PULL - Trading, Predictions, RWA, Rewards, and Admin endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.token) {",
+                  "        pm.collectionVariables.set('access_token', jsonData.data.token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123!\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.token) {",
+                  "        pm.collectionVariables.set('access_token', jsonData.data.token);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/forgot-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "forgot-password"]
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"reset-token-here\",\n  \"password\": \"NewPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/reset-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "reset-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Trading",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetClass\": \"crypto\",\n  \"symbol\": \"BTC-USD\",\n  \"side\": \"buy\",\n  \"type\": \"limit\",\n  \"quantity\": 0.1,\n  \"price\": 50000,\n  \"timeInForce\": \"gtc\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/trading/orders",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trading", "orders"]
+            }
+          }
+        },
+        {
+          "name": "Get Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trading/orders?status=pending&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trading", "orders"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Order by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trading/orders/:orderId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trading", "orders", ":orderId"],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "order-id-here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trading/orders/:orderId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trading", "orders", ":orderId"],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "order-id-here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Portfolio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trading/portfolio?assetClass=crypto",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trading", "portfolio"],
+              "query": [
+                {
+                  "key": "assetClass",
+                  "value": "crypto"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Buying Power",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/trading/buying-power",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "trading", "buying-power"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Predictions",
+      "item": [
+        {
+          "name": "Get Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions/events?status=open&category=politics&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions", "events"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open"
+                },
+                {
+                  "key": "category",
+                  "value": "politics"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Event by Ticker",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions/events/:ticker",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions", "events", ":ticker"],
+              "variable": [
+                {
+                  "key": "ticker",
+                  "value": "PRES-2024"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions/search?q=election&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "election"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions/categories",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Get User Positions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions/positions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions", "positions"]
+            }
+          }
+        },
+        {
+          "name": "Get Event Markets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions/events/:ticker/markets",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions", "events", ":ticker", "markets"],
+              "variable": [
+                {
+                  "key": "ticker",
+                  "value": "PRES-2024"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Market by Ticker",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/predictions/markets/:ticker",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "predictions", "markets", ":ticker"],
+              "variable": [
+                {
+                  "key": "ticker",
+                  "value": "PRES-2024-DEM"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RWA (Real World Assets)",
+      "item": [
+        {
+          "name": "Get Assets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rwa/assets?type=pokemon_card&status=available&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rwa", "assets"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "pokemon_card"
+                },
+                {
+                  "key": "status",
+                  "value": "available"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Asset by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rwa/assets/:assetId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rwa", "assets", ":assetId"],
+              "variable": [
+                {
+                  "key": "assetId",
+                  "value": "asset-id-here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Assets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rwa/search?q=charizard&type=pokemon_card&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rwa", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "charizard"
+                },
+                {
+                  "key": "type",
+                  "value": "pokemon_card"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Listings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rwa/listings?status=active&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rwa", "listings"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User Ownership",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rwa/ownership",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rwa", "ownership"]
+            }
+          }
+        },
+        {
+          "name": "Purchase Shares",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"listingId\": \"listing-id-here\",\n  \"shares\": 10\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/rwa/purchase",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rwa", "purchase"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rewards",
+      "item": [
+        {
+          "name": "Get Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rewards/balance",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rewards", "balance"]
+            }
+          }
+        },
+        {
+          "name": "Get History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rewards/history?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rewards", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Catalog",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rewards/catalog?category=trading",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rewards", "catalog"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "trading"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Redeem Reward",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rewardId\": \"reward-id-here\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/rewards/redeem",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rewards", "redeem"]
+            }
+          }
+        },
+        {
+          "name": "Get Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rewards/leaderboard?period=weekly&limit=100",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rewards", "leaderboard"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "weekly"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Claim Daily Streak",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/rewards/daily-streak",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "rewards", "daily-streak"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users?status=active&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/:userId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users", ":userId"],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "user-id-here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"suspended\",\n  \"reason\": \"Violation of terms\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/:userId/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "users", ":userId", "status"],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "user-id-here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get KYC Queue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/kyc/queue?status=pending&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "kyc", "queue"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve KYC",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"verified\",\n  \"notes\": \"All documents verified\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/kyc/:userId/approve",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "kyc", ":userId", "approve"],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "user-id-here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reject KYC",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Documents unclear\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/kyc/:userId/reject",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "kyc", ":userId", "reject"],
+              "variable": [
+                {
+                  "key": "userId",
+                  "value": "user-id-here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/orders?status=pending&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "orders"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/audit-logs?limit=100",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "audit-logs"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Persona Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Persona-Signature",
+                "value": "signature-here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": {\n    \"type\": \"event\",\n    \"id\": \"evt_123\",\n    \"attributes\": {\n      \"name\": \"inquiry.completed\",\n      \"payload\": {\n        \"data\": {\n          \"id\": \"inq_123\",\n          \"attributes\": {\n            \"reference-id\": \"user-id-here\",\n            \"status\": \"completed\"\n          }\n        }\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/persona",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "persona"]
+            }
+          }
+        },
+        {
+          "name": "Stripe Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Stripe-Signature",
+                "value": "signature-here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"payment_intent.succeeded\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"pi_123\",\n      \"amount\": 10000,\n      \"currency\": \"usd\",\n      \"metadata\": {\n        \"userId\": \"user-id-here\"\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/stripe",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "stripe"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
