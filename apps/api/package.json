@@ -11,12 +11,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@pull/db": "workspace:*",
     "@pull/types": "workspace:*",
     "@hono/trpc-server": "^0.3.0",
     "@hono/zod-validator": "^0.2.0",
     "@trpc/server": "^10.45.0",
     "@upstash/ratelimit": "^1.0.0",
     "@upstash/redis": "^1.28.0",
+    "bcryptjs": "^2.4.3",
     "convex": "^1.10.0",
     "hono": "^4.1.0",
     "jose": "^5.2.0",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@pull/config": "workspace:*",
+    "@types/bcryptjs": "^2.4.6",
     "@types/bun": "^1.0.0",
     "typescript": "^5.4.0"
   }

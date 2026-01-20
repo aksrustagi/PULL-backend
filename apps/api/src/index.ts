@@ -1,12 +1,17 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { secureHeaders } from "hono/secure-headers";
-import { timing } from "hono/timing";
 import { trpcServer } from "@hono/trpc-server";
 
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import {
+  securityHeaders,
+  csrfProtection,
+  requestId,
+  requestTiming,
+} from "./middleware/security";
+import { errorHandler } from "./middleware/error-handler";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { tradingRoutes } from "./routes/trading";
@@ -22,15 +27,32 @@ export type Env = {
   Variables: {
     userId?: string;
     requestId: string;
+    sanitizedBody?: unknown;
   };
 };
 
 const app = new Hono<Env>();
 
-// Global middleware
-app.use("*", timing());
+// Global middleware - order matters!
+// 1. Request ID first for tracking
+app.use("*", requestId);
+
+// 2. Request timing for performance monitoring
+app.use("*", requestTiming);
+
+// 3. Security headers for all responses
+app.use("*", securityHeaders);
+
+// 4. CSRF protection for state-changing requests
+app.use("*", csrfProtection);
+
+// 5. Error handler wraps entire app
+app.use("*", errorHandler);
+
+// 6. Logging
 app.use("*", logger());
-app.use("*", secureHeaders());
+
+// 7. CORS configuration
 app.use(
   "*",
   cors({
@@ -40,21 +62,12 @@ app.use(
       "https://*.pull.app",
     ],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID"],
-    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-API-Key"],
+    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-Response-Time"],
     credentials: true,
     maxAge: 86400,
   })
 );
-
-// Request ID middleware
-app.use("*", async (c, next) => {
-  const requestId =
-    c.req.header("X-Request-ID") ?? crypto.randomUUID();
-  c.set("requestId", requestId);
-  c.header("X-Request-ID", requestId);
-  await next();
-});
 
 // Rate limiting for non-webhook routes
 app.use("/api/*", rateLimitMiddleware);

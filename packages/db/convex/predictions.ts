@@ -129,6 +129,27 @@ export const getMarketByTicker = query({
 });
 
 /**
+ * Get categories with event counts
+ */
+export const getCategories = query({
+  args: {},
+  handler: async (ctx) => {
+    const events = await ctx.db.query("predictionEvents").collect();
+    const categoryCounts: Record<string, number> = {};
+
+    for (const event of events) {
+      categoryCounts[event.category] = (categoryCounts[event.category] ?? 0) + 1;
+    }
+
+    return Object.entries(categoryCounts).map(([id, count]) => ({
+      id,
+      name: id.charAt(0).toUpperCase() + id.slice(1),
+      count,
+    }));
+  },
+});
+
+/**
  * Get user's prediction positions
  */
 export const getUserPositions = query({

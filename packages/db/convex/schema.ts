@@ -85,6 +85,7 @@ export default defineSchema({
     .index("by_referral_code", ["referralCode"])
     .index("by_status", ["status"])
     .index("by_kyc_status", ["kycStatus"])
+    .index("by_referrer", ["referredBy"])
     .searchIndex("search_users", {
       searchField: "displayName",
       filterFields: ["status", "kycTier"],
