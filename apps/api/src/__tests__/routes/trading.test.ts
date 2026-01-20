@@ -31,6 +31,12 @@ vi.mock('../../lib/convex', () => ({
   },
 }));
 
+// Mock Temporal client
+vi.mock('../../lib/temporal', () => ({
+  startOrderWorkflow: vi.fn().mockResolvedValue('workflow-123'),
+  getTemporalClient: vi.fn(),
+}));
+
 // Import after mocks are set up
 const { tradingRoutes } = await import('../../routes/trading');
 

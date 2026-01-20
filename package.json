@@ -36,6 +36,8 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
+    "@temporalio/client": "^1.14.1",
+    "@temporalio/worker": "^1.9.0",
     "@types/node": "^20.11.0",
     "@vitest/coverage-v8": "^1.6.0",
     "eslint": "^9.0.0",

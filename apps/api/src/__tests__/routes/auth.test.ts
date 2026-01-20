@@ -24,6 +24,20 @@ vi.mock('../../middleware/auth', () => ({
   verifyToken: vi.fn().mockResolvedValue({ userId: 'test-user-id' }),
 }));
 
+// Mock Redis for token blacklisting
+vi.mock('../../lib/redis', () => ({
+  blacklistToken: vi.fn().mockResolvedValue(undefined),
+  isTokenBlacklisted: vi.fn().mockResolvedValue(false),
+}));
+
+// Mock Resend client
+vi.mock('@pull/core/src/services/resend', () => ({
+  resendClient: {
+    sendPasswordResetEmail: vi.fn().mockResolvedValue({ id: 'email-123' }),
+    sendEmail: vi.fn().mockResolvedValue({ id: 'email-123' }),
+  },
+}));
+
 // Import after mocks are set up
 const { authRoutes } = await import('../../routes/auth');
 

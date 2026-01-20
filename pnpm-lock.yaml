@@ -11,6 +11,12 @@ importers:
       '@changesets/cli':
         specifier: ^2.27.0
         version: 2.29.8(@types/node@20.19.30)
+      '@temporalio/client':
+        specifier: ^1.14.1
+        version: 1.14.1
+      '@temporalio/worker':
+        specifier: ^1.9.0
+        version: 1.14.1(@swc/helpers@0.5.5)(tslib@2.8.1)
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.30
@@ -62,6 +68,9 @@ importers:
       '@sentry/node':
         specifier: ^7.100.0
         version: 7.120.4
+      '@temporalio/client':
+        specifier: ^1.14.1
+        version: 1.14.1
       '@trpc/server':
         specifier: ^10.45.0
         version: 10.45.4
