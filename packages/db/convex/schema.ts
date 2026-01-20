@@ -863,4 +863,210 @@ export default defineSchema({
       dimensions: 1536,
       filterFields: ["userId", "agentType"],
     }),
+
+  // ============================================================================
+  // AI SIGNAL DETECTION TABLES
+  // ============================================================================
+
+  /**
+   * Signals - Detected trading and market signals
+   */
+  signals: defineTable({
+    // Signal identification
+    type: v.union(
+      v.literal("email"),
+      v.literal("news"),
+      v.literal("market"),
+      v.literal("social"),
+      v.literal("on_chain"),
+      v.literal("sentiment"),
+      v.literal("unusual_activity"),
+      v.literal("correlation")
+    ),
+    source: v.string(), // e.g., "email_triage", "news_feed", "market_analysis"
+    sourceId: v.optional(v.string()), // Reference to source record
+
+    // Signal content
+    title: v.string(),
+    description: v.string(),
+    confidence: v.number(), // 0-1 confidence score
+    severity: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("critical")
+    ),
+
+    // Related markets/assets
+    relatedMarkets: v.array(v.string()), // Array of tickers/market IDs
+    relatedEvents: v.array(v.string()), // Array of event IDs
+
+    // Signal metadata
+    sentiment: v.optional(
+      v.union(v.literal("bullish"), v.literal("bearish"), v.literal("neutral"))
+    ),
+    priceImpact: v.optional(v.number()), // Expected price impact percentage
+    timeHorizon: v.optional(v.string()), // e.g., "immediate", "short_term", "long_term"
+    actionSuggestion: v.optional(v.string()),
+
+    // AI analysis
+    aiAnalysis: v.optional(v.string()),
+    aiConfidenceFactors: v.optional(v.array(v.string())),
+    rawData: v.optional(v.any()), // Original data that triggered the signal
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("acknowledged"),
+      v.literal("expired"),
+      v.literal("invalidated")
+    ),
+    expiresAt: v.optional(v.number()),
+
+    // Timestamps
+    detectedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_type", ["type", "status"])
+    .index("by_source", ["source", "createdAt"])
+    .index("by_severity", ["severity", "status"])
+    .index("by_status", ["status", "createdAt"])
+    .index("by_detected", ["detectedAt"])
+    .searchIndex("search_signals", {
+      searchField: "title",
+      filterFields: ["type", "status", "severity"],
+    }),
+
+  /**
+   * User Insights - Personalized AI-generated insights for users
+   */
+  userInsights: defineTable({
+    userId: v.id("users"),
+
+    // Insight type
+    insightType: v.union(
+      v.literal("portfolio_analysis"),
+      v.literal("market_opportunity"),
+      v.literal("risk_alert"),
+      v.literal("trading_pattern"),
+      v.literal("performance_summary"),
+      v.literal("recommendation"),
+      v.literal("correlation_alert"),
+      v.literal("daily_digest"),
+      v.literal("weekly_summary")
+    ),
+
+    // Insight content
+    title: v.string(),
+    content: v.string(),
+    summary: v.optional(v.string()),
+
+    // Related data
+    relatedSignals: v.array(v.id("signals")),
+    relatedMarkets: v.array(v.string()),
+    relatedPositions: v.array(v.id("positions")),
+
+    // Confidence and priority
+    confidence: v.number(),
+    priority: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("urgent")
+    ),
+
+    // User interaction
+    dismissed: v.boolean(),
+    dismissedAt: v.optional(v.number()),
+    viewedAt: v.optional(v.number()),
+    actionTaken: v.optional(v.string()),
+    actionTakenAt: v.optional(v.number()),
+    feedback: v.optional(
+      v.union(v.literal("helpful"), v.literal("not_helpful"), v.literal("neutral"))
+    ),
+
+    // Validity
+    validFrom: v.number(),
+    validUntil: v.optional(v.number()),
+    isExpired: v.boolean(),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_user_type", ["userId", "insightType"])
+    .index("by_user_dismissed", ["userId", "dismissed"])
+    .index("by_user_priority", ["userId", "priority", "dismissed"])
+    .index("by_type", ["insightType", "createdAt"]),
+
+  /**
+   * Market Correlations - Tracked correlations between markets
+   */
+  marketCorrelations: defineTable({
+    // Market pair
+    marketA: v.string(), // Ticker or market ID
+    marketB: v.string(), // Ticker or market ID
+    marketAType: v.union(
+      v.literal("prediction"),
+      v.literal("crypto"),
+      v.literal("stock"),
+      v.literal("rwa")
+    ),
+    marketBType: v.union(
+      v.literal("prediction"),
+      v.literal("crypto"),
+      v.literal("stock"),
+      v.literal("rwa")
+    ),
+
+    // Correlation metrics
+    correlation: v.number(), // -1 to 1 correlation coefficient
+    correlationType: v.union(
+      v.literal("price"),
+      v.literal("volume"),
+      v.literal("sentiment"),
+      v.literal("news")
+    ),
+    strength: v.union(
+      v.literal("weak"),
+      v.literal("moderate"),
+      v.literal("strong"),
+      v.literal("very_strong")
+    ),
+
+    // Statistical data
+    sampleSize: v.number(), // Number of data points used
+    timeWindow: v.string(), // e.g., "1h", "24h", "7d", "30d"
+    pValue: v.optional(v.number()), // Statistical significance
+    rSquared: v.optional(v.number()), // R-squared value
+    standardError: v.optional(v.number()),
+
+    // Trend analysis
+    previousCorrelation: v.optional(v.number()),
+    correlationChange: v.optional(v.number()),
+    trend: v.optional(
+      v.union(v.literal("increasing"), v.literal("decreasing"), v.literal("stable"))
+    ),
+
+    // AI analysis
+    aiExplanation: v.optional(v.string()),
+    causalFactors: v.optional(v.array(v.string())),
+    predictedCorrelation: v.optional(v.number()),
+
+    // Status
+    isActive: v.boolean(),
+    lastCalculatedAt: v.number(),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_markets", ["marketA", "marketB"])
+    .index("by_market_a", ["marketA", "correlationType"])
+    .index("by_market_b", ["marketB", "correlationType"])
+    .index("by_strength", ["strength", "isActive"])
+    .index("by_correlation_type", ["correlationType", "isActive"])
+    .index("by_updated", ["updatedAt"]),
 });
