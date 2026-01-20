@@ -863,4 +863,233 @@ export default defineSchema({
       dimensions: 1536,
       filterFields: ["userId", "agentType"],
     }),
+
+  // ============================================================================
+  // ANALYTICS & EXPERIMENTS TABLES
+  // ============================================================================
+
+  /**
+   * Analytics Events - Event tracking for analytics
+   */
+  analyticsEvents: defineTable({
+    event: v.string(),
+    userId: v.optional(v.string()),
+    anonymousId: v.optional(v.string()),
+    properties: v.any(),
+    timestamp: v.number(),
+    context: v.object({
+      page: v.optional(v.string()),
+      referrer: v.optional(v.string()),
+      userAgent: v.optional(v.string()),
+      ip: v.optional(v.string()),
+      locale: v.optional(v.string()),
+      timezone: v.optional(v.string()),
+      campaign: v.optional(
+        v.object({
+          source: v.optional(v.string()),
+          medium: v.optional(v.string()),
+          name: v.optional(v.string()),
+          term: v.optional(v.string()),
+          content: v.optional(v.string()),
+        })
+      ),
+      device: v.optional(
+        v.object({
+          type: v.optional(v.union(v.literal("mobile"), v.literal("tablet"), v.literal("desktop"))),
+          os: v.optional(v.string()),
+          osVersion: v.optional(v.string()),
+          browser: v.optional(v.string()),
+          browserVersion: v.optional(v.string()),
+          screenWidth: v.optional(v.number()),
+          screenHeight: v.optional(v.number()),
+        })
+      ),
+      session: v.optional(
+        v.object({
+          id: v.string(),
+          startedAt: v.number(),
+          pageViews: v.number(),
+        })
+      ),
+    }),
+    batchId: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_event", ["event"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_event_timestamp", ["event", "timestamp"]),
+
+  /**
+   * Experiments - A/B test definitions
+   */
+  experiments: defineTable({
+    name: v.string(),
+    description: v.string(),
+    hypothesis: v.string(),
+    variants: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        description: v.optional(v.string()),
+        weight: v.number(),
+        isControl: v.boolean(),
+        config: v.any(),
+      })
+    ),
+    targetAudience: v.optional(
+      v.object({
+        tiers: v.optional(v.array(v.string())),
+        cohorts: v.optional(v.array(v.string())),
+        percentOfUsers: v.optional(v.number()),
+        countries: v.optional(v.array(v.string())),
+        platforms: v.optional(v.array(v.union(v.literal("web"), v.literal("ios"), v.literal("android")))),
+        includeUserIds: v.optional(v.array(v.string())),
+        excludeUserIds: v.optional(v.array(v.string())),
+        filters: v.optional(
+          v.array(
+            v.object({
+              field: v.string(),
+              operator: v.union(
+                v.literal("eq"),
+                v.literal("neq"),
+                v.literal("gt"),
+                v.literal("gte"),
+                v.literal("lt"),
+                v.literal("lte"),
+                v.literal("in"),
+                v.literal("nin"),
+                v.literal("contains")
+              ),
+              value: v.any(),
+            })
+          )
+        ),
+      })
+    ),
+    metrics: v.array(
+      v.object({
+        name: v.string(),
+        type: v.union(
+          v.literal("conversion"),
+          v.literal("revenue"),
+          v.literal("count"),
+          v.literal("duration"),
+          v.literal("custom")
+        ),
+        eventName: v.string(),
+        property: v.optional(v.string()),
+        isPrimary: v.boolean(),
+        minimumDetectableEffect: v.optional(v.number()),
+      })
+    ),
+    startDate: v.number(),
+    endDate: v.optional(v.number()),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("running"),
+      v.literal("paused"),
+      v.literal("completed"),
+      v.literal("archived")
+    ),
+    type: v.union(
+      v.literal("feature_flag"),
+      v.literal("ab_test"),
+      v.literal("multivariate"),
+      v.literal("holdout"),
+      v.literal("rollout")
+    ),
+    minimumSampleSize: v.optional(v.number()),
+    minimumRunDuration: v.optional(v.number()),
+    winnerVariantId: v.optional(v.string()),
+    createdBy: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_name", ["name"]),
+
+  /**
+   * Experiment Assignments - User variant assignments
+   */
+  experimentAssignments: defineTable({
+    userId: v.string(),
+    experimentId: v.string(),
+    variantId: v.string(),
+    assignedAt: v.number(),
+    context: v.optional(
+      v.object({
+        platform: v.optional(v.string()),
+        version: v.optional(v.string()),
+        country: v.optional(v.string()),
+        userAgent: v.optional(v.string()),
+        sessionId: v.optional(v.string()),
+      })
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_experiment", ["experimentId"])
+    .index("by_user_experiment", ["userId", "experimentId"]),
+
+  /**
+   * Experiment Events - Exposure and conversion events
+   */
+  experimentEvents: defineTable({
+    userId: v.string(),
+    experimentId: v.string(),
+    variantId: v.string(),
+    eventType: v.union(v.literal("exposure"), v.literal("conversion")),
+    eventName: v.optional(v.string()),
+    value: v.optional(v.number()),
+    timestamp: v.number(),
+    properties: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_experiment", ["experimentId"])
+    .index("by_experiment_variant", ["experimentId", "variantId"]),
+
+  /**
+   * Daily Metrics - Pre-computed daily analytics
+   */
+  dailyMetrics: defineTable({
+    date: v.string(), // YYYY-MM-DD
+    dau: v.number(),
+    wau: v.number(),
+    mau: v.number(),
+    newSignups: v.number(),
+    kycCompletions: v.number(),
+    firstDeposits: v.number(),
+    firstTrades: v.number(),
+    totalTrades: v.number(),
+    totalVolume: v.number(),
+    totalDeposits: v.number(),
+    totalWithdrawals: v.number(),
+    activeTraders: v.number(),
+    avgSessionDuration: v.number(),
+    avgTradesPerUser: v.number(),
+    referrals: v.number(),
+    totalFees: v.number(),
+    d1Retention: v.optional(v.number()),
+    d7Retention: v.optional(v.number()),
+    d30Retention: v.optional(v.number()),
+    dauMauRatio: v.optional(v.number()),
+    avgSessionsPerDay: v.optional(v.number()),
+    newFollows: v.optional(v.number()),
+    copyTradingStarts: v.optional(v.number()),
+    messagesSent: v.optional(v.number()),
+    anomalies: v.optional(
+      v.array(
+        v.object({
+          metric: v.string(),
+          severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+          message: v.string(),
+        })
+      )
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_date", ["date"]),
 });

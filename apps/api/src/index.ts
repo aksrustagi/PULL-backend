@@ -14,6 +14,7 @@ import { predictionsRoutes } from "./routes/predictions";
 import { rwaRoutes } from "./routes/rwa";
 import { rewardsRoutes } from "./routes/rewards";
 import { webhookRoutes } from "./routes/webhooks";
+import { analyticsRoutes, experimentsRoutes } from "./routes/admin";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -70,6 +71,11 @@ app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
 app.route("/api/v1/rwa", rwaRoutes);
 app.route("/api/v1/rewards", rewardsRoutes);
+
+// Admin routes (require auth + admin role)
+// TODO: Add admin role check middleware
+app.route("/admin/analytics", analyticsRoutes);
+app.route("/admin/experiments", experimentsRoutes);
 
 // tRPC endpoint
 app.use(
