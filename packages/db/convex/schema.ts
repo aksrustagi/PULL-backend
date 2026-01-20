@@ -798,6 +798,116 @@ export default defineSchema({
     .index("by_pool", ["poolId"]),
 
   // ============================================================================
+  // COPY TRADING TABLES
+  // ============================================================================
+
+  /**
+   * Follows - Social follow relationships between traders
+   */
+  follows: defineTable({
+    followerId: v.id("users"),
+    followedId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_follower", ["followerId"])
+    .index("by_followed", ["followedId"])
+    .index("by_relationship", ["followerId", "followedId"]),
+
+  /**
+   * Copy Settings - Configuration for copying a trader's positions
+   */
+  copySettings: defineTable({
+    userId: v.id("users"),
+    traderId: v.id("users"),
+    allocationPct: v.number(), // Percentage of portfolio to allocate (0-100)
+    maxPositionSize: v.number(), // Maximum position size in USD
+    active: v.boolean(),
+    riskLevel: v.optional(
+      v.union(
+        v.literal("conservative"),
+        v.literal("moderate"),
+        v.literal("aggressive")
+      )
+    ),
+    copyStopLoss: v.optional(v.boolean()), // Whether to copy stop loss orders
+    copyTakeProfit: v.optional(v.boolean()), // Whether to copy take profit orders
+    minTradeSize: v.optional(v.number()), // Minimum trade size to copy
+    excludedAssets: v.optional(v.array(v.string())), // Assets to exclude from copying
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_trader", ["traderId"])
+    .index("by_user_trader", ["userId", "traderId"])
+    .index("by_active", ["active"]),
+
+  /**
+   * Trader Stats - Performance metrics for traders
+   */
+  traderStats: defineTable({
+    userId: v.id("users"),
+    totalReturn: v.number(), // Total return percentage
+    sharpeRatio: v.number(), // Risk-adjusted return metric
+    maxDrawdown: v.number(), // Maximum peak-to-trough decline
+    winRate: v.number(), // Percentage of winning trades
+    totalTrades: v.number(), // Total number of trades
+    profitableTrades: v.number(), // Number of profitable trades
+    averageWin: v.number(), // Average profit on winning trades
+    averageLoss: v.number(), // Average loss on losing trades
+    profitFactor: v.number(), // Gross profit / Gross loss
+    tradingVolume: v.number(), // Total trading volume in USD
+    followerCount: v.number(), // Number of followers
+    copierCount: v.number(), // Number of users copying this trader
+    rank: v.optional(v.number()), // Leaderboard rank
+    tier: v.optional(
+      v.union(
+        v.literal("bronze"),
+        v.literal("silver"),
+        v.literal("gold"),
+        v.literal("platinum"),
+        v.literal("diamond")
+      )
+    ),
+    periodStart: v.number(), // Start of the stats period
+    periodEnd: v.number(), // End of the stats period
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_rank", ["rank"])
+    .index("by_total_return", ["totalReturn"])
+    .index("by_sharpe_ratio", ["sharpeRatio"])
+    .index("by_follower_count", ["followerCount"])
+    .index("by_win_rate", ["winRate"]),
+
+  /**
+   * Copy Trades - Record of copied trades
+   */
+  copyTrades: defineTable({
+    userId: v.id("users"), // The copier
+    traderId: v.id("users"), // The trader being copied
+    originalOrderId: v.id("orders"), // The original order from trader
+    copiedOrderId: v.id("orders"), // The copied order for the user
+    copySettingsId: v.id("copySettings"),
+    originalQuantity: v.number(),
+    copiedQuantity: v.number(),
+    scaleFactor: v.number(), // Ratio of copied to original quantity
+    status: v.union(
+      v.literal("pending"),
+      v.literal("executed"),
+      v.literal("partial"),
+      v.literal("failed"),
+      v.literal("cancelled")
+    ),
+    failureReason: v.optional(v.string()),
+    executedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_trader", ["traderId"])
+    .index("by_original_order", ["originalOrderId"])
+    .index("by_status", ["status"]),
+
+  // ============================================================================
   // SYSTEM TABLES
   // ============================================================================
 

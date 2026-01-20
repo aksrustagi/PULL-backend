@@ -10,6 +10,7 @@ import * as rewardsActivities from "./activities/rewards";
 import * as emailActivities from "./activities/email";
 import * as messagingActivities from "./activities/messaging";
 import * as rwaActivities from "./activities/rwa";
+import * as copyTradingActivities from "./activities/copyTrading";
 
 // Configure runtime telemetry
 Runtime.install({
@@ -31,6 +32,7 @@ export const TASK_QUEUES = {
   REWARDS: "pull-rewards",
   EMAIL: "pull-email",
   MESSAGING: "pull-messaging",
+  COPY_TRADING: "pull-copy-trading",
 } as const;
 
 interface WorkerConfig {
@@ -88,6 +90,7 @@ async function run() {
     ...emailActivities,
     ...messagingActivities,
     ...rwaActivities,
+    ...copyTradingActivities,
   };
 
   // Create workers based on environment configuration
@@ -172,6 +175,17 @@ async function run() {
     });
     workers.push(messagingWorker);
     console.log(`📋 Messaging worker registered on queue: ${TASK_QUEUES.MESSAGING}`);
+  }
+
+  if (workerType === "all" || workerType === "copy-trading") {
+    const copyTradingWorker = await createWorker(connection, {
+      taskQueue: TASK_QUEUES.COPY_TRADING,
+      workflowsPath,
+      activities: { ...copyTradingActivities, ...tradingActivities },
+      maxConcurrentActivityTaskExecutions: 100,
+    });
+    workers.push(copyTradingWorker);
+    console.log(`📋 Copy Trading worker registered on queue: ${TASK_QUEUES.COPY_TRADING}`);
   }
 
   if (workers.length === 0) {

@@ -499,6 +499,146 @@ export async function startBridgeMessageWorkflow(
 }
 
 // ============================================================================
+// Copy Trading Workflow Helpers
+// ============================================================================
+
+export interface CalculateTraderStatsInput {
+  userId: string;
+  periodStart: number;
+  periodEnd: number;
+}
+
+export async function startCalculateTraderStatsWorkflow(
+  input: CalculateTraderStatsInput,
+  options?: Partial<WorkflowOptions>
+): Promise<WorkflowHandle> {
+  const client = await getTemporalClient();
+  const workflowId = options?.workflowId ?? `trader-stats-${input.userId}-${Date.now()}`;
+
+  return client.workflow.start("calculateTraderStatsWorkflow", {
+    taskQueue: TASK_QUEUES.COPY_TRADING,
+    workflowId,
+    args: [input],
+    workflowExecutionTimeout: "30 minutes",
+    ...options,
+  });
+}
+
+export interface ExecuteCopyTradeInput {
+  originalOrderId: string;
+  traderId: string;
+}
+
+export async function startExecuteCopyTradeWorkflow(
+  input: ExecuteCopyTradeInput,
+  options?: Partial<WorkflowOptions>
+): Promise<WorkflowHandle> {
+  const client = await getTemporalClient();
+  const workflowId = options?.workflowId ?? `copy-trade-${input.originalOrderId}`;
+
+  return client.workflow.start("executeCopyTradeWorkflow", {
+    taskQueue: TASK_QUEUES.COPY_TRADING,
+    workflowId,
+    args: [input],
+    workflowExecutionTimeout: "5 minutes",
+    ...options,
+  });
+}
+
+export interface UpdateLeaderboardInput {
+  notifyTopN?: number;
+}
+
+export async function startUpdateLeaderboardWorkflow(
+  input: UpdateLeaderboardInput = {},
+  options?: Partial<WorkflowOptions>
+): Promise<WorkflowHandle> {
+  const client = await getTemporalClient();
+  const workflowId = options?.workflowId ?? `leaderboard-update-${Date.now()}`;
+
+  return client.workflow.start("updateLeaderboardWorkflow", {
+    taskQueue: TASK_QUEUES.COPY_TRADING,
+    workflowId,
+    args: [input],
+    workflowExecutionTimeout: "30 minutes",
+    ...options,
+  });
+}
+
+export interface BatchStatsCalculationInput {
+  periodDays?: number;
+}
+
+export async function startBatchStatsCalculationWorkflow(
+  input: BatchStatsCalculationInput = {},
+  options?: Partial<WorkflowOptions>
+): Promise<WorkflowHandle> {
+  const client = await getTemporalClient();
+  const workflowId = options?.workflowId ?? `batch-stats-${Date.now()}`;
+
+  return client.workflow.start("batchStatsCalculationWorkflow", {
+    taskQueue: TASK_QUEUES.COPY_TRADING,
+    workflowId,
+    args: [input],
+    workflowExecutionTimeout: "2 hours",
+    ...options,
+  });
+}
+
+export async function startScheduledLeaderboardUpdateWorkflow(
+  options?: Partial<WorkflowOptions>
+): Promise<WorkflowHandle> {
+  const client = await getTemporalClient();
+  const workflowId = options?.workflowId ?? "scheduled-leaderboard-update";
+
+  return client.workflow.start("scheduledLeaderboardUpdateWorkflow", {
+    taskQueue: TASK_QUEUES.COPY_TRADING,
+    workflowId,
+    args: [],
+    workflowExecutionTimeout: "365 days",
+    ...options,
+  });
+}
+
+/**
+ * Start daily trader stats calculation (scheduled workflow)
+ */
+export async function startDailyTraderStatsWorkflow(
+  options?: Partial<WorkflowOptions>
+): Promise<WorkflowHandle> {
+  const client = await getTemporalClient();
+  const workflowId = options?.workflowId ?? "daily-trader-stats";
+
+  return client.workflow.start("batchStatsCalculationWorkflow", {
+    taskQueue: TASK_QUEUES.COPY_TRADING,
+    workflowId,
+    args: [{ periodDays: 30 }],
+    workflowExecutionTimeout: "4 hours",
+    cronSchedule: "0 0 * * *", // Daily at midnight
+    ...options,
+  });
+}
+
+/**
+ * Start hourly leaderboard update (scheduled workflow)
+ */
+export async function startHourlyLeaderboardUpdateWorkflow(
+  options?: Partial<WorkflowOptions>
+): Promise<WorkflowHandle> {
+  const client = await getTemporalClient();
+  const workflowId = options?.workflowId ?? "hourly-leaderboard-update";
+
+  return client.workflow.start("updateLeaderboardWorkflow", {
+    taskQueue: TASK_QUEUES.COPY_TRADING,
+    workflowId,
+    args: [{ notifyTopN: 10 }],
+    workflowExecutionTimeout: "30 minutes",
+    cronSchedule: "0 * * * *", // Every hour
+    ...options,
+  });
+}
+
+// ============================================================================
 // Workflow Management Helpers
 // ============================================================================
 
