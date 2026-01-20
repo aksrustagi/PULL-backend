@@ -660,8 +660,192 @@ export default defineSchema({
     }),
 
   // ============================================================================
-  // REWARDS TABLES
+  // GAMIFICATION & REWARDS TABLES
   // ============================================================================
+
+  /**
+   * Points Configuration - Defines points for each action type
+   */
+  pointsConfig: defineTable({
+    actionType: v.string(),
+    basePoints: v.number(),
+    description: v.string(),
+    multiplierRules: v.optional(v.any()), // JSON with streak/tier multipliers
+    dailyLimit: v.optional(v.number()),
+    active: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_actionType", ["actionType"])
+    .index("by_active", ["active"]),
+
+  /**
+   * Streaks - Track user streaks for various action types
+   */
+  streaks: defineTable({
+    userId: v.id("users"),
+    streakType: v.string(), // login, trading, prediction_correct
+    currentCount: v.number(),
+    longestCount: v.number(),
+    lastActionAt: v.number(),
+    currentMultiplier: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_type", ["userId", "streakType"]),
+
+  /**
+   * Quests - Daily, weekly, achievement, and seasonal quests
+   */
+  quests: defineTable({
+    questId: v.string(), // Human-readable ID
+    title: v.string(),
+    description: v.string(),
+    type: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("achievement"),
+      v.literal("seasonal")
+    ),
+    requirements: v.any(), // JSON defining completion criteria
+    pointsReward: v.number(),
+    bonusReward: v.optional(v.any()), // Badge, title, etc.
+    startsAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()),
+    maxCompletions: v.optional(v.number()), // For repeatables
+    active: v.boolean(),
+    sortOrder: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_questId", ["questId"])
+    .index("by_type", ["type"])
+    .index("by_active", ["active"])
+    .index("by_type_active", ["type", "active"]),
+
+  /**
+   * User Quests - Track quest progress per user
+   */
+  userQuests: defineTable({
+    userId: v.id("users"),
+    questId: v.id("quests"),
+    progress: v.any(), // JSON matching requirements structure
+    completed: v.boolean(),
+    claimed: v.boolean(),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    claimedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_active", ["userId", "completed"])
+    .index("by_quest", ["questId"])
+    .index("by_user_quest", ["userId", "questId"]),
+
+  /**
+   * Tiers - User tier status and benefits
+   */
+  tiers: defineTable({
+    userId: v.id("users"),
+    currentTier: v.union(
+      v.literal("bronze"),
+      v.literal("silver"),
+      v.literal("gold"),
+      v.literal("platinum"),
+      v.literal("diamond")
+    ),
+    lifetimePoints: v.number(),
+    currentMonthPoints: v.number(),
+    tierAchievedAt: v.number(),
+    tierExpiresAt: v.optional(v.number()), // For decay
+    benefits: v.any(), // Current tier benefits JSON
+    lastActivityAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_tier", ["currentTier"]),
+
+  /**
+   * Achievements - Achievement definitions
+   */
+  achievements: defineTable({
+    achievementId: v.string(), // Human-readable ID
+    title: v.string(),
+    description: v.string(),
+    icon: v.string(),
+    category: v.string(),
+    requirement: v.any(), // Unlock criteria JSON
+    rarity: v.union(
+      v.literal("common"),
+      v.literal("rare"),
+      v.literal("epic"),
+      v.literal("legendary")
+    ),
+    pointsReward: v.number(),
+    tokenReward: v.optional(v.number()),
+    isSecret: v.optional(v.boolean()),
+    sortOrder: v.optional(v.number()),
+    active: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_achievementId", ["achievementId"])
+    .index("by_category", ["category"])
+    .index("by_rarity", ["rarity"])
+    .index("by_active", ["active"]),
+
+  /**
+   * User Achievements - Track unlocked achievements per user
+   */
+  userAchievements: defineTable({
+    userId: v.id("users"),
+    achievementId: v.id("achievements"),
+    unlockedAt: v.number(),
+    displayed: v.boolean(), // Show on profile
+    progress: v.optional(v.any()), // Progress before unlock
+    claimedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_achievement", ["achievementId"])
+    .index("by_user_achievement", ["userId", "achievementId"]),
+
+  /**
+   * Daily Action Counts - Track daily limits per user
+   */
+  dailyActionCounts: defineTable({
+    userId: v.id("users"),
+    actionType: v.string(),
+    date: v.string(), // YYYY-MM-DD format
+    count: v.number(),
+    lastActionAt: v.number(),
+  })
+    .index("by_user_date", ["userId", "date"])
+    .index("by_user_action_date", ["userId", "actionType", "date"]),
+
+  /**
+   * Anti-Gaming Flags - Suspicious activity tracking
+   */
+  antiGamingFlags: defineTable({
+    userId: v.id("users"),
+    flagType: v.string(), // velocity_limit, duplicate_action, suspicious_pattern
+    severity: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("critical")
+    ),
+    description: v.string(),
+    metadata: v.any(),
+    resolved: v.boolean(),
+    resolvedBy: v.optional(v.id("users")),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_type", ["flagType"])
+    .index("by_severity", ["severity"])
+    .index("by_unresolved", ["resolved"]),
 
   /**
    * Points Transactions - Points ledger
@@ -680,13 +864,16 @@ export default defineSchema({
     description: v.string(),
     referenceType: v.optional(v.string()),
     referenceId: v.optional(v.string()),
+    multiplierApplied: v.optional(v.number()),
+    baseAmount: v.optional(v.number()),
     expiresAt: v.optional(v.number()),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_user_type", ["userId", "type"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_created", ["createdAt"]),
 
   /**
    * Rewards - Available rewards catalog
@@ -743,6 +930,32 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_reward", ["rewardId"])
     .index("by_status", ["status"]),
+
+  /**
+   * Leaderboard Snapshots - Cached leaderboard data
+   */
+  leaderboardSnapshots: defineTable({
+    period: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly"),
+      v.literal("alltime")
+    ),
+    type: v.union(
+      v.literal("points"),
+      v.literal("trading_volume"),
+      v.literal("pnl"),
+      v.literal("referrals"),
+      v.literal("streak")
+    ),
+    tierFilter: v.optional(v.string()),
+    entries: v.array(v.any()), // LeaderboardEntry[]
+    totalParticipants: v.number(),
+    generatedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_period_type", ["period", "type"])
+    .index("by_expires", ["expiresAt"]),
 
   // ============================================================================
   // TOKEN TABLES

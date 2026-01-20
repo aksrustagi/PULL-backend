@@ -398,3 +398,285 @@ export interface Leaderboard {
   totalParticipants: number;
   updatedAt: Date;
 }
+
+// ============================================================================
+// GAMIFICATION TYPES
+// ============================================================================
+
+/** Points configuration for action types */
+export interface PointsConfig {
+  actionType: string;
+  basePoints: number;
+  description: string;
+  multiplierRules?: {
+    streakMultiplier?: number;
+    maxMultiplier?: number;
+    per?: number;
+    perDollar?: boolean;
+    profitMultiplier?: number;
+    cap?: number;
+  };
+  dailyLimit?: number;
+  active: boolean;
+}
+
+/** Streak types */
+export type StreakType = "login" | "trading" | "prediction_correct";
+
+/** User streak record */
+export interface UserStreak {
+  id: string;
+  userId: string;
+  streakType: StreakType | string;
+  currentCount: number;
+  longestCount: number;
+  lastActionAt: Date;
+  currentMultiplier: number;
+}
+
+/** Quest types */
+export type QuestType = "daily" | "weekly" | "achievement" | "seasonal";
+
+/** Quest requirement types */
+export type QuestRequirementType =
+  | "login_before"
+  | "trades_count"
+  | "markets_viewed"
+  | "messages_sent"
+  | "signals_reviewed"
+  | "categories_traded"
+  | "prediction_streak"
+  | "followers_gained"
+  | "referral_kyc"
+  | "trade_volume";
+
+/** Quest requirement */
+export interface QuestRequirement {
+  type: QuestRequirementType | string;
+  target?: number;
+  hour?: number;
+  [key: string]: unknown;
+}
+
+/** Quest progress */
+export interface QuestProgress {
+  current?: number;
+  completed?: number;
+  [key: string]: unknown;
+}
+
+/** Quest definition */
+export interface Quest {
+  id: string;
+  questId: string;
+  title: string;
+  description: string;
+  type: QuestType;
+  requirements: QuestRequirement;
+  pointsReward: number;
+  bonusReward?: {
+    type: string;
+    name: string;
+    [key: string]: unknown;
+  };
+  startsAt?: Date;
+  expiresAt?: Date;
+  maxCompletions?: number;
+  active: boolean;
+}
+
+/** User quest progress */
+export interface UserQuest {
+  id: string;
+  oderId: string;
+  questId: string;
+  quest: Quest;
+  progress: QuestProgress;
+  completed: boolean;
+  claimed: boolean;
+  startedAt: Date;
+  completedAt?: Date;
+  claimedAt?: Date;
+}
+
+/** Tier benefit configuration */
+export interface TierBenefitConfig {
+  threshold: number;
+  feeDiscount: number;
+  aiCredits: number;
+  copyTrading: boolean;
+  prioritySupport: boolean;
+  revenueShare: number;
+  pointsMultiplier: number;
+  color: string;
+  icon: string;
+}
+
+/** User tier record */
+export interface UserTier {
+  id: string;
+  userId: string;
+  currentTier: RewardTier;
+  lifetimePoints: number;
+  currentMonthPoints: number;
+  tierAchievedAt: Date;
+  tierExpiresAt?: Date;
+  benefits: TierBenefitConfig;
+  lastActivityAt: Date;
+}
+
+/** Achievement rarity */
+export type AchievementRarity = "common" | "rare" | "epic" | "legendary";
+
+/** Achievement requirement */
+export interface AchievementRequirementDef {
+  type: string;
+  target?: number;
+  minTrades?: number;
+  mustBeWinning?: boolean;
+  daysFromLaunch?: number;
+  [key: string]: unknown;
+}
+
+/** Achievement definition */
+export interface AchievementDef {
+  id: string;
+  achievementId: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: AchievementCategory;
+  requirement: AchievementRequirementDef;
+  rarity: AchievementRarity;
+  pointsReward: number;
+  tokenReward?: number;
+  isSecret?: boolean;
+  active: boolean;
+}
+
+/** User achievement unlock */
+export interface UserAchievementUnlock {
+  id: string;
+  userId: string;
+  achievementId: string;
+  achievement: AchievementDef;
+  unlockedAt: Date;
+  displayed: boolean;
+  progress?: Record<string, number>;
+  claimedAt?: Date;
+}
+
+/** Daily action count for velocity limits */
+export interface DailyActionCount {
+  id: string;
+  userId: string;
+  actionType: string;
+  date: string;
+  count: number;
+  lastActionAt: Date;
+}
+
+/** Anti-gaming flag severity */
+export type AntiGamingFlagSeverity = "low" | "medium" | "high" | "critical";
+
+/** Anti-gaming flag */
+export interface AntiGamingFlag {
+  id: string;
+  userId: string;
+  flagType: string;
+  severity: AntiGamingFlagSeverity;
+  description: string;
+  metadata: Record<string, unknown>;
+  resolved: boolean;
+  resolvedBy?: string;
+  resolvedAt?: Date;
+  createdAt: Date;
+}
+
+/** Rewards summary for dashboard */
+export interface RewardsSummary {
+  pointsBalance: number;
+  pendingPoints: number;
+  lifetimePoints: number;
+  currentTier: RewardTier;
+  tierProgress: number;
+  pointsToNextTier: number;
+  nextTier: RewardTier | null;
+  tierBenefits: TierBenefitConfig;
+  activeStreaks: Array<{
+    type: string;
+    count: number;
+    multiplier: number;
+    longestCount: number;
+    lastActionAt: number;
+  }>;
+  recentEarnings: number;
+  currentMonthPoints: number;
+  decayWarning?: {
+    daysUntilDecay: number;
+    decayPercent: number;
+  } | null;
+}
+
+/** Points earning result */
+export interface PointsEarningResult {
+  success: boolean;
+  pointsEarned: number;
+  basePoints: number;
+  multiplier: number;
+  newBalance: number;
+  streakBonus: boolean;
+  tierBonus: boolean;
+  achievementsUnlocked: string[];
+  questsUpdated: string[];
+  errorMessage?: string;
+}
+
+/** Redemption type */
+export type RedemptionType = "fee_discount" | "token_conversion" | "sweepstakes" | "item";
+
+/** Redemption request */
+export interface RedemptionRequest {
+  type: RedemptionType;
+  amount: number;
+  itemId?: string;
+  walletAddress?: string;
+  shippingAddress?: ShippingAddress;
+}
+
+/** Redemption result */
+export interface RedemptionResult {
+  redemptionId: string;
+  type: RedemptionType;
+  pointsSpent: number;
+  newBalance: number;
+  status: "pending" | "processing" | "completed" | "failed";
+  details?: {
+    tokensToReceive?: number;
+    walletAddress?: string;
+    estimatedTime?: string;
+    discountPercent?: number;
+    validUntil?: number;
+    entries?: number;
+  };
+}
+
+/** Shop item */
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  pointsCost: number;
+  type: RedemptionType;
+  value?: number;
+  stock?: number;
+  available: boolean;
+  minTier?: RewardTier;
+  requiresShipping?: boolean;
+  imageUrl?: string;
+  rate?: number;
+  minAmount?: number;
+  entriesPerPurchase?: number;
+  drawDate?: number;
+  totalEntries?: number;
+}
