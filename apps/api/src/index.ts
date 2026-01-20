@@ -14,6 +14,7 @@ import { predictionsRoutes } from "./routes/predictions";
 import { rwaRoutes } from "./routes/rwa";
 import { rewardsRoutes } from "./routes/rewards";
 import { webhookRoutes } from "./routes/webhooks";
+import { wsApp } from "./websocket";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -63,6 +64,9 @@ app.use("/api/*", rateLimitMiddleware);
 app.route("/health", healthRoutes);
 app.route("/api/auth", authRoutes);
 app.route("/webhooks", webhookRoutes);
+
+// WebSocket routes
+app.route("/", wsApp);
 
 // Protected routes (require auth)
 app.use("/api/v1/*", authMiddleware);

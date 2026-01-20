@@ -5,6 +5,7 @@
 // Services
 export * from "./services/kalshi";
 export * from "./services/massive";
+export * from "./services/realtime";
 
 // Utils
 export * from "./utils/validation";
