@@ -1,0 +1,163 @@
+{
+  "default_server_config": {
+    "m.homeserver": {
+      "base_url": "https://${MATRIX_DOMAIN:-matrix.fantasy.local}",
+      "server_name": "${MATRIX_SERVER_NAME:-matrix.fantasy.local}"
+    },
+    "m.identity_server": {
+      "base_url": ""
+    }
+  },
+  "disable_custom_urls": true,
+  "disable_guests": true,
+  "disable_login_language_selector": false,
+  "disable_3pid_login": false,
+  "brand": "Fantasy Markets Chat",
+  "integrations_ui_url": "",
+  "integrations_rest_url": "",
+  "integrations_widgets_urls": [],
+  "bug_report_endpoint_url": "",
+  "uisi_autorageshake_app": "",
+  "show_labs_settings": false,
+  "features": {
+    "feature_video_rooms": true,
+    "feature_element_call_video_rooms": true,
+    "feature_group_calls": true,
+    "feature_pinning": true,
+    "feature_thread": true,
+    "feature_state_counters": true,
+    "feature_jump_to_date": true,
+    "feature_latex_maths": false,
+    "feature_wysiwyg_composer": true,
+    "feature_html_topic": true,
+    "feature_bridge_state": true,
+    "feature_mjolnir": false,
+    "feature_custom_themes": true,
+    "feature_dehydration": true,
+    "feature_oidc_native_flow": true
+  },
+  "default_theme": "dark",
+  "room_directory": {
+    "servers": [
+      "${MATRIX_SERVER_NAME:-matrix.fantasy.local}"
+    ]
+  },
+  "enable_presence_by_hs_url": {
+    "https://matrix.org": false,
+    "https://matrix-client.matrix.org": false
+  },
+  "setting_defaults": {
+    "breadcrumbs": true,
+    "FTUE.userOnboardingButton": false,
+    "UIFeature.urlPreviews": true,
+    "UIFeature.widgets": true,
+    "UIFeature.voip": true,
+    "UIFeature.feedback": false,
+    "UIFeature.registration": false,
+    "UIFeature.passwordReset": true,
+    "UIFeature.deactivate": false,
+    "UIFeature.shareQrCode": true,
+    "UIFeature.shareSocial": false,
+    "UIFeature.identityServer": false,
+    "UIFeature.thirdPartyId": true,
+    "UIFeature.flair": false,
+    "UIFeature.communities": false,
+    "UIFeature.advancedSettings": false,
+    "UIFeature.TimelineEnableRelativeDates": true,
+    "showHiddenEventsInTimeline": false,
+    "autoplayGifs": true,
+    "autoplayVideo": false,
+    "showReadReceipts": true,
+    "showRedactions": true,
+    "showJoinLeaves": false,
+    "showAvatarChanges": false,
+    "showDisplaynameChanges": false,
+    "showImages": true,
+    "showChatEffects": true,
+    "ctrlFForSearch": true,
+    "MessageComposerInput.showStickersButton": true,
+    "MessageComposerInput.showPollsButton": true,
+    "MessageComposerInput.insertTrailingColon": true,
+    "Pill.shouldShowPillAvatar": true,
+    "TextualBody.enableBigEmoji": true,
+    "sendTypingNotifications": true,
+    "showTypingNotifications": true,
+    "webRtcAllowPeerToPeer": true,
+    "language": "en",
+    "layout": "group",
+    "useCompactLayout": false
+  },
+  "jitsi": {
+    "preferred_domain": "meet.element.io"
+  },
+  "element_call": {
+    "url": "https://call.element.io",
+    "use_exclusively": false,
+    "participant_limit": 8,
+    "brand": "Element Call"
+  },
+  "map_style_url": "https://api.maptiler.com/maps/streets/style.json?key=YOUR_MAPTILER_KEY",
+  "sso_redirect_options": {
+    "immediate": false
+  },
+  "custom_themes": [
+    {
+      "name": "Fantasy Dark",
+      "is_dark": true,
+      "colors": {
+        "accent-color": "#10B981",
+        "primary-color": "#10B981",
+        "warning-color": "#F59E0B",
+        "sidebar-color": "#0D0D0D",
+        "roomlist-background-color": "#1A1A1A",
+        "roomlist-text-color": "#E5E5E5",
+        "roomlist-text-secondary-color": "#A3A3A3",
+        "roomlist-highlights-color": "#262626",
+        "roomlist-separator-color": "#333333",
+        "timeline-background-color": "#1A1A1A",
+        "timeline-text-color": "#E5E5E5",
+        "timeline-text-secondary-color": "#A3A3A3",
+        "timeline-highlights-color": "#262626",
+        "reaction-row-button-selected-bg-color": "#10B98133"
+      }
+    },
+    {
+      "name": "Fantasy Green",
+      "is_dark": true,
+      "colors": {
+        "accent-color": "#22C55E",
+        "primary-color": "#22C55E",
+        "warning-color": "#EAB308",
+        "sidebar-color": "#052E16",
+        "roomlist-background-color": "#064E3B",
+        "roomlist-text-color": "#ECFDF5",
+        "roomlist-text-secondary-color": "#A7F3D0",
+        "roomlist-highlights-color": "#065F46",
+        "roomlist-separator-color": "#047857",
+        "timeline-background-color": "#064E3B",
+        "timeline-text-color": "#ECFDF5",
+        "timeline-text-secondary-color": "#A7F3D0",
+        "timeline-highlights-color": "#065F46",
+        "reaction-row-button-selected-bg-color": "#22C55E33"
+      }
+    }
+  ],
+  "branding": {
+    "welcome_background_url": "",
+    "auth_header_logo_url": "",
+    "auth_footer_links": [
+      {
+        "text": "Terms of Service",
+        "url": "https://fantasy.local/terms"
+      },
+      {
+        "text": "Privacy Policy",
+        "url": "https://fantasy.local/privacy"
+      }
+    ]
+  },
+  "embedded_pages": {
+    "welcome_url": ""
+  },
+  "permalink_prefix": "https://chat.fantasy.local"
+}

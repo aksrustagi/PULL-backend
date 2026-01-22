@@ -1,0 +1,126 @@
+# Fantasy Markets Platform - Slack Bridge Configuration
+# https://docs.mau.fi/bridges/go/slack/config.html
+
+# Homeserver details
+homeserver:
+  address: http://synapse:8008
+  domain: ${MATRIX_SERVER_NAME:-matrix.fantasy.local}
+  software: standard
+  status_endpoint: null
+  message_send_checkpoint_target: null
+  async_media: false
+
+# Application service host/registration related details
+appservice:
+  address: http://mautrix-slack:29335
+  hostname: 0.0.0.0
+  port: 29335
+  database:
+    type: postgres
+    uri: postgres://${MATRIX_DB_USER:-synapse}:${MATRIX_DB_PASSWORD:-synapse_password}@postgres-matrix/mautrix_slack?sslmode=disable
+    max_open_conns: 20
+    max_idle_conns: 2
+  id: slack
+  bot:
+    username: slackbot
+    displayname: Slack Bridge Bot
+    avatar: mxc://maunium.net/tyoLnTevSFtDfVhSARAhbfBe
+  ephemeral_events: true
+  async_transactions: false
+  as_token: ${SLACK_AS_TOKEN:-GENERATE_NEW_TOKEN}
+  hs_token: ${SLACK_HS_TOKEN:-GENERATE_NEW_TOKEN}
+
+# Bridge config
+bridge:
+  username_template: slack_{{.}}
+  displayname_template: "{{.RealName}} (Slack)"
+  bot_displayname_template: "{{.Name}} (bot)"
+  channel_name_template: "#{{.Name}}"
+  team_name_template: "{{.Name}} (Slack)"
+
+  private_chat_portal_meta: always
+  portal_message_buffer: 128
+
+  delivery_receipts: true
+  message_status_events: false
+  message_error_notices: true
+
+  sync_channel_members: true
+  sync_direct_chat_list: true
+
+  # Backfill
+  backfill:
+    enable: true
+    conversations_count: 20
+    immediate_messages: 10
+    incremental_messages: 20
+
+  # Customization
+  custom_emoji_reactions: true
+  workspace_avatar_in_rooms: false
+
+  # Command prefix
+  command_prefix: "!slack"
+
+  # Double puppet
+  double_puppet_server_map:
+    ${MATRIX_SERVER_NAME:-matrix.fantasy.local}: ${MATRIX_DOMAIN:-https://matrix.fantasy.local}
+  double_puppet_allow_discovery: false
+  login_shared_secret_map:
+    ${MATRIX_SERVER_NAME:-matrix.fantasy.local}: ${MATRIX_DOUBLE_PUPPET_SECRET:-}
+
+  # Encryption
+  encryption:
+    allow: true
+    default: true
+    appservice: false
+    require: false
+    allow_key_sharing: true
+    plaintext_mentions: false
+    delete_keys:
+      delete_outbound_on_ack: false
+      dont_store_outbound: false
+      ratchet_on_decrypt: false
+      delete_fully_used_on_decrypt: false
+      delete_prev_on_new_session: false
+      delete_on_device_delete: false
+      periodically_delete_expired: false
+      delete_outdated_inbound: false
+    verification_levels:
+      receive: unverified
+      send: unverified
+      share: cross-signed-tofu
+    rotation:
+      enable_custom: false
+
+  # Permissions
+  permissions:
+    "*": relay
+    "${MATRIX_SERVER_NAME:-matrix.fantasy.local}": user
+    "@admin:${MATRIX_SERVER_NAME:-matrix.fantasy.local}": admin
+
+  # Relay mode
+  relay:
+    enabled: true
+    message_formats:
+      m.text: "*{{ .Sender.Displayname }}*: {{ .Message }}"
+      m.notice: "*{{ .Sender.Displayname }}*: {{ .Message }}"
+      m.emote: "_*{{ .Sender.Displayname }}* {{ .Message }}_"
+      m.file: "*{{ .Sender.Displayname }}* sent a file"
+      m.image: "*{{ .Sender.Displayname }}* sent an image"
+      m.audio: "*{{ .Sender.Displayname }}* sent an audio file"
+      m.video: "*{{ .Sender.Displayname }}* sent a video"
+      m.location: "*{{ .Sender.Displayname }}* sent a location"
+
+# Logging
+logging:
+  min_level: debug
+  writers:
+    - type: stdout
+      format: pretty-colored
+    - type: file
+      format: json
+      filename: /data/logs/slack.log
+      max_size: 100
+      max_backups: 10
+      compress: true

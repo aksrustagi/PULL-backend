@@ -115,6 +115,38 @@ jobs:
         env:
           NODE_ENV: test
 
+  test-fantasy:
+    name: Fantasy Module Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run fantasy scoring tests
+        run: pnpm --filter @pull/core test -- --grep "Fantasy Scoring"
+        env:
+          NODE_ENV: test
+
+      - name: Run market maker tests
+        run: pnpm --filter @pull/core test -- --grep "LMSR Market"
+        env:
+          NODE_ENV: test
+
   convex-typecheck:
     name: Convex Type Check
     runs-on: ubuntu-latest
