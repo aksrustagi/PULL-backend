@@ -1,5 +1,18 @@
 import { createMiddleware } from "hono/factory";
+import { timingSafeEqual } from "crypto";
 import type { Env } from "../index";
+
+/**
+ * Timing-safe string comparison to prevent timing attacks
+ */
+function timingSafeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  return timingSafeEqual(bufA, bufB);
+}
 
 /**
  * Security headers middleware
@@ -70,9 +83,10 @@ export const csrfProtection = createMiddleware<Env>(async (c, next) => {
     // Allow requests without origin header (e.g., from native apps, Postman)
     // In production, you might want to be stricter
     if (process.env.NODE_ENV === "production") {
-      // Check for valid API key instead
+      // Check for valid API key instead using timing-safe comparison
       const apiKey = c.req.header("X-API-Key");
-      if (!apiKey || apiKey !== process.env.API_KEY) {
+      const expectedApiKey = process.env.API_KEY;
+      if (!apiKey || !expectedApiKey || !timingSafeCompare(apiKey, expectedApiKey)) {
         return c.json(
           {
             success: false,

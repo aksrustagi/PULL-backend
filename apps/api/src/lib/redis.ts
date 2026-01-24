@@ -3,10 +3,21 @@ import { Redis } from "@upstash/redis";
 /**
  * Upstash Redis client for token blacklisting and caching
  */
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+
+// Validate Redis configuration
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+if (!redisUrl || !redisToken) {
+  console.warn("Redis credentials not configured. Token blacklisting will be unavailable.");
+}
+
+const redis = redisUrl && redisToken
+  ? new Redis({
+      url: redisUrl,
+      token: redisToken,
+    })
+  : null;
 
 const TOKEN_BLACKLIST_PREFIX = "token:blacklist:";
 
@@ -31,6 +42,10 @@ export async function blacklistToken(
   token: string,
   expiresIn: number
 ): Promise<void> {
+  if (!redis) {
+    console.warn("Redis not configured. Cannot blacklist token.");
+    return;
+  }
   const tokenHash = await hashToken(token);
   await redis.set(`${TOKEN_BLACKLIST_PREFIX}${tokenHash}`, "1", {
     ex: expiresIn,
@@ -43,6 +58,10 @@ export async function blacklistToken(
  * @returns true if the token is blacklisted, false otherwise
  */
 export async function isTokenBlacklisted(token: string): Promise<boolean> {
+  if (!redis) {
+    // If Redis is not configured, tokens can't be blacklisted
+    return false;
+  }
   const tokenHash = await hashToken(token);
   const result = await redis.get(`${TOKEN_BLACKLIST_PREFIX}${tokenHash}`);
   return result !== null;
@@ -53,6 +72,9 @@ export async function isTokenBlacklisted(token: string): Promise<boolean> {
  * @param token - The JWT token to remove from blacklist
  */
 export async function removeFromBlacklist(token: string): Promise<void> {
+  if (!redis) {
+    return;
+  }
   const tokenHash = await hashToken(token);
   await redis.del(`${TOKEN_BLACKLIST_PREFIX}${tokenHash}`);
 }
