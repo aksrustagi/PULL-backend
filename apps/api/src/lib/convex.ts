@@ -204,3 +204,139 @@ export const convexWebhooks = {
       processedAt: Date.now(),
     }),
 };
+
+/**
+ * Social trading operations
+ */
+export const convexSocial = {
+  // Follow/Unfollow
+  follow: (args: {
+    followerId: string;
+    followeeId: string;
+    notificationsEnabled?: boolean;
+    positionVisibility?: "all" | "entry_only" | "none";
+  }) => convexMutation("social:follow", args),
+  unfollow: (args: { followerId: string; followeeId: string }) =>
+    convexMutation("social:unfollow", args),
+  updateFollowSettings: (args: {
+    followerId: string;
+    followeeId: string;
+    notificationsEnabled?: boolean;
+    positionVisibility?: "all" | "entry_only" | "none";
+  }) => convexMutation("social:updateFollowSettings", args),
+  getFollowers: (args: { userId: string; limit?: number; cursor?: string }) =>
+    convexQuery("social:getFollowers", args),
+  getFollowing: (args: { userId: string; limit?: number }) =>
+    convexQuery("social:getFollowing", args),
+  isFollowing: (args: { followerId: string; followeeId: string }) =>
+    convexQuery("social:isFollowing", args),
+
+  // Trader Profiles
+  getTraderProfile: (userId: string) =>
+    convexQuery("social:getTraderProfile", { userId }),
+  getTraderStats: (args: {
+    userId: string;
+    period?:
+      | "daily"
+      | "weekly"
+      | "monthly"
+      | "quarterly"
+      | "yearly"
+      | "all_time";
+  }) => convexQuery("social:getTraderStats", args),
+  getTraderReputation: (userId: string) =>
+    convexQuery("social:getTraderReputation", { userId }),
+  upsertTraderProfile: (args: {
+    userId: string;
+    isPublic?: boolean;
+    allowCopyTrading?: boolean;
+    allowAutoCopy?: boolean;
+    copyTradingFee?: number;
+    performanceFee?: number;
+    bio?: string;
+    tradingStyle?: string;
+    tradingPhilosophy?: string;
+    riskProfile?: "conservative" | "moderate" | "aggressive" | "very_aggressive";
+    preferredAssets?: string[];
+    twitterHandle?: string;
+    discordHandle?: string;
+    telegramHandle?: string;
+    websiteUrl?: string;
+  }) => convexMutation("social:upsertTraderProfile", args),
+
+  // Leaderboard
+  getLeaderboard: (args: {
+    leaderboardType:
+      | "pnl"
+      | "pnl_percent"
+      | "sharpe_ratio"
+      | "win_rate"
+      | "total_trades"
+      | "followers"
+      | "copiers"
+      | "reputation";
+    period: "daily" | "weekly" | "monthly" | "all_time";
+    assetClass?: string;
+    limit?: number;
+    offset?: number;
+  }) => convexQuery("social:getLeaderboard", args),
+  getMyLeaderboardRank: (args: {
+    userId: string;
+    leaderboardType: string;
+    period: string;
+  }) => convexQuery("social:getMyLeaderboardRank", args),
+
+  // Copy Trading
+  getCopySettings: (args: { copierId: string; traderId: string }) =>
+    convexQuery("social:getCopySettings", args),
+  getMyCopySubscriptions: (args: {
+    copierId: string;
+    status?:
+      | "pending"
+      | "active"
+      | "paused"
+      | "stopped"
+      | "cancelled";
+  }) => convexQuery("social:getMyCopySubscriptions", args),
+  getMyCopiers: (args: { traderId: string; status?: string }) =>
+    convexQuery("social:getMyCopiers", args),
+  getCopyTrades: (args: { subscriptionId: string; limit?: number }) =>
+    convexQuery("social:getCopyTrades", args),
+  activateCopyTrading: (args: {
+    copierId: string;
+    traderId: string;
+    copyMode: "fixed_amount" | "percentage_portfolio" | "proportional" | "fixed_ratio";
+    fixedAmount?: number;
+    portfolioPercentage?: number;
+    copyRatio?: number;
+    maxPositionSize: number;
+    maxDailyLoss: number;
+    maxTotalExposure: number;
+    stopLossPercent?: number;
+    takeProfitPercent?: number;
+    copyAssetClasses: string[];
+    excludedSymbols?: string[];
+    copyDelaySeconds?: number;
+  }) => convexMutation("social:activateCopyTrading", args),
+  deactivateCopyTrading: (subscriptionId: string) =>
+    convexMutation("social:deactivateCopyTrading", { subscriptionId }),
+  updateCopySettings: (args: {
+    subscriptionId: string;
+    copyMode?: "fixed_amount" | "percentage_portfolio" | "proportional" | "fixed_ratio";
+    fixedAmount?: number;
+    portfolioPercentage?: number;
+    copyRatio?: number;
+    maxPositionSize?: number;
+    maxDailyLoss?: number;
+    maxTotalExposure?: number;
+    stopLossPercent?: number;
+    takeProfitPercent?: number;
+    copyAssetClasses?: string[];
+    excludedSymbols?: string[];
+    copyDelaySeconds?: number;
+  }) => convexMutation("social:updateCopySettings", args),
+  pauseCopyTrading: (subscriptionId: string) =>
+    convexMutation("social:pauseCopyTrading", { subscriptionId }),
+  resumeCopyTrading: (subscriptionId: string) =>
+    convexMutation("social:resumeCopyTrading", { subscriptionId }),
+};

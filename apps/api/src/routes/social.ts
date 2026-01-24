@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { convexSocial, convexAudit } from "../lib/convex";
 
 const app = new Hono<Env>();
 
@@ -31,6 +32,7 @@ const updateFollowSchema = z.object({
 app.post("/follow", zValidator("json", followTraderSchema), async (c) => {
   const userId = c.get("userId");
   const body = c.req.valid("json");
+  const requestId = c.get("requestId");
 
   if (!userId) {
     return c.json(
@@ -39,19 +41,50 @@ app.post("/follow", zValidator("json", followTraderSchema), async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: {
+  try {
+    const followId = await convexSocial.follow({
       followerId: userId,
       followeeId: body.traderId,
       notificationsEnabled: body.notificationsEnabled,
       positionVisibility: body.positionVisibility,
-      followedAt: new Date().toISOString(),
-      isActive: true,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    });
+
+    // Log audit event
+    await convexAudit.log({
+      userId,
+      action: "follow_trader",
+      resourceType: "follow",
+      resourceId: followId as string,
+      metadata: { traderId: body.traderId },
+      requestId,
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        id: followId,
+        followerId: userId,
+        followeeId: body.traderId,
+        notificationsEnabled: body.notificationsEnabled,
+        positionVisibility: body.positionVisibility,
+        followedAt: new Date().toISOString(),
+        isActive: true,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Follow trader error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FOLLOW_FAILED",
+          message: error instanceof Error ? error.message : "Failed to follow trader",
+        },
+      },
+      400
+    );
+  }
 });
 
 /**
@@ -60,6 +93,7 @@ app.post("/follow", zValidator("json", followTraderSchema), async (c) => {
 app.delete("/follow/:traderId", async (c) => {
   const userId = c.get("userId");
   const traderId = c.req.param("traderId");
+  const requestId = c.get("requestId");
 
   if (!userId) {
     return c.json(
@@ -68,12 +102,39 @@ app.delete("/follow/:traderId", async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { unfollowed: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await convexSocial.unfollow({
+      followerId: userId,
+      followeeId: traderId,
+    });
+
+    await convexAudit.log({
+      userId,
+      action: "unfollow_trader",
+      resourceType: "follow",
+      resourceId: traderId,
+      metadata: { traderId },
+      requestId,
+    });
+
+    return c.json({
+      success: true,
+      data: { unfollowed: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Unfollow trader error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UNFOLLOW_FAILED",
+          message: error instanceof Error ? error.message : "Failed to unfollow trader",
+        },
+      },
+      400
+    );
+  }
 });
 
 /**
@@ -91,12 +152,31 @@ app.patch("/follow/:traderId", zValidator("json", updateFollowSchema), async (c)
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { ...body, updated: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await convexSocial.updateFollowSettings({
+      followerId: userId,
+      followeeId: traderId,
+      ...body,
+    });
+
+    return c.json({
+      success: true,
+      data: { ...body, updated: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Update follow settings error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_FAILED",
+          message: error instanceof Error ? error.message : "Failed to update settings",
+        },
+      },
+      400
+    );
+  }
 });
 
 /**
@@ -108,12 +188,31 @@ app.get("/followers", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const cursor = c.req.query("cursor");
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { followers: [], cursor: undefined },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const result = await convexSocial.getFollowers({
+      userId: targetId!,
+      limit,
+      cursor,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get followers error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch followers",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -123,14 +222,31 @@ app.get("/following", async (c) => {
   const userId = c.get("userId");
   const targetId = c.req.query("userId") ?? userId;
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
-  const cursor = c.req.query("cursor");
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { following: [], cursor: undefined },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const result = await convexSocial.getFollowing({
+      userId: targetId!,
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get following error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch following",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -147,12 +263,30 @@ app.get("/follow/check/:traderId", async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { isFollowing: false },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const result = await convexSocial.isFollowing({
+      followerId: userId,
+      followeeId: traderId,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Check following error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "CHECK_FAILED",
+          message: "Failed to check following status",
+        },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -183,18 +317,36 @@ app.get("/traders/:traderId", async (c) => {
   const traderId = c.req.param("traderId");
   const userId = c.get("userId");
 
-  // TODO: Implement with TraderStatsService
-  return c.json({
-    success: true,
-    data: {
-      userId: traderId,
-      isPublic: true,
-      allowCopyTrading: false,
-      stats: null,
-      reputation: null,
-    },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const [profile, stats, reputation] = await Promise.all([
+      convexSocial.getTraderProfile(traderId),
+      convexSocial.getTraderStats({ userId: traderId, period: "all_time" }),
+      convexSocial.getTraderReputation(traderId),
+    ]);
+
+    return c.json({
+      success: true,
+      data: {
+        userId: traderId,
+        profile,
+        stats,
+        reputation,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get trader profile error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch trader profile",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -211,12 +363,30 @@ app.patch("/traders/me", zValidator("json", updateProfileSchema), async (c) => {
     );
   }
 
-  // TODO: Implement profile update
-  return c.json({
-    success: true,
-    data: { ...body, updated: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await convexSocial.upsertTraderProfile({
+      userId,
+      ...body,
+    });
+
+    return c.json({
+      success: true,
+      data: { ...body, updated: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Update trader profile error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_FAILED",
+          message: "Failed to update trader profile",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -226,12 +396,30 @@ app.get("/traders/:traderId/stats", async (c) => {
   const traderId = c.req.param("traderId");
   const period = c.req.query("period") ?? "all_time";
 
-  // TODO: Implement with TraderStatsService
-  return c.json({
-    success: true,
-    data: null,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const stats = await convexSocial.getTraderStats({
+      userId: traderId,
+      period: period as any,
+    });
+
+    return c.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get trader stats error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch trader stats",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -240,12 +428,27 @@ app.get("/traders/:traderId/stats", async (c) => {
 app.get("/traders/:traderId/reputation", async (c) => {
   const traderId = c.req.param("traderId");
 
-  // TODO: Implement with ReputationService
-  return c.json({
-    success: true,
-    data: null,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const reputation = await convexSocial.getTraderReputation(traderId);
+
+    return c.json({
+      success: true,
+      data: reputation,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get trader reputation error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch trader reputation",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -321,6 +524,7 @@ const updateCopySubscriptionSchema = createCopySubscriptionSchema.partial().omit
 app.post("/copy/subscribe", zValidator("json", createCopySubscriptionSchema), async (c) => {
   const userId = c.get("userId");
   const body = c.req.valid("json");
+  const requestId = c.get("requestId");
 
   if (!userId) {
     return c.json(
@@ -329,20 +533,57 @@ app.post("/copy/subscribe", zValidator("json", createCopySubscriptionSchema), as
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  const subscriptionId = crypto.randomUUID();
-
-  return c.json({
-    success: true,
-    data: {
-      id: subscriptionId,
+  try {
+    const subscriptionId = await convexSocial.activateCopyTrading({
       copierId: userId,
-      ...body,
-      status: "active",
-      subscribedAt: new Date().toISOString(),
-    },
-    timestamp: new Date().toISOString(),
-  });
+      traderId: body.traderId,
+      copyMode: body.copyMode,
+      fixedAmount: body.fixedAmount,
+      portfolioPercentage: body.portfolioPercentage,
+      copyRatio: body.copyRatio,
+      maxPositionSize: body.maxPositionSize,
+      maxDailyLoss: body.maxDailyLoss,
+      maxTotalExposure: body.maxTotalExposure,
+      stopLossPercent: body.stopLossPercent,
+      takeProfitPercent: body.takeProfitPercent,
+      copyAssetClasses: body.copyAssetClasses,
+      excludedSymbols: body.excludedSymbols,
+      copyDelaySeconds: body.copyDelaySeconds,
+    });
+
+    await convexAudit.log({
+      userId,
+      action: "activate_copy_trading",
+      resourceType: "copy_subscription",
+      resourceId: subscriptionId as string,
+      metadata: { traderId: body.traderId, copyMode: body.copyMode },
+      requestId,
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        id: subscriptionId,
+        copierId: userId,
+        ...body,
+        status: "active",
+        subscribedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Create copy subscription error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "SUBSCRIPTION_FAILED",
+          message: error instanceof Error ? error.message : "Failed to create copy subscription",
+        },
+      },
+      400
+    );
+  }
 });
 
 /**
@@ -359,12 +600,30 @@ app.get("/copy/subscriptions", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { subscriptions: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const result = await convexSocial.getMyCopySubscriptions({
+      copierId: userId,
+      status: status as any,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get copy subscriptions error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch copy subscriptions",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -381,12 +640,30 @@ app.get("/copy/copiers", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { copiers: [], total: 0 },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const result = await convexSocial.getMyCopiers({
+      traderId: userId,
+      status,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get my copiers error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch copiers",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -407,12 +684,30 @@ app.patch(
       );
     }
 
-    // TODO: Implement with CopyTradingService
-    return c.json({
-      success: true,
-      data: { id: subscriptionId, ...body, updated: true },
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      await convexSocial.updateCopySettings({
+        subscriptionId,
+        ...body,
+      });
+
+      return c.json({
+        success: true,
+        data: { id: subscriptionId, ...body, updated: true },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Update copy subscription error:", error);
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "UPDATE_FAILED",
+            message: "Failed to update copy subscription",
+          },
+        },
+        400
+      );
+    }
   }
 );
 
@@ -430,12 +725,27 @@ app.post("/copy/subscriptions/:subscriptionId/pause", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { id: subscriptionId, status: "paused" },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await convexSocial.pauseCopyTrading(subscriptionId);
+
+    return c.json({
+      success: true,
+      data: { id: subscriptionId, status: "paused" },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Pause copy subscription error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "PAUSE_FAILED",
+          message: "Failed to pause copy subscription",
+        },
+      },
+      400
+    );
+  }
 });
 
 /**
@@ -452,12 +762,27 @@ app.post("/copy/subscriptions/:subscriptionId/resume", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { id: subscriptionId, status: "active" },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await convexSocial.resumeCopyTrading(subscriptionId);
+
+    return c.json({
+      success: true,
+      data: { id: subscriptionId, status: "active" },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Resume copy subscription error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "RESUME_FAILED",
+          message: "Failed to resume copy subscription",
+        },
+      },
+      400
+    );
+  }
 });
 
 /**
@@ -466,6 +791,7 @@ app.post("/copy/subscriptions/:subscriptionId/resume", async (c) => {
 app.delete("/copy/subscriptions/:subscriptionId", async (c) => {
   const userId = c.get("userId");
   const subscriptionId = c.req.param("subscriptionId");
+  const requestId = c.get("requestId");
 
   if (!userId) {
     return c.json(
@@ -474,12 +800,35 @@ app.delete("/copy/subscriptions/:subscriptionId", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { id: subscriptionId, status: "cancelled" },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await convexSocial.deactivateCopyTrading(subscriptionId);
+
+    await convexAudit.log({
+      userId,
+      action: "cancel_copy_trading",
+      resourceType: "copy_subscription",
+      resourceId: subscriptionId,
+      requestId,
+    });
+
+    return c.json({
+      success: true,
+      data: { id: subscriptionId, status: "cancelled" },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Cancel copy subscription error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "CANCEL_FAILED",
+          message: "Failed to cancel copy subscription",
+        },
+      },
+      400
+    );
+  }
 });
 
 /**
@@ -488,14 +837,31 @@ app.delete("/copy/subscriptions/:subscriptionId", async (c) => {
 app.get("/copy/subscriptions/:subscriptionId/trades", async (c) => {
   const subscriptionId = c.req.param("subscriptionId");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
-  const cursor = c.req.query("cursor");
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { trades: [], cursor: undefined },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const result = await convexSocial.getCopyTrades({
+      subscriptionId,
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get copy trades error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch copy trades",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -527,17 +893,33 @@ app.get("/leaderboards/:type/:period", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "100", 10);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-  // TODO: Implement with LeaderboardService
-  return c.json({
-    success: true,
-    data: {
-      leaderboardType: type,
-      period,
-      entries: [],
-      totalParticipants: 0,
-    },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const result = await convexSocial.getLeaderboard({
+      leaderboardType: type as any,
+      period: period as any,
+      assetClass,
+      limit,
+      offset,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get leaderboard error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch leaderboard",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -555,12 +937,31 @@ app.get("/leaderboards/:type/:period/my-rank", async (c) => {
     );
   }
 
-  // TODO: Implement with LeaderboardService
-  return c.json({
-    success: true,
-    data: null,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const rank = await convexSocial.getMyLeaderboardRank({
+      userId,
+      leaderboardType: type,
+      period,
+    });
+
+    return c.json({
+      success: true,
+      data: rank,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Get my leaderboard rank error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch leaderboard rank",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
