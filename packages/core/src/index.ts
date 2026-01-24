@@ -12,3 +12,6 @@ export * from "./utils/format";
 
 // Workflows
 export * from "./workflows";
+
+// Inngest - Event-driven functions
+export * from "./inngest";
