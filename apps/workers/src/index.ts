@@ -4,6 +4,7 @@
  */
 
 import { NativeConnection, Worker, Runtime } from "@temporalio/worker";
+import { initSentry, captureException } from "./lib/sentry";
 import * as kycActivities from "./activities/kyc";
 import * as tradingActivities from "./activities/trading";
 import * as rewardsActivities from "./activities/rewards";
@@ -11,6 +12,9 @@ import * as emailActivities from "./activities/email";
 import * as messagingActivities from "./activities/messaging";
 import * as rwaActivities from "./activities/rwa";
 import * as portfolioActivities from "./activities/portfolio";
+
+// Initialize Sentry for error tracking
+initSentry();
 
 // Configure runtime telemetry
 Runtime.install({
@@ -215,6 +219,7 @@ async function run() {
 }
 
 run().catch((err) => {
-  console.error("❌ Worker failed:", err);
+  console.error("Worker failed:", err);
+  captureException(err, { context: "worker-startup" });
   process.exit(1);
 });
