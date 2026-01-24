@@ -7,6 +7,14 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import {
+  socialGraphService,
+  traderStatsService,
+  copyTradingService,
+  leaderboardService,
+  positionCommentsService,
+  reputationService,
+} from "../services/social";
 
 const app = new Hono<Env>();
 
@@ -39,19 +47,39 @@ app.post("/follow", zValidator("json", followTraderSchema), async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: {
+  try {
+    const followId = await socialGraphService.follow({
       followerId: userId,
       followeeId: body.traderId,
       notificationsEnabled: body.notificationsEnabled,
       positionVisibility: body.positionVisibility,
-      followedAt: new Date().toISOString(),
-      isActive: true,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        id: followId,
+        followerId: userId,
+        followeeId: body.traderId,
+        notificationsEnabled: body.notificationsEnabled,
+        positionVisibility: body.positionVisibility,
+        followedAt: new Date().toISOString(),
+        isActive: true,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FOLLOW_FAILED",
+          message: error instanceof Error ? error.message : "Failed to follow trader",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -68,12 +96,29 @@ app.delete("/follow/:traderId", async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { unfollowed: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await socialGraphService.unfollow({
+      followerId: userId,
+      followeeId: traderId,
+    });
+
+    return c.json({
+      success: true,
+      data: { unfollowed: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UNFOLLOW_FAILED",
+          message: error instanceof Error ? error.message : "Failed to unfollow trader",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -91,12 +136,31 @@ app.patch("/follow/:traderId", zValidator("json", updateFollowSchema), async (c)
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { ...body, updated: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await socialGraphService.updateFollowSettings({
+      followerId: userId,
+      followeeId: traderId,
+      notificationsEnabled: body.notificationsEnabled,
+      positionVisibility: body.positionVisibility,
+    });
+
+    return c.json({
+      success: true,
+      data: { ...body, updated: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_SETTINGS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to update follow settings",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -108,12 +172,37 @@ app.get("/followers", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const cursor = c.req.query("cursor");
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { followers: [], cursor: undefined },
-    timestamp: new Date().toISOString(),
-  });
+  if (!targetId) {
+    return c.json(
+      { success: false, error: { code: "INVALID_REQUEST", message: "User ID is required" } },
+      400
+    );
+  }
+
+  try {
+    const result = await socialGraphService.getFollowers({
+      userId: targetId,
+      limit,
+      cursor,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_FOLLOWERS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get followers",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -125,12 +214,37 @@ app.get("/following", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const cursor = c.req.query("cursor");
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { following: [], cursor: undefined },
-    timestamp: new Date().toISOString(),
-  });
+  if (!targetId) {
+    return c.json(
+      { success: false, error: { code: "INVALID_REQUEST", message: "User ID is required" } },
+      400
+    );
+  }
+
+  try {
+    const result = await socialGraphService.getFollowing({
+      userId: targetId,
+      limit,
+      cursor,
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_FOLLOWING_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get following",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -147,12 +261,29 @@ app.get("/follow/check/:traderId", async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { isFollowing: false },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const isFollowing = await socialGraphService.isFollowing({
+      followerId: userId,
+      followeeId: traderId,
+    });
+
+    return c.json({
+      success: true,
+      data: { isFollowing },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "CHECK_FOLLOWING_FAILED",
+          message: error instanceof Error ? error.message : "Failed to check following status",
+        },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -183,18 +314,26 @@ app.get("/traders/:traderId", async (c) => {
   const traderId = c.req.param("traderId");
   const userId = c.get("userId");
 
-  // TODO: Implement with TraderStatsService
-  return c.json({
-    success: true,
-    data: {
-      userId: traderId,
-      isPublic: true,
-      allowCopyTrading: false,
-      stats: null,
-      reputation: null,
-    },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const profile = await traderStatsService.getTraderProfile(traderId);
+
+    return c.json({
+      success: true,
+      data: profile,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_PROFILE_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get trader profile",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -211,12 +350,29 @@ app.patch("/traders/me", zValidator("json", updateProfileSchema), async (c) => {
     );
   }
 
-  // TODO: Implement profile update
-  return c.json({
-    success: true,
-    data: { ...body, updated: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await traderStatsService.updateTraderProfile({
+      userId,
+      ...body,
+    });
+
+    return c.json({
+      success: true,
+      data: { ...body, updated: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_PROFILE_FAILED",
+          message: error instanceof Error ? error.message : "Failed to update trader profile",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -226,12 +382,29 @@ app.get("/traders/:traderId/stats", async (c) => {
   const traderId = c.req.param("traderId");
   const period = c.req.query("period") ?? "all_time";
 
-  // TODO: Implement with TraderStatsService
-  return c.json({
-    success: true,
-    data: null,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const stats = await traderStatsService.getTraderStats({
+      userId: traderId,
+      period: period as "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "all_time",
+    });
+
+    return c.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_STATS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get trader stats",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -240,12 +413,26 @@ app.get("/traders/:traderId/stats", async (c) => {
 app.get("/traders/:traderId/reputation", async (c) => {
   const traderId = c.req.param("traderId");
 
-  // TODO: Implement with ReputationService
-  return c.json({
-    success: true,
-    data: null,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const reputation = await reputationService.getReputation(traderId);
+
+    return c.json({
+      success: true,
+      data: reputation,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_REPUTATION_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get trader reputation",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -255,12 +442,36 @@ app.get("/traders/search", async (c) => {
   const query = c.req.query("q");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Implement trader search
-  return c.json({
-    success: true,
-    data: { traders: [], total: 0 },
-    timestamp: new Date().toISOString(),
-  });
+  if (!query) {
+    return c.json(
+      { success: false, error: { code: "INVALID_REQUEST", message: "Search query is required" } },
+      400
+    );
+  }
+
+  try {
+    const traders = await traderStatsService.searchTraders({
+      query,
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: traders,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "SEARCH_FAILED",
+          message: error instanceof Error ? error.message : "Failed to search traders",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -270,27 +481,61 @@ app.get("/traders/recommended", async (c) => {
   const userId = c.get("userId");
   const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { recommendations: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const traders = await traderStatsService.getTrendingTraders({
+      period: "weekly",
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: traders,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_RECOMMENDATIONS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get recommended traders",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
  * Get trending traders
  */
 app.get("/traders/trending", async (c) => {
-  const period = c.req.query("period") ?? "week";
+  const period = c.req.query("period") ?? "weekly";
   const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { traders: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const traders = await traderStatsService.getTrendingTraders({
+      period: period as "daily" | "weekly" | "monthly",
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: traders,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_TRENDING_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get trending traders",
+        },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -329,20 +574,47 @@ app.post("/copy/subscribe", zValidator("json", createCopySubscriptionSchema), as
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  const subscriptionId = crypto.randomUUID();
-
-  return c.json({
-    success: true,
-    data: {
-      id: subscriptionId,
+  try {
+    const subscriptionId = await copyTradingService.createSubscription({
       copierId: userId,
-      ...body,
-      status: "active",
-      subscribedAt: new Date().toISOString(),
-    },
-    timestamp: new Date().toISOString(),
-  });
+      traderId: body.traderId,
+      copyMode: body.copyMode,
+      fixedAmount: body.fixedAmount,
+      portfolioPercentage: body.portfolioPercentage,
+      copyRatio: body.copyRatio,
+      maxPositionSize: body.maxPositionSize,
+      maxDailyLoss: body.maxDailyLoss,
+      maxTotalExposure: body.maxTotalExposure,
+      stopLossPercent: body.stopLossPercent,
+      takeProfitPercent: body.takeProfitPercent,
+      copyAssetClasses: body.copyAssetClasses,
+      excludedSymbols: body.excludedSymbols,
+      copyDelaySeconds: body.copyDelaySeconds,
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        id: subscriptionId,
+        copierId: userId,
+        ...body,
+        status: "active",
+        subscribedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "CREATE_SUBSCRIPTION_FAILED",
+          message: error instanceof Error ? error.message : "Failed to create copy subscription",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -359,12 +631,29 @@ app.get("/copy/subscriptions", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { subscriptions: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const subscriptions = await copyTradingService.getSubscriptions({
+      copierId: userId,
+      status: status as "pending" | "active" | "paused" | "stopped" | "cancelled" | undefined,
+    });
+
+    return c.json({
+      success: true,
+      data: subscriptions,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_SUBSCRIPTIONS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get copy subscriptions",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -381,12 +670,29 @@ app.get("/copy/copiers", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { copiers: [], total: 0 },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const copiers = await copyTradingService.getCopiers({
+      traderId: userId,
+      status: status as "pending" | "active" | "paused" | "stopped" | "cancelled",
+    });
+
+    return c.json({
+      success: true,
+      data: copiers,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_COPIERS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get copiers",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -407,12 +713,26 @@ app.patch(
       );
     }
 
-    // TODO: Implement with CopyTradingService
-    return c.json({
-      success: true,
-      data: { id: subscriptionId, ...body, updated: true },
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      await copyTradingService.updateSubscription(subscriptionId, body);
+
+      return c.json({
+        success: true,
+        data: { id: subscriptionId, ...body, updated: true },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "UPDATE_SUBSCRIPTION_FAILED",
+            message: error instanceof Error ? error.message : "Failed to update copy subscription",
+          },
+        },
+        500
+      );
+    }
   }
 );
 
@@ -430,12 +750,26 @@ app.post("/copy/subscriptions/:subscriptionId/pause", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { id: subscriptionId, status: "paused" },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await copyTradingService.pauseSubscription(subscriptionId);
+
+    return c.json({
+      success: true,
+      data: { id: subscriptionId, status: "paused" },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "PAUSE_SUBSCRIPTION_FAILED",
+          message: error instanceof Error ? error.message : "Failed to pause copy subscription",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -452,12 +786,26 @@ app.post("/copy/subscriptions/:subscriptionId/resume", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { id: subscriptionId, status: "active" },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await copyTradingService.resumeSubscription(subscriptionId);
+
+    return c.json({
+      success: true,
+      data: { id: subscriptionId, status: "active" },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "RESUME_SUBSCRIPTION_FAILED",
+          message: error instanceof Error ? error.message : "Failed to resume copy subscription",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -474,12 +822,26 @@ app.delete("/copy/subscriptions/:subscriptionId", async (c) => {
     );
   }
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { id: subscriptionId, status: "cancelled" },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await copyTradingService.cancelSubscription(subscriptionId);
+
+    return c.json({
+      success: true,
+      data: { id: subscriptionId, status: "cancelled" },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "CANCEL_SUBSCRIPTION_FAILED",
+          message: error instanceof Error ? error.message : "Failed to cancel copy subscription",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -490,12 +852,30 @@ app.get("/copy/subscriptions/:subscriptionId/trades", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const cursor = c.req.query("cursor");
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: { trades: [], cursor: undefined },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const trades = await copyTradingService.getCopyTrades({
+      subscriptionId,
+      limit,
+      cursor,
+    });
+
+    return c.json({
+      success: true,
+      data: trades,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_TRADES_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get copy trades",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -505,12 +885,26 @@ app.get("/copy/subscriptions/:subscriptionId/analytics", async (c) => {
   const subscriptionId = c.req.param("subscriptionId");
   const period = c.req.query("period") ?? "all_time";
 
-  // TODO: Implement with CopyTradingService
-  return c.json({
-    success: true,
-    data: null,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const subscription = await copyTradingService.getSubscription(subscriptionId);
+
+    return c.json({
+      success: true,
+      data: subscription,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_ANALYTICS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get copy trading analytics",
+        },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -527,17 +921,32 @@ app.get("/leaderboards/:type/:period", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "100", 10);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-  // TODO: Implement with LeaderboardService
-  return c.json({
-    success: true,
-    data: {
-      leaderboardType: type,
-      period,
-      entries: [],
-      totalParticipants: 0,
-    },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const leaderboard = await leaderboardService.getLeaderboard({
+      leaderboardType: type as "pnl" | "pnl_percent" | "sharpe_ratio" | "win_rate" | "total_trades" | "followers" | "copiers" | "reputation",
+      period: period as "daily" | "weekly" | "monthly" | "all_time",
+      assetClass,
+      limit,
+      offset,
+    });
+
+    return c.json({
+      success: true,
+      data: leaderboard,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_LEADERBOARD_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get leaderboard",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -555,12 +964,30 @@ app.get("/leaderboards/:type/:period/my-rank", async (c) => {
     );
   }
 
-  // TODO: Implement with LeaderboardService
-  return c.json({
-    success: true,
-    data: null,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const rank = await leaderboardService.getMyRank({
+      userId,
+      leaderboardType: type,
+      period,
+    });
+
+    return c.json({
+      success: true,
+      data: rank,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_RANK_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get leaderboard rank",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -579,12 +1006,31 @@ app.get("/leaderboards/history", async (c) => {
     );
   }
 
-  // TODO: Implement with LeaderboardService
-  return c.json({
-    success: true,
-    data: { history: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const history = await leaderboardService.getLeaderboardHistory({
+      userId,
+      leaderboardType: type,
+      period,
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: history,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_HISTORY_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get leaderboard history",
+        },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -837,12 +1283,31 @@ app.get("/feed", async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { items: [], cursor: undefined, hasMore: false },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const feed = await socialGraphService.getActivityFeed({
+      userId,
+      feedType: feedType as "following" | "discover" | "notifications",
+      limit,
+      cursor,
+    });
+
+    return c.json({
+      success: true,
+      data: feed,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_FEED_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get activity feed",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -860,12 +1325,30 @@ app.get("/notifications", async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { items: [], unreadCount: 0 },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const notifications = await socialGraphService.getNotifications({
+      userId,
+      unreadOnly,
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: notifications,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_NOTIFICATIONS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get notifications",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -882,12 +1365,30 @@ app.post("/notifications/mark-read", async (c) => {
     );
   }
 
-  // TODO: Implement with SocialGraphService
-  return c.json({
-    success: true,
-    data: { marked: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await socialGraphService.markNotificationsRead({
+      userId,
+      itemIds: body.itemIds,
+      all: body.all,
+    });
+
+    return c.json({
+      success: true,
+      data: { marked: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "MARK_READ_FAILED",
+          message: error instanceof Error ? error.message : "Failed to mark notifications as read",
+        },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -917,19 +1418,40 @@ app.post("/comments", zValidator("json", createCommentSchema), async (c) => {
     );
   }
 
-  // TODO: Implement comment creation
-  const commentId = crypto.randomUUID();
-
-  return c.json({
-    success: true,
-    data: {
-      id: commentId,
+  try {
+    const commentId = await positionCommentsService.createComment({
       authorId: userId,
-      ...body,
-      createdAt: new Date().toISOString(),
-    },
-    timestamp: new Date().toISOString(),
-  });
+      traderId: userId,
+      positionId: body.positionId,
+      orderId: body.orderId,
+      tradeId: body.tradeId,
+      content: body.content,
+      contentType: body.contentType,
+      parentCommentId: body.parentCommentId,
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        id: commentId,
+        authorId: userId,
+        ...body,
+        createdAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "CREATE_COMMENT_FAILED",
+          message: error instanceof Error ? error.message : "Failed to create comment",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -939,12 +1461,29 @@ app.get("/comments/position/:positionId", async (c) => {
   const positionId = c.req.param("positionId");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Implement comment fetching
-  return c.json({
-    success: true,
-    data: { comments: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const comments = await positionCommentsService.getPositionComments({
+      positionId,
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: comments,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "GET_COMMENTS_FAILED",
+          message: error instanceof Error ? error.message : "Failed to get comments",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -961,12 +1500,29 @@ app.post("/comments/:commentId/like", async (c) => {
     );
   }
 
-  // TODO: Implement like
-  return c.json({
-    success: true,
-    data: { liked: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await positionCommentsService.likeComment({
+      commentId,
+      userId,
+    });
+
+    return c.json({
+      success: true,
+      data: { liked: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "LIKE_COMMENT_FAILED",
+          message: error instanceof Error ? error.message : "Failed to like comment",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -983,12 +1539,29 @@ app.delete("/comments/:commentId/like", async (c) => {
     );
   }
 
-  // TODO: Implement unlike
-  return c.json({
-    success: true,
-    data: { unliked: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    await positionCommentsService.unlikeComment({
+      commentId,
+      userId,
+    });
+
+    return c.json({
+      success: true,
+      data: { unliked: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UNLIKE_COMMENT_FAILED",
+          message: error instanceof Error ? error.message : "Failed to unlike comment",
+        },
+      },
+      500
+    );
+  }
 });
 
 export { app as socialRoutes };

@@ -55,6 +55,21 @@ export {
   getPriceUpdateStatusQuery,
 } from "./rwa";
 
+// Social Trading Workflows
+export {
+  calculateTraderStatsWorkflow,
+  batchCalculateStatsWorkflow,
+  copyTradeExecutionWorkflow,
+  cancelCopyTradeSignal,
+  copyTradingMonitorWorkflow,
+  fraudDetectionWorkflow,
+  batchFraudDetectionWorkflow,
+  calculateReputationWorkflow,
+  batchReputationWorkflow,
+  generateLeaderboardWorkflow,
+  scheduledLeaderboardWorkflow,
+} from "./social";
+
 // Re-export types for convenience
 export type {
   EmailSyncInput,
@@ -81,3 +96,11 @@ export type {
   RWAPurchaseStatus,
   PriceUpdateStatus,
 } from "./rwa";
+
+export type {
+  TraderStatsWorkflowParams,
+  CopyTradingWorkflowParams,
+  FraudDetectionWorkflowParams,
+  ReputationWorkflowParams,
+  LeaderboardWorkflowParams,
+} from "./social";
