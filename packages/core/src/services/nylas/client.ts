@@ -36,6 +36,7 @@ export interface NylasClientConfig {
   apiUri?: string;
   webhookSecret?: string;
   timeout?: number;
+  maxRetries?: number;
   logger?: Logger;
 }
 
@@ -57,6 +58,7 @@ export class NylasClient {
   private readonly apiUri: string;
   private readonly webhookSecret?: string;
   private readonly timeout: number;
+  private readonly maxRetries: number;
   private readonly logger: Logger;
 
   constructor(config: NylasClientConfig) {
@@ -64,6 +66,7 @@ export class NylasClient {
     this.apiUri = config.apiUri ?? DEFAULT_API_URI;
     this.webhookSecret = config.webhookSecret;
     this.timeout = config.timeout ?? 30000;
+    this.maxRetries = config.maxRetries ?? 3;
     this.logger = config.logger ?? this.createDefaultLogger();
   }
 
@@ -79,6 +82,14 @@ export class NylasClient {
   // ==========================================================================
   // HTTP Methods
   // ==========================================================================
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private isRetryableStatus(status: number): boolean {
+    return status === 429 || (status >= 500 && status < 600);
+  }
 
   private async request<T>(
     method: string,
@@ -96,61 +107,87 @@ export class NylasClient {
       Accept: "application/json",
     };
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    let lastError: unknown;
 
-    try {
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: data ? JSON.stringify(data) : undefined,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new NylasApiError(responseData, response.status);
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      if (attempt > 0) {
+        const baseDelay = attempt === 1 ? 1000 : attempt === 2 ? 2000 : 4000;
+        const delay = lastError instanceof NylasApiError && lastError.statusCode === 429
+          ? baseDelay * 2
+          : baseDelay;
+        this.logger.warn(`Retrying request (attempt ${attempt + 1})`, { method, path });
+        await this.sleep(delay);
       }
 
-      return responseData as T;
-    } catch (error) {
-      clearTimeout(timeoutId);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      if (error instanceof NylasApiError) {
-        this.logger.error("Nylas API error", {
-          type: error.type,
-          message: error.message,
-          statusCode: error.statusCode,
+      try {
+        const response = await fetch(url, {
+          method,
+          headers,
+          body: data ? JSON.stringify(data) : undefined,
+          signal: controller.signal,
         });
-        throw error;
-      }
 
-      if (error instanceof Error) {
-        if (error.name === "AbortError") {
+        clearTimeout(timeoutId);
+
+        const responseData = await response.json();
+
+        if (!response.ok) {
+          const apiError = new NylasApiError(responseData, response.status);
+          if (this.isRetryableStatus(response.status) && attempt < this.maxRetries) {
+            lastError = apiError;
+            continue;
+          }
+          throw apiError;
+        }
+
+        return responseData as T;
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof NylasApiError) {
+          if (this.isRetryableStatus(error.statusCode) && attempt < this.maxRetries) {
+            lastError = error;
+            continue;
+          }
+          this.logger.error("Nylas API error", {
+            type: error.type,
+            message: error.message,
+            statusCode: error.statusCode,
+          });
+          throw error;
+        }
+
+        if (error instanceof Error) {
+          if (error.name === "AbortError") {
+            const timeoutError = new NylasApiError(
+              { type: "timeout", message: "Request timeout", request_id: "" },
+              408
+            );
+            if (attempt < this.maxRetries) {
+              lastError = timeoutError;
+              continue;
+            }
+            throw timeoutError;
+          }
+          // Network errors are retryable
+          if (attempt < this.maxRetries) {
+            lastError = error;
+            continue;
+          }
           throw new NylasApiError(
-            {
-              type: "timeout",
-              message: "Request timeout",
-              request_id: "",
-            },
-            408
+            { type: "internal_error", message: error.message, request_id: "" },
+            500
           );
         }
-        throw new NylasApiError(
-          {
-            type: "internal_error",
-            message: error.message,
-            request_id: "",
-          },
-          500
-        );
-      }
 
-      throw error;
+        throw error;
+      }
     }
+
+    throw lastError;
   }
 
   private buildQueryString(params?: Record<string, unknown>): string {

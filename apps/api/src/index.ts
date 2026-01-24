@@ -1,3 +1,17 @@
+// Validate required environment variables at startup
+const REQUIRED_ENV_VARS = [
+  "JWT_SECRET",
+  "CONVEX_URL",
+] as const;
+
+const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
+if (missing.length > 0) {
+  throw new Error(
+    `FATAL: Missing required environment variables: ${missing.join(", ")}. ` +
+    "Check your .env file or deployment configuration."
+  );
+}
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";

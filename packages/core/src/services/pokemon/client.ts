@@ -26,6 +26,7 @@ export interface PokemonPriceClientConfig {
   apiKey: string;
   baseUrl?: string;
   timeout?: number;
+  maxRetries?: number;
   cacheConfig?: CacheConfig;
   logger?: Logger;
 }
@@ -49,6 +50,7 @@ export class PokemonPriceClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly timeout: number;
+  private readonly maxRetries: number;
   private readonly logger: Logger;
   private readonly cache: Map<string, CachedPrice>;
   private readonly cacheConfig: CacheConfig;
@@ -59,6 +61,7 @@ export class PokemonPriceClient {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeout = config.timeout ?? 30000;
+    this.maxRetries = config.maxRetries ?? 3;
     this.logger = config.logger ?? this.createDefaultLogger();
     this.cache = new Map();
     this.cacheConfig = config.cacheConfig ?? {
@@ -79,6 +82,14 @@ export class PokemonPriceClient {
   // ==========================================================================
   // HTTP Methods with Rate Limiting
   // ==========================================================================
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private isRetryableStatus(status: number): boolean {
+    return status === 429 || (status >= 500 && status < 600);
+  }
 
   private async request<T>(path: string, params?: Record<string, string>): Promise<T> {
     // Rate limiting
@@ -103,63 +114,102 @@ export class PokemonPriceClient {
       Accept: "application/json",
     };
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    let lastError: unknown;
 
-    try {
-      const response = await fetch(url.toString(), {
-        method: "GET",
-        headers,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.status === 429) {
-        throw new PokemonPriceApiError(
-          "Rate limit exceeded",
-          PRICE_ERRORS.RATE_LIMITED,
-          429
-        );
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      if (attempt > 0) {
+        const baseDelay = attempt === 1 ? 1000 : attempt === 2 ? 2000 : 4000;
+        const delay = lastError instanceof PokemonPriceApiError && lastError.statusCode === 429
+          ? baseDelay * 3
+          : baseDelay;
+        this.logger.warn(`Retrying request (attempt ${attempt + 1})`, { path });
+        await this.sleep(delay);
       }
 
-      if (!response.ok) {
-        throw new PokemonPriceApiError(
-          `HTTP ${response.status}`,
-          PRICE_ERRORS.API_ERROR,
-          response.status
-        );
-      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      return await response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof PokemonPriceApiError) {
-        this.logger.error("Pokemon API error", {
-          code: error.code,
-          message: error.message,
+      try {
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          headers,
+          signal: controller.signal,
         });
-        throw error;
-      }
 
-      if (error instanceof Error) {
-        if (error.name === "AbortError") {
-          throw new PokemonPriceApiError(
-            "Request timeout",
+        clearTimeout(timeoutId);
+
+        if (response.status === 429) {
+          const rateLimitError = new PokemonPriceApiError(
+            "Rate limit exceeded",
+            PRICE_ERRORS.RATE_LIMITED,
+            429
+          );
+          if (attempt < this.maxRetries) {
+            lastError = rateLimitError;
+            continue;
+          }
+          throw rateLimitError;
+        }
+
+        if (!response.ok) {
+          const apiError = new PokemonPriceApiError(
+            `HTTP ${response.status}`,
             PRICE_ERRORS.API_ERROR,
-            408
+            response.status
+          );
+          if (this.isRetryableStatus(response.status) && attempt < this.maxRetries) {
+            lastError = apiError;
+            continue;
+          }
+          throw apiError;
+        }
+
+        return await response.json();
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof PokemonPriceApiError) {
+          if (this.isRetryableStatus(error.statusCode) && attempt < this.maxRetries) {
+            lastError = error;
+            continue;
+          }
+          this.logger.error("Pokemon API error", {
+            code: error.code,
+            message: error.message,
+          });
+          throw error;
+        }
+
+        if (error instanceof Error) {
+          if (error.name === "AbortError") {
+            const timeoutError = new PokemonPriceApiError(
+              "Request timeout",
+              PRICE_ERRORS.API_ERROR,
+              408
+            );
+            if (attempt < this.maxRetries) {
+              lastError = timeoutError;
+              continue;
+            }
+            throw timeoutError;
+          }
+          // Network errors are retryable
+          if (attempt < this.maxRetries) {
+            lastError = error;
+            continue;
+          }
+          throw new PokemonPriceApiError(
+            error.message,
+            PRICE_ERRORS.API_ERROR,
+            500
           );
         }
-        throw new PokemonPriceApiError(
-          error.message,
-          PRICE_ERRORS.API_ERROR,
-          500
-        );
-      }
 
-      throw error;
+        throw error;
+      }
     }
+
+    throw lastError;
   }
 
   // ==========================================================================

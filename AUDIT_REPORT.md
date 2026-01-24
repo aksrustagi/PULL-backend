@@ -32,12 +32,17 @@ The following fixes have been applied across 2 commits:
 - **Workflows (4 files):** Replaced crypto.randomUUID() with replay-safe uuid4(), added compensation/refund logic, removed console.error
 - **Service clients (2 files):** Added retry with exponential backoff to Plaid and Fireblocks
 
+### Batch 3: Service Reliability, CI/CD, and Startup Validation (4 files modified)
+- **Nylas client:** Added retry with exponential backoff for 429/5xx/network errors
+- **Pokemon client:** Added retry with exponential backoff for 429/5xx/network errors
+- **Deploy workflow:** Changed trigger from `push` to `workflow_run` (only deploys after CI passes)
+- **API startup:** Added required env var validation (JWT_SECRET, CONVEX_URL) before server boot
+
 ### Remaining Items (not yet fixed)
-- Nylas/Pokemon clients: No retry logic
-- CI/CD: Missing pnpm-lock.yaml, deploy workflow should depend on CI
+- CI/CD: Missing pnpm-lock.yaml
 - `@pull/config` phantom package dependency
 - Workers webpack bundling for Temporal isolation
-- Code quality: Structured logging, env validation at startup
+- Code quality: Structured logging
 
 ---
 
@@ -48,9 +53,9 @@ The PULL monorepo is a fintech super-app covering prediction markets, crypto tra
 | Severity | Count | Fixed | Remaining |
 |----------|-------|-------|-----------|
 | **CRITICAL** | 28 | 26 | 2 |
-| **HIGH** | 38 | 33 | 5 |
-| **MEDIUM** | 35 | 25 | 10 |
-| **LOW** | 26 | 8 | 18 |
+| **HIGH** | 38 | 35 | 3 |
+| **MEDIUM** | 35 | 28 | 7 |
+| **LOW** | 26 | 9 | 17 |
 
 **Post-fix status:** The critical authentication bypass, database layer zero-auth, broken cryptography, and missing compensation logic have all been remediated. Remaining items are primarily code quality and operational hardening.
 
