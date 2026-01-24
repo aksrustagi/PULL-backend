@@ -203,3 +203,145 @@ export type {
   FilterOperator,
   SubscriptionChannel,
 } from "./api";
+
+// Real Estate Prediction Market types
+export type {
+  // Market types
+  RealEstatePredictionEvent,
+  RealEstateMarketDataPoint,
+  RealEstatePredictionPosition,
+  RealEstateMarketCategory,
+  RealEstateMarketStatus,
+  GeographicScope,
+  // Brokerage & Agent types
+  Brokerage,
+  RealEstateAgent,
+  AgentPerformanceSnapshot,
+  BrokerageStatus,
+  BrokerageTier,
+  AgentStatus,
+  AgentSpecialization,
+  // Referral types
+  AgentReferral,
+  AgentPointsTransaction,
+  AgentPointsTransactionType,
+  ReferralStatus,
+  // Market sentiment types
+  MarketSentiment,
+  AgentMarketInsight,
+  CommissionPredictionMarket,
+  // PULL Index types
+  PullRealEstateIndex,
+  PullRealEstateIndexComponent,
+  PullRealEstateIndexHistorical,
+  // Content types
+  MarketPredictionNewsletter,
+  NewsletterPrediction,
+  MarketHighlight,
+  // White-label types
+  WhiteLabelConfig,
+  WhiteLabelFeature,
+  // Lead qualification types
+  TradingBehaviorLeadScore,
+  // API request types
+  CreateRealEstateMarketRequest,
+  CreateBrokerageRequest,
+  RegisterAgentRequest,
+  AgentInviteClientRequest,
+  GetMarketSentimentRequest,
+  GetPullIndexRequest,
+} from "./realEstate";
+
+// Social Trading types
+export type {
+  // Social Graph
+  Follow,
+  FollowWithDetails,
+  PositionVisibility,
+  UserSummary,
+
+  // Trader Profile
+  TraderProfile,
+  TraderRiskProfile,
+
+  // Trader Stats
+  TraderStats,
+  TraderStatsSnapshot,
+  StatsPeriod,
+  AssetBreakdown,
+  AssetClassStats,
+
+  // Reputation
+  ReputationScore,
+  ReputationBadge,
+  ReputationTier,
+  BadgeType,
+
+  // Copy Trading
+  CopyTradingSubscription,
+  CopyTrade,
+  CopySubscriptionStatus,
+  CopyMode,
+  CopyTradeStatus,
+  CreateCopySubscriptionInput,
+  UpdateCopySubscriptionInput,
+
+  // Position Comments
+  PositionComment,
+  CommentAttachment,
+  CommentContentType,
+  AttachmentType,
+  CreateCommentInput,
+
+  // Trading Rooms
+  TradingRoom,
+  TradingRoomMember,
+  TradingRoomMessage,
+  TradingRoomSettings,
+  TradingRoomType,
+  RoomAccessLevel,
+  SubscriptionPeriod,
+  RoomMemberRole,
+  RoomMemberStatus,
+  NotificationLevel,
+  RoomMessageType,
+  SharedTradeData,
+  MessageAttachment,
+  CreateTradingRoomInput,
+  SendRoomMessageInput,
+
+  // Leaderboards
+  LeaderboardSnapshot,
+  LeaderboardEntry,
+  UserLeaderboardPosition,
+  LeaderboardType,
+  LeaderboardPeriod,
+  LeaderboardQuery,
+
+  // Fraud Detection
+  FraudAlert,
+  FraudEvidence,
+  TradingPatterns,
+  TradingPatternFeatures,
+  FraudAlertType,
+  FraudSeverity,
+  FraudAlertStatus,
+
+  // Activity Feed
+  SocialActivity,
+  FeedItem,
+  SocialActivityType,
+  ActivityVisibility,
+  FeedType,
+  FeedQuery,
+
+  // Search & Discovery
+  TraderSearchFilters,
+  TraderSearchResult,
+  TraderRecommendation,
+
+  // Analytics
+  CopyTradingAnalytics,
+  SocialAnalytics,
+  SymbolPerformance,
+} from "./social-trading";

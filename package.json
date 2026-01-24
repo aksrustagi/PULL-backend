@@ -16,12 +16,17 @@
     "dev:api": "turbo dev --filter=@pull/api",
     "dev:web": "turbo dev --filter=@pull/web",
     "dev:workers": "turbo dev --filter=@pull/workers",
+    "start:api": "pnpm --filter @pull/api start",
+    "start:web": "pnpm --filter @pull/web start",
+    "start:workers": "pnpm --filter @pull/workers start",
     "lint": "turbo lint",
     "lint:fix": "turbo lint -- --fix",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
     "typecheck": "turbo typecheck",
-    "test": "turbo test",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "turbo test:e2e",
     "clean": "turbo clean && rm -rf node_modules",
     "db:push": "pnpm --filter @pull/db db:push",
@@ -34,13 +39,17 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
+    "@temporalio/client": "^1.14.1",
+    "@temporalio/worker": "^1.9.0",
     "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.6.0",
     "eslint": "^9.0.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.2.0",
     "prettier": "^3.2.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
   },
   "lint-staged": {
     "*.{ts,tsx}": [

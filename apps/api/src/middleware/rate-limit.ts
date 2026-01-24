@@ -3,74 +3,95 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import type { Env } from "../index";
 
-// Initialize Upstash Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL ?? "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN ?? "",
-});
+const isProduction = process.env.NODE_ENV === "production";
+const isDevelopment = process.env.NODE_ENV === "development";
 
-// Create rate limiters for different tiers
-const rateLimiters = {
-  // Anonymous users: 30 requests per minute
-  anonymous: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(30, "1 m"),
-    prefix: "ratelimit:anon",
-  }),
-  // Authenticated users: 100 requests per minute
-  authenticated: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(100, "1 m"),
-    prefix: "ratelimit:auth",
-  }),
-  // Premium users: 300 requests per minute
-  premium: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(300, "1 m"),
-    prefix: "ratelimit:premium",
-  }),
-  // Betting: 30 bets per minute
-  betting: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(30, "1 m"),
-    prefix: "ratelimit:betting",
-  }),
-  // Draft actions: 60 per minute
-  draft: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(60, "1 m"),
-    prefix: "ratelimit:draft",
-  }),
-  // Trade proposals: 10 per hour
-  trade: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(10, "1 h"),
-    prefix: "ratelimit:trade",
-  }),
-  // Payment operations: 5 per 10 minutes
-  payment: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(5, "10 m"),
-    prefix: "ratelimit:payment",
-  }),
-  // WebSocket connections: 5 per minute
-  websocket: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(5, "1 m"),
-    prefix: "ratelimit:ws",
-  }),
-  // Auth attempts: 10 per 15 minutes
-  auth: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(10, "15 m"),
-    prefix: "ratelimit:auth",
-  }),
-};
+// Check Redis configuration in production
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const isRedisConfigured = redisUrl && redisToken;
+
+// In production, Redis must be configured
+if (isProduction && !isRedisConfigured) {
+  console.error("CRITICAL: Redis is not configured in production. Rate limiting will reject all requests.");
+}
+
+// Initialize Upstash Redis client (only if configured)
+const redis = isRedisConfigured
+  ? new Redis({
+      url: redisUrl,
+      token: redisToken,
+    })
+  : null;
+
+// Create rate limiters for different tiers (only if Redis is available)
+const rateLimiters = redis
+  ? {
+      // Anonymous users: 30 requests per minute
+      anonymous: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(30, "1 m"),
+        prefix: "ratelimit:anon",
+      }),
+      // Authenticated users: 100 requests per minute
+      authenticated: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(100, "1 m"),
+        prefix: "ratelimit:auth",
+      }),
+      // Premium users: 300 requests per minute
+      premium: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(300, "1 m"),
+        prefix: "ratelimit:premium",
+      }),
+      // Betting: 30 bets per minute
+      betting: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(30, "1 m"),
+        prefix: "ratelimit:betting",
+      }),
+      // Draft actions: 60 per minute
+      draft: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(60, "1 m"),
+        prefix: "ratelimit:draft",
+      }),
+      // Trade proposals: 10 per hour
+      trade: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(10, "1 h"),
+        prefix: "ratelimit:trade",
+      }),
+      // Payment operations: 5 per 10 minutes
+      payment: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, "10 m"),
+        prefix: "ratelimit:payment",
+      }),
+      // WebSocket connections: 5 per minute
+      websocket: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, "1 m"),
+        prefix: "ratelimit:ws",
+      }),
+      // Auth attempts: 10 per 15 minutes
+      auth: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(10, "15 m"),
+        prefix: "ratelimit:auth-attempts",
+      }),
+    }
+  : null;
+
+// Type for rate limiter tiers
+type RateLimiterTier = "anonymous" | "authenticated" | "premium" | "betting" | "draft" | "trade" | "payment" | "websocket" | "auth";
 
 // Fantasy-specific rate limit middleware factory
-export function createFantasyRateLimit(tier: keyof typeof rateLimiters) {
+export function createFantasyRateLimit(tier: RateLimiterTier) {
   return createMiddleware<Env>(async (c, next) => {
-    if (process.env.NODE_ENV === "development" || !process.env.UPSTASH_REDIS_REST_URL) {
+    // Skip rate limiting in development or if Redis is not configured
+    if (isDevelopment || !rateLimiters) {
       await next();
       return;
     }
@@ -81,8 +102,14 @@ export function createFantasyRateLimit(tier: keyof typeof rateLimiters) {
                "unknown";
     const identifier = userId ?? ip;
 
+    const limiter = rateLimiters[tier];
+    if (!limiter) {
+      await next();
+      return;
+    }
+
     try {
-      const { success, limit, remaining, reset } = await rateLimiters[tier].limit(identifier);
+      const { success, limit, remaining, reset } = await limiter.limit(identifier);
       c.header("X-RateLimit-Limit", limit.toString());
       c.header("X-RateLimit-Remaining", remaining.toString());
       c.header("X-RateLimit-Reset", reset.toString());
@@ -107,13 +134,29 @@ export function createFantasyRateLimit(tier: keyof typeof rateLimiters) {
 
 export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
   // Skip rate limiting in development
-  if (process.env.NODE_ENV === "development") {
+  if (isDevelopment) {
     await next();
     return;
   }
 
-  // Skip if Redis is not configured
-  if (!process.env.UPSTASH_REDIS_REST_URL) {
+  // In production, if Redis is not configured, return 503
+  if (isProduction && !rateLimiters) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message: "Rate limiting service is unavailable. Please try again later.",
+        },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      503
+    );
+  }
+
+  // In non-production/non-development (e.g., test), skip if not configured
+  if (!rateLimiters) {
     await next();
     return;
   }
@@ -161,7 +204,23 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
 
     await next();
   } catch (error) {
-    // If rate limiting fails, allow the request
+    // In production, if rate limiting fails, return 503 instead of allowing through
+    if (isProduction) {
+      console.error("Rate limit error in production:", error);
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "Rate limiting service error. Please try again later.",
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        503
+      );
+    }
+    // In non-production, log and allow through
     console.error("Rate limit error:", error);
     await next();
   }
