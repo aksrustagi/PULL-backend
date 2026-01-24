@@ -53,10 +53,9 @@ export class MassiveClient {
     path: string,
     body: string = ""
   ): string {
-    // Implement HMAC signature generation
     const message = `${timestamp}${method}${path}${body}`;
-    // In production, use crypto.createHmac
-    return Buffer.from(message).toString("base64");
+    const crypto = require("crypto");
+    return crypto.createHmac("sha256", this.apiSecret).update(message).digest("hex");
   }
 
   private async request<T>(
@@ -68,23 +67,30 @@ export class MassiveClient {
     const bodyStr = body ? JSON.stringify(body) : "";
     const signature = this.generateSignature(timestamp, method, endpoint, bodyStr);
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": this.apiKey,
-        "X-Timestamp": timestamp,
-        "X-Signature": signature,
-      },
-      body: body ? bodyStr : undefined,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": this.apiKey,
+          "X-Timestamp": timestamp,
+          "X-Signature": signature,
+        },
+        body: body ? bodyStr : undefined,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Massive API error: ${response.status} - ${error}`);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Massive API error: ${response.status} - ${error}`);
+      }
+
+      return response.json();
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return response.json();
   }
 
   /**

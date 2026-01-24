@@ -34,11 +34,16 @@ app.use("*", secureHeaders());
 app.use(
   "*",
   cors({
-    origin: [
-      "http://localhost:3000",
-      "https://pull.app",
-      "https://*.pull.app",
-    ],
+    origin: (origin) => {
+      const allowed = [
+        "http://localhost:3000",
+        "https://pull.app",
+      ];
+      if (allowed.includes(origin)) return origin;
+      // Match subdomains of pull.app
+      if (/^https:\/\/[\w-]+\.pull\.app$/.test(origin)) return origin;
+      return undefined;
+    },
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", "X-Request-ID"],
     exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
@@ -47,31 +52,48 @@ app.use(
   })
 );
 
-// Request ID middleware
+// Request ID middleware - always generate server-side for security
 app.use("*", async (c, next) => {
-  const requestId =
-    c.req.header("X-Request-ID") ?? crypto.randomUUID();
+  const requestId = crypto.randomUUID();
   c.set("requestId", requestId);
   c.header("X-Request-ID", requestId);
   await next();
 });
 
-// Rate limiting for non-webhook routes
-app.use("/api/*", rateLimitMiddleware);
+// Body size limit (1MB max) to prevent DoS
+app.use("*", async (c, next) => {
+  const contentLength = c.req.header("Content-Length");
+  if (contentLength && parseInt(contentLength, 10) > 1024 * 1024) {
+    return c.json(
+      {
+        success: false,
+        error: { code: "PAYLOAD_TOO_LARGE", message: "Request body too large (max 1MB)" },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      413
+    );
+  }
+  await next();
+});
 
-// Public routes
+// Public routes (no auth required)
 app.route("/health", healthRoutes);
 app.route("/api/auth", authRoutes);
+
+// Webhook routes (with rate limiting and their own signature-based auth)
+app.use("/webhooks/*", rateLimitMiddleware);
 app.route("/webhooks", webhookRoutes);
 
-// Protected routes (require auth)
+// Protected routes - auth first, then rate limit (so userId is available)
 app.use("/api/v1/*", authMiddleware);
+app.use("/api/v1/*", rateLimitMiddleware);
 app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
 app.route("/api/v1/rwa", rwaRoutes);
 app.route("/api/v1/rewards", rewardsRoutes);
 
-// tRPC endpoint
+// tRPC endpoint (uses its own auth via context)
 app.use(
   "/trpc/*",
   trpcServer({
@@ -96,7 +118,7 @@ app.notFound((c) => {
   );
 });
 
-// Error handler
+// Error handler - never leak internal details
 app.onError((err, c) => {
   console.error(`[${c.get("requestId")}] Error:`, err);
 
@@ -107,10 +129,7 @@ app.onError((err, c) => {
       success: false,
       error: {
         code: status === 500 ? "INTERNAL_SERVER_ERROR" : "ERROR",
-        message:
-          process.env.NODE_ENV === "production"
-            ? "An unexpected error occurred"
-            : err.message,
+        message: "An unexpected error occurred",
       },
       requestId: c.get("requestId"),
       timestamp: new Date().toISOString(),
@@ -122,7 +141,7 @@ app.onError((err, c) => {
 // Start server
 const port = parseInt(process.env.PORT ?? "3001", 10);
 
-console.log(`🚀 PULL API server starting on port ${port}`);
+console.log(`PULL API server starting on port ${port}`);
 
 export default {
   port,

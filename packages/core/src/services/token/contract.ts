@@ -311,9 +311,11 @@ export class PullTokenService {
 
     if (allowance.allowance < parsedAmount) {
       this.logger.info("Approving staking contract");
+      // Approve only the required amount plus 10% buffer, never unlimited
+      const approvalAmount = (parsedAmount * 110n) / 100n;
       const approveTx = await this.approve(
         this.networkConfig.stakingAddress,
-        ethers.MaxUint256.toString()
+        approvalAmount.toString()
       );
       await approveTx.wait();
     }

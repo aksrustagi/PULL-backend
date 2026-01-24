@@ -6,14 +6,21 @@ import type { Env } from "../index";
 const app = new Hono<Env>();
 
 const createOrderSchema = z.object({
-  symbol: z.string(),
+  symbol: z.string().min(1).max(20).regex(/^[A-Za-z0-9_.-]+$/),
   side: z.enum(["buy", "sell"]),
   type: z.enum(["market", "limit", "stop", "stop_limit"]),
-  quantity: z.number().positive(),
+  quantity: z.number().positive().max(1000000),
   price: z.number().positive().optional(),
   stopPrice: z.number().positive().optional(),
   timeInForce: z.enum(["day", "gtc", "ioc", "fok"]).default("gtc"),
-});
+}).refine(
+  (data) => {
+    if (data.type === "limit" || data.type === "stop_limit") return data.price !== undefined;
+    if (data.type === "stop" || data.type === "stop_limit") return data.stopPrice !== undefined;
+    return true;
+  },
+  { message: "Limit orders require price, stop orders require stopPrice" }
+);
 
 /**
  * Create a new order
@@ -55,7 +62,7 @@ app.post("/orders", zValidator("json", createOrderSchema), async (c) => {
 app.get("/orders", async (c) => {
   const userId = c.get("userId");
   const status = c.req.query("status");
-  const limit = parseInt(c.req.query("limit") ?? "50", 10);
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
 
   // TODO: Fetch from Convex
 
@@ -79,6 +86,11 @@ app.get("/orders", async (c) => {
  */
 app.get("/orders/:orderId", async (c) => {
   const orderId = c.req.param("orderId");
+  const userId = c.get("userId");
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+  // TODO: Verify order.userId === userId when fetching from Convex
 
   // TODO: Fetch from Convex
 
@@ -97,6 +109,11 @@ app.get("/orders/:orderId", async (c) => {
  */
 app.delete("/orders/:orderId", async (c) => {
   const orderId = c.req.param("orderId");
+  const userId = c.get("userId");
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+  // TODO: Verify order.userId === userId when fetching from Convex
 
   // TODO: Cancel order via Temporal workflow
 

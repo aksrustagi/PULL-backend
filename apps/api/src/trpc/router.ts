@@ -1,4 +1,4 @@
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { Context } from "./context";
 
@@ -8,7 +8,7 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   if (!ctx.userId) {
-    throw new Error("Unauthorized");
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
   }
   return next({ ctx: { ...ctx, userId: ctx.userId } });
 });
@@ -59,8 +59,8 @@ export const appRouter = router({
     getOrders: protectedProcedure
       .input(
         z.object({
-          status: z.string().optional(),
-          limit: z.number().default(50),
+          status: z.enum(["pending", "filled", "cancelled", "partial", "rejected"]).optional(),
+          limit: z.number().max(100).default(50),
         })
       )
       .query(async ({ ctx, input }) => {
@@ -81,7 +81,7 @@ export const appRouter = router({
         z.object({
           status: z.string().optional(),
           category: z.string().optional(),
-          limit: z.number().default(50),
+          limit: z.number().max(100).default(50),
         })
       )
       .query(async ({ input }) => {

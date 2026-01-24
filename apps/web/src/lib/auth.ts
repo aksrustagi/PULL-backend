@@ -63,7 +63,8 @@ export const useAuthStore = create<AuthState>()(
       name: "pull-auth",
       partialize: (state) => ({
         token: state.token,
-        refreshToken: state.refreshToken,
+        // Note: refreshToken should NOT be stored in localStorage for security
+        // It should be in an httpOnly cookie. For now, store only the access token.
       }),
     }
   )

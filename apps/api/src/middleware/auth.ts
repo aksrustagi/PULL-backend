@@ -2,9 +2,18 @@ import { createMiddleware } from "hono/factory";
 import * as jose from "jose";
 import type { Env } from "../index";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "your-secret-key-min-32-chars-long"
-);
+// Fail fast if JWT_SECRET is not configured
+const jwtSecretValue = process.env.JWT_SECRET;
+if (!jwtSecretValue) {
+  throw new Error(
+    "FATAL: JWT_SECRET environment variable is required. " +
+    "Generate one with: openssl rand -base64 32"
+  );
+}
+if (jwtSecretValue.length < 32) {
+  throw new Error("FATAL: JWT_SECRET must be at least 32 characters long");
+}
+const JWT_SECRET = new TextEncoder().encode(jwtSecretValue);
 
 export const authMiddleware = createMiddleware<Env>(async (c, next) => {
   const authHeader = c.req.header("Authorization");
@@ -76,14 +85,36 @@ export const authMiddleware = createMiddleware<Env>(async (c, next) => {
 /**
  * Generate a JWT token
  */
+/**
+ * Generate a JWT token with proper claims
+ */
 export async function generateToken(
   userId: string,
-  expiresIn: string = "7d"
+  expiresIn: string = "15m"
 ): Promise<string> {
   const token = await new jose.SignJWT({ sub: userId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
+    .setIssuer("pull-api")
+    .setAudience("pull-app")
     .setExpirationTime(expiresIn)
+    .sign(JWT_SECRET);
+
+  return token;
+}
+
+/**
+ * Generate a refresh token with longer expiry
+ */
+export async function generateRefreshToken(
+  userId: string
+): Promise<string> {
+  const token = await new jose.SignJWT({ sub: userId, type: "refresh" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setIssuer("pull-api")
+    .setAudience("pull-app")
+    .setExpirationTime("7d")
     .sign(JWT_SECRET);
 
   return token;

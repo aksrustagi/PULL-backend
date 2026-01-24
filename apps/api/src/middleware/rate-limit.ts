@@ -45,9 +45,13 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
   }
 
   const userId = c.get("userId");
-  const ip = c.req.header("CF-Connecting-IP") ??
-             c.req.header("X-Forwarded-For")?.split(",")[0] ??
-             "unknown";
+  // Only trust proxy headers if explicitly configured
+  const trustProxy = !!process.env.TRUST_PROXY;
+  const ip = trustProxy
+    ? (c.req.header("CF-Connecting-IP") ??
+       c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ??
+       "unknown")
+    : "unknown";
 
   // Determine rate limiter based on authentication
   const limiter = userId ? rateLimiters.authenticated : rateLimiters.anonymous;
@@ -87,8 +91,22 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
 
     await next();
   } catch (error) {
-    // If rate limiting fails, allow the request
-    console.error("Rate limit error:", error);
+    // Fail CLOSED for sensitive endpoints - deny on rate limit failure
+    const path = c.req.path;
+    const isSensitive = path.includes("/auth") || path.includes("/trading") || path.includes("/orders");
+    if (isSensitive) {
+      console.error("Rate limit error on sensitive endpoint, blocking:", error);
+      return c.json(
+        {
+          success: false,
+          error: { code: "SERVICE_UNAVAILABLE", message: "Service temporarily unavailable" },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        503
+      );
+    }
+    console.error("Rate limit error, allowing through:", error);
     await next();
   }
 });
