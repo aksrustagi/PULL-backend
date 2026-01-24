@@ -170,7 +170,7 @@ export async function orderExecutionWorkflow(
     // Step 3: Submit order to exchange (with cancellation check)
     // =========================================================================
     if (status.cancellationRequested) {
-      await handleCancellation(userId, orderId, status, hold.holdId);
+      await handleCancellation(userId, orderId, status, hold.holdId, undefined, input);
       return { orderId, status };
     }
 
@@ -195,8 +195,11 @@ export async function orderExecutionWorkflow(
     // Step 4: Poll for execution (with cancellation support)
     // =========================================================================
     let orderComplete = false;
+    const MAX_POLL_ITERATIONS = 720; // Max ~1 hour of polling (720 * 5s)
+    let pollCount = 0;
 
-    while (!orderComplete) {
+    while (!orderComplete && pollCount < MAX_POLL_ITERATIONS) {
+      pollCount++;
       // Check for cancellation request
       if (status.cancellationRequested) {
         await handleCancellation(
@@ -204,7 +207,8 @@ export async function orderExecutionWorkflow(
           orderId,
           status,
           hold.holdId,
-          submission.externalOrderId
+          submission.externalOrderId,
+          input
         );
         return { orderId, status };
       }
@@ -325,10 +329,10 @@ export async function orderExecutionWorkflow(
     status.status = "failed";
     status.failureReason = error instanceof Error ? error.message : String(error);
 
-    // Attempt to release any held funds
+    // Attempt to release any held funds (use orderId-based hold reference)
     if (status.holdAmount) {
       try {
-        await releaseBuyingPower(userId, `hold_${orderId}`, status.holdAmount);
+        await releaseBuyingPower(userId, orderId, status.holdAmount);
       } catch {
         // Best-effort release; will be reconciled by the system
       }
@@ -374,7 +378,8 @@ async function handleCancellation(
   orderId: string,
   status: OrderStatus,
   holdId: string,
-  externalOrderId?: string
+  externalOrderId?: string,
+  input?: OrderExecutionInput
 ): Promise<void> {
   status.status = "cancelled";
 
@@ -398,8 +403,8 @@ async function handleCancellation(
     await settleOrder({
       userId,
       orderId,
-      assetId: "", // Will be filled from context
-      side: "buy",
+      assetId: input?.assetId ?? "",
+      side: input?.side ?? "buy",
       filledQuantity: status.filledQuantity,
       averagePrice: status.averagePrice!,
       totalCost: status.totalCost!,

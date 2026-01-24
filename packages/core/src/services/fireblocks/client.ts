@@ -84,7 +84,7 @@ export class FireblocksClient {
       uri: path,
       nonce,
       iat: now,
-      exp: now + 30, // 30 second expiry
+      exp: now + 300, // 5 minute expiry (allows for network latency and retries)
       sub: this.apiKey,
       bodyHash: body
         ? crypto.createHash("sha256").update(body).digest("hex")

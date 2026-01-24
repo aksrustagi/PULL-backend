@@ -212,7 +212,13 @@ export const createAsset = authenticatedMutation({
     cardNumber: v.optional(v.string()),
     rarity: v.optional(v.string()),
     year: v.optional(v.number()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      condition: v.optional(v.string()),
+      edition: v.optional(v.string()),
+      language: v.optional(v.string()),
+      marketPrice: v.optional(v.number()),
+      notes: v.optional(v.string()),
+    })),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -410,6 +416,15 @@ export const purchaseShares = authenticatedMutation({
 
     if (listing.status !== "active") {
       throw new Error("Listing is not active");
+    }
+
+    // Prevent self-purchase
+    if (listing.sellerId === buyerId) {
+      throw new Error("Cannot purchase from your own listing");
+    }
+
+    if (args.shares <= 0) {
+      throw new Error("Shares must be a positive number");
     }
 
     if (args.shares < listing.minShares) {

@@ -44,9 +44,8 @@ function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    // Check for existing auth token
-    // Read from the Zustand persisted auth store
-    const stored = localStorage.getItem("pull-auth");
+    // Check for existing auth token from Zustand persisted store (sessionStorage)
+    const stored = sessionStorage.getItem("pull-auth");
     const token = stored ? JSON.parse(stored)?.state?.token : null;
     setAuthState({
       isAuthenticated: !!token,

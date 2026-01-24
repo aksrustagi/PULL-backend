@@ -442,11 +442,16 @@ export const completeDeposit = systemMutation({
       throw new Error("Deposit not found");
     }
 
-    if (deposit.status !== "pending" && deposit.status !== "processing") {
-      throw new Error("Deposit cannot be completed");
+    if (deposit.status === "completed") {
+      // Idempotent: if already completed, return success without double-crediting
+      return { success: true, alreadyCompleted: true };
     }
 
-    // Update deposit status
+    if (deposit.status !== "pending" && deposit.status !== "processing") {
+      throw new Error("Deposit cannot be completed from status: " + deposit.status);
+    }
+
+    // Update deposit status atomically (Convex serializable isolation prevents double-complete)
     await ctx.db.patch(args.depositId, {
       status: "completed",
       completedAt: now,

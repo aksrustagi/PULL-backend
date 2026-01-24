@@ -142,22 +142,25 @@ export const search = authenticatedQuery({
 });
 
 /**
- * List users with pagination
+ * List users with pagination (admin only)
  */
-// TODO: Restrict to admin users only
-export const list = query({
+export const list = adminMutation({
   args: {
-    status: v.optional(v.string()),
+    status: v.optional(v.union(
+      v.literal("active"),
+      v.literal("inactive"),
+      v.literal("suspended"),
+      v.literal("closed")
+    )),
     limit: v.optional(v.number()),
-    cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 50;
+    const limit = Math.min(args.limit ?? 50, 100); // Cap at 100
 
     let query = ctx.db.query("users");
     if (args.status) {
       query = query.withIndex("by_status", (q) =>
-        q.eq("status", args.status as "active")
+        q.eq("status", args.status!)
       );
     }
 
@@ -168,7 +171,6 @@ export const list = query({
     return {
       users,
       hasMore,
-      nextCursor: hasMore ? users[users.length - 1]?._id : undefined,
     };
   },
 });
@@ -523,8 +525,11 @@ export const suspend = adminMutation({
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
+  // Use crypto.getRandomValues for unpredictable referral codes
+  const randomBytes = new Uint8Array(8);
+  crypto.getRandomValues(randomBytes);
   for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomBytes[i] % chars.length);
   }
   return code;
 }

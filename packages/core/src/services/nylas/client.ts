@@ -678,11 +678,16 @@ export class NylasClient {
     messageIds: string[],
     read: boolean = true
   ): Promise<void> {
-    await Promise.all(
-      messageIds.map((id) =>
-        this.updateMessage(grantId, id, { unread: !read })
-      )
-    );
+    // Batch into groups of 10 to avoid overwhelming the API with concurrent requests
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+      const batch = messageIds.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map((id) =>
+          this.updateMessage(grantId, id, { unread: !read })
+        )
+      );
+    }
   }
 }
 

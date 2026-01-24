@@ -48,22 +48,29 @@ export class KalshiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-        ...options.headers,
-      },
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+          ...options.headers,
+        },
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Kalshi API error: ${response.status} - ${error}`);
+      if (!response.ok) {
+        // Don't log full error body to avoid leaking sensitive info
+        throw new Error(`Kalshi API error: ${response.status}`);
+      }
+
+      return response.json();
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return response.json();
   }
 
   /**

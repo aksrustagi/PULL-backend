@@ -32,6 +32,7 @@ export interface MassiveConfig {
   apiSecret: string;
   baseUrl?: string;
   wsUrl?: string;
+  timeout?: number;
 }
 
 export class MassiveClient {
@@ -39,12 +40,14 @@ export class MassiveClient {
   private apiSecret: string;
   private baseUrl: string;
   private wsUrl: string;
+  private timeout: number;
 
   constructor(config: MassiveConfig) {
     this.apiKey = config.apiKey;
     this.apiSecret = config.apiSecret;
     this.baseUrl = config.baseUrl ?? "https://api.massive.com";
     this.wsUrl = config.wsUrl ?? "wss://ws.massive.com";
+    this.timeout = config.timeout ?? 30000;
   }
 
   private generateSignature(
@@ -68,7 +71,7 @@ export class MassiveClient {
     const signature = this.generateSignature(timestamp, method, endpoint, bodyStr);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), this.timeout);
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method,

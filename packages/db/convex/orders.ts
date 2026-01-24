@@ -229,10 +229,18 @@ export const create = authenticatedMutation({
       throw new Error("Stop orders require a stop price");
     }
 
+    // Market orders MUST have a price for buy orders to prevent $0 holds
+    if (args.type === "market" && args.side === "buy" && !args.price) {
+      throw new Error("Market buy orders require an estimated price");
+    }
+
     // Calculate estimated cost for buys
     let estimatedCost = 0;
     if (args.side === "buy") {
-      const priceToUse = args.price ?? args.stopPrice ?? 0;
+      const priceToUse = args.price ?? args.stopPrice;
+      if (!priceToUse || priceToUse <= 0) {
+        throw new Error("Buy orders require a valid price for fund holding");
+      }
       estimatedCost = args.quantity * priceToUse;
 
       // Check buying power
@@ -254,7 +262,7 @@ export const create = authenticatedMutation({
         updatedAt: now,
       });
     } else {
-      // For sells, check position
+      // For sells, check position AND lock it (prevent double-spend)
       const position = await ctx.db
         .query("positions")
         .withIndex("by_user_asset", (q) =>
@@ -267,6 +275,26 @@ export const create = authenticatedMutation({
 
       if (!position || position.quantity < args.quantity) {
         throw new Error("Insufficient position to sell");
+      }
+
+      // Check for existing open sell orders on this position to prevent double-spend
+      const openSellOrders = await ctx.db
+        .query("orders")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect();
+
+      const pendingSellQuantity = openSellOrders
+        .filter(
+          (o) =>
+            o.symbol === args.symbol &&
+            o.assetClass === args.assetClass &&
+            o.side === "sell" &&
+            ["pending", "submitted", "accepted", "partial_fill"].includes(o.status)
+        )
+        .reduce((sum, o) => sum + o.remainingQuantity, 0);
+
+      if (position.quantity - pendingSellQuantity < args.quantity) {
+        throw new Error("Insufficient available position (shares already committed to pending sell orders)");
       }
     }
 

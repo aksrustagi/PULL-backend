@@ -288,8 +288,9 @@ export class PokemonPriceClient {
     const allCards: Card[] = [];
     let page = 1;
     const pageSize = 250;
+    const MAX_PAGES = 100; // Safety limit to prevent infinite loops
 
-    while (true) {
+    while (page <= MAX_PAGES) {
       const response = await this.searchCards({
         setId,
         page,
@@ -298,11 +299,15 @@ export class PokemonPriceClient {
 
       allCards.push(...response.data);
 
-      if (allCards.length >= response.totalCount) {
+      if (allCards.length >= response.totalCount || response.data.length === 0) {
         break;
       }
 
       page++;
+    }
+
+    if (page > MAX_PAGES) {
+      this.logger.warn("Reached maximum page limit for set", { setId, totalCards: allCards.length });
     }
 
     return allCards;

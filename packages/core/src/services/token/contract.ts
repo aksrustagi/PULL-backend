@@ -468,12 +468,19 @@ export class PullTokenService {
           error: lastError.message,
         });
 
-        // Don't retry on certain errors
-        if (
-          lastError.message.includes("insufficient funds") ||
-          lastError.message.includes("nonce")
-        ) {
+        // Don't retry on insufficient funds (permanent failure)
+        if (lastError.message.includes("insufficient funds")) {
           throw error;
+        }
+
+        // For nonce errors, retry with fresh nonce (stale nonce is transient)
+        if (lastError.message.includes("nonce")) {
+          this.logger.warn("Nonce error detected, will retry with fresh nonce");
+          // Continue to retry - the fn() should fetch fresh nonce on next call
+          await new Promise((resolve) =>
+            setTimeout(resolve, 500 * Math.pow(2, attempt))
+          );
+          continue;
         }
 
         // Wait before retry with exponential backoff

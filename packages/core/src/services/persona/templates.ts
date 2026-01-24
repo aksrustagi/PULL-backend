@@ -18,12 +18,24 @@ export enum KycTier {
 // Template IDs
 // ============================================================================
 
-// These should be configured via environment variables in production
+// Template IDs MUST be set via environment variables - no fallback to prevent
+// using invalid placeholder IDs in production
+function requireTemplateId(envVar: string, tier: string): string {
+  const value = process.env[envVar];
+  if (!value) {
+    throw new Error(
+      `FATAL: ${envVar} environment variable is required for KYC tier "${tier}". ` +
+      "Configure valid Persona template IDs in your deployment."
+    );
+  }
+  return value;
+}
+
 export const TEMPLATE_IDS: Record<KycTier, string> = {
-  [KycTier.BASIC]: process.env.PERSONA_TEMPLATE_BASIC || "tmpl_basic_kyc",
-  [KycTier.STANDARD]: process.env.PERSONA_TEMPLATE_STANDARD || "tmpl_standard_kyc",
-  [KycTier.ENHANCED]: process.env.PERSONA_TEMPLATE_ENHANCED || "tmpl_enhanced_kyc",
-  [KycTier.ACCREDITED]: process.env.PERSONA_TEMPLATE_ACCREDITED || "tmpl_accredited_kyc",
+  [KycTier.BASIC]: requireTemplateId("PERSONA_TEMPLATE_BASIC", "basic"),
+  [KycTier.STANDARD]: requireTemplateId("PERSONA_TEMPLATE_STANDARD", "standard"),
+  [KycTier.ENHANCED]: requireTemplateId("PERSONA_TEMPLATE_ENHANCED", "enhanced"),
+  [KycTier.ACCREDITED]: requireTemplateId("PERSONA_TEMPLATE_ACCREDITED", "accredited"),
 };
 
 // ============================================================================
