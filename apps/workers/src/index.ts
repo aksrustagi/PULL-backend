@@ -10,6 +10,7 @@ import * as rewardsActivities from "./activities/rewards";
 import * as emailActivities from "./activities/email";
 import * as messagingActivities from "./activities/messaging";
 import * as rwaActivities from "./activities/rwa";
+import * as socialActivities from "./activities/social";
 
 // Configure runtime telemetry
 Runtime.install({
@@ -31,6 +32,7 @@ export const TASK_QUEUES = {
   REWARDS: "pull-rewards",
   EMAIL: "pull-email",
   MESSAGING: "pull-messaging",
+  SOCIAL: "pull-social",
 } as const;
 
 interface WorkerConfig {
@@ -88,6 +90,7 @@ async function run() {
     ...emailActivities,
     ...messagingActivities,
     ...rwaActivities,
+    ...socialActivities,
   };
 
   // Create workers based on environment configuration
@@ -172,6 +175,17 @@ async function run() {
     });
     workers.push(messagingWorker);
     console.log(`📋 Messaging worker registered on queue: ${TASK_QUEUES.MESSAGING}`);
+  }
+
+  if (workerType === "all" || workerType === "social") {
+    const socialWorker = await createWorker(connection, {
+      taskQueue: TASK_QUEUES.SOCIAL,
+      workflowsPath,
+      activities: { ...socialActivities },
+      maxConcurrentActivityTaskExecutions: 100,
+    });
+    workers.push(socialWorker);
+    console.log(`📋 Social worker registered on queue: ${TASK_QUEUES.SOCIAL}`);
   }
 
   if (workers.length === 0) {

@@ -55,6 +55,16 @@ export {
   getPriceUpdateStatusQuery,
 } from "./rwa";
 
+// Social Trading Workflows
+export {
+  calculateTraderStatsWorkflow,
+  batchCalculateTraderStatsWorkflow,
+  updateLeaderboardWorkflow,
+  updateAllLeaderboardsWorkflow,
+  dailyStatsCalculationWorkflow,
+  weeklyLeaderboardUpdateWorkflow,
+} from "./social";
+
 // Re-export types for convenience
 export type {
   EmailSyncInput,
@@ -81,3 +91,10 @@ export type {
   RWAPurchaseStatus,
   PriceUpdateStatus,
 } from "./rwa";
+
+export type {
+  TraderStatsCalculationInput,
+  BatchStatsCalculationInput,
+  LeaderboardUpdateInput,
+  UpdateAllLeaderboardsInput,
+} from "./social";
