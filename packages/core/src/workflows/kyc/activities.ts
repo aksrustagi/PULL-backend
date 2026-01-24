@@ -451,38 +451,92 @@ export async function waitForCheckrCompletion(reportId: string): Promise<CheckrC
 
 /**
  * Screen wallet address with Chainalysis
+ *
+ * SECURITY: This function fails CLOSED - API failures result in screening failure,
+ * not automatic approval. This is critical for AML compliance.
  */
 export async function screenWalletChainalysis(
   walletAddress: string
-): Promise<{ risk: "low" | "medium" | "high" | "severe"; score: number }> {
+): Promise<{
+  risk: "low" | "medium" | "high" | "severe";
+  score: number;
+  screeningId: string;
+  details?: {
+    categories: string[];
+    exposure: number;
+    lastUpdated: string;
+  };
+}> {
   console.log(`[KYC Activity] Screening wallet ${walletAddress}`);
 
-  // TODO: Call Chainalysis API
-  const response = await fetch(
-    `https://api.chainalysis.com/api/risk/v2/entities/${walletAddress}`,
-    {
-      headers: {
-        Token: process.env.CHAINALYSIS_API_KEY ?? "",
-      },
-    }
-  );
-
-  if (!response.ok) {
-    // Default to low risk if API fails (should be handled better in production)
-    return { risk: "low", score: 0.1 };
+  // Validate wallet address format (Ethereum)
+  if (!walletAddress || !walletAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+    throw new Error(`Invalid wallet address format: ${walletAddress}`);
   }
 
-  const data = await response.json();
+  // Check for API key
+  if (!process.env.CHAINALYSIS_API_KEY) {
+    throw new Error("CHAINALYSIS_API_KEY is not configured - cannot proceed with wallet screening");
+  }
 
-  // Map Chainalysis risk score to our risk levels
-  const riskScore = data.risk ?? 0;
-  let risk: "low" | "medium" | "high" | "severe" = "low";
+  const screeningId = `chainalysis_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 
-  if (riskScore >= 0.8) risk = "severe";
-  else if (riskScore >= 0.6) risk = "high";
-  else if (riskScore >= 0.4) risk = "medium";
+  try {
+    const response = await fetch(
+      `https://api.chainalysis.com/api/risk/v2/entities/${walletAddress}`,
+      {
+        headers: {
+          Token: process.env.CHAINALYSIS_API_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-  return { risk, score: riskScore };
+    if (!response.ok) {
+      // SECURITY: Fail closed - do not allow transaction without proper screening
+      const errorText = await response.text().catch(() => "Unknown error");
+      throw new Error(
+        `Chainalysis API error (${response.status}): ${errorText}. ` +
+        `Screening failed for wallet ${walletAddress}. ` +
+        `Manual review required.`
+      );
+    }
+
+    const data = await response.json();
+
+    // Map Chainalysis risk score to our risk levels
+    const riskScore = data.risk ?? 0;
+    let risk: "low" | "medium" | "high" | "severe" = "low";
+
+    if (riskScore >= 0.8) risk = "severe";
+    else if (riskScore >= 0.6) risk = "high";
+    else if (riskScore >= 0.4) risk = "medium";
+
+    return {
+      risk,
+      score: riskScore,
+      screeningId,
+      details: {
+        categories: data.categories ?? [],
+        exposure: data.exposure ?? 0,
+        lastUpdated: new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    // SECURITY: Re-throw all errors - never fail open
+    // Log for audit purposes
+    console.error(
+      `[KYC Activity] SECURITY: Chainalysis screening failed for wallet ${walletAddress}:`,
+      error
+    );
+
+    // Add context to the error
+    if (error instanceof Error) {
+      error.message = `Wallet screening failed (${screeningId}): ${error.message}`;
+    }
+
+    throw error;
+  }
 }
 
 // ============================================================================
