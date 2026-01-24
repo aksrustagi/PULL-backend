@@ -720,11 +720,16 @@ class SegmentDestination implements AnalyticsDestinationHandler {
     const endpoint = 'https://api.segment.io/v1/batch';
 
     try {
+      // Use btoa for browser compatibility or Buffer for Node.js
+      const basicAuth = typeof Buffer !== 'undefined'
+        ? Buffer.from(writeKey + ':').toString('base64')
+        : btoa(writeKey + ':');
+        
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Basic ${Buffer.from(writeKey + ':').toString('base64')}`,
+          Authorization: `Basic ${basicAuth}`,
         },
         body: JSON.stringify({
           batch: batch.events.map((event) => ({

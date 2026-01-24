@@ -494,8 +494,18 @@ export const getEngagementMetrics = query({
       .collect();
 
     // Calculate DAU/MAU ratio
-    const activeUserIds = new Set(events.map((e) => e.userId).filter(Boolean));
-    const dauMauRatio = activeUserIds.size > 0 ? activeUserIds.size / activeUserIds.size : 0; // Simplified
+    // For proper DAU/MAU ratio, we need MAU from last 30 days
+    const mauStartTime = args.startTime - 30 * 24 * 60 * 60 * 1000; // 30 days before
+    const mauEvents = await ctx.db
+      .query('analyticsEvents')
+      .withIndex('by_timestamp', (q) =>
+        q.gte('timestamp', mauStartTime).lte('timestamp', args.endTime)
+      )
+      .collect();
+    
+    const mauUserIds = new Set(mauEvents.map((e) => e.userId).filter(Boolean));
+    const dauUserIds = new Set(events.map((e) => e.userId).filter(Boolean));
+    const dauMauRatio = mauUserIds.size > 0 ? dauUserIds.size / mauUserIds.size : 0;
 
     // Session metrics
     const sessionEvents = events.filter((e) => e.event === 'session.ended');

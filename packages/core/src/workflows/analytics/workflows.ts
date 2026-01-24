@@ -79,7 +79,7 @@ export async function calculateDailyMetricsWorkflow(
   setHandler(getStatusQuery, () => status);
 
   // Determine date (default to yesterday)
-  const date = input.date || getYesterdayDate();
+  const date = input.date ?? getYesterdayDate();
   status = `calculating metrics for ${date}`;
 
   // Calculate daily metrics
@@ -143,7 +143,7 @@ export async function updateCohortRetentionWorkflow(
   setHandler(getStatusQuery, () => status);
 
   // Determine cohort dates (default to last 30 days)
-  const cohortDates = input.cohortDates || getLast30Days();
+  const cohortDates = input.cohortDates ?? getLast30Days();
 
   const retentionData: Array<{
     cohortDate: string;
@@ -218,7 +218,7 @@ export async function generateWeeklyReportWorkflow(
   setHandler(getStatusQuery, () => status);
 
   // Determine week end date (default to yesterday/Sunday)
-  const weekEndDate = input.weekEndDate || getYesterdayDate();
+  const weekEndDate = input.weekEndDate ?? getYesterdayDate();
   status = `generating report for week ending ${weekEndDate}`;
 
   // Generate report
