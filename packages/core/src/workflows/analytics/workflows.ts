@@ -258,7 +258,11 @@ export interface ExperimentMonitoringResult {
 
 /**
  * Monitor running experiments for statistical significance
+
+ * Trigger: cron "0 */4 * * *" (every 4 hours)
+
  * Runs every 4 hours
+
  */
 export async function monitorExperimentsWorkflow(
   input: ExperimentMonitoringInput

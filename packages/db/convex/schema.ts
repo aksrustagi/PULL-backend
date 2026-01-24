@@ -3135,4 +3135,5 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_date", ["date"]),
 });

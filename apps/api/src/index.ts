@@ -116,7 +116,6 @@ app.use("/admin/*", authMiddleware);
 app.route("/admin/analytics", analyticsRoutes);
 app.route("/admin/experiments", experimentsRoutes);
 
-// Admin routes (require auth + admin role)
 app.use("/api/admin/*", authMiddleware);
 app.route("/api/admin", adminRoutes);
 
