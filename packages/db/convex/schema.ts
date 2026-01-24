@@ -1640,6 +1640,288 @@ export default defineSchema({
     .index("by_source", ["sourceType", "sourceId"])
     .index("by_user", ["userId", "processedAt"]),
 
+  // ============================================================================
+  // AUTONOMOUS PORTFOLIO AGENT TABLES
+  // ============================================================================
+
+  /**
+   * Portfolio Agent Configurations - Per-user agent settings and activation
+   */
+  portfolioAgentConfigs: defineTable({
+    userId: v.id("users"),
+    isActive: v.boolean(),
+    riskTolerance: v.union(
+      v.literal("conservative"),
+      v.literal("moderate"),
+      v.literal("aggressive")
+    ),
+    maxDailyTradeAmount: v.number(), // Max USD value of trades per day
+    maxPositionSize: v.number(), // Max % of portfolio per position
+    autoExecute: v.boolean(), // Execute without confirmation (pre-approved)
+    requireConfirmationAbove: v.number(), // USD threshold requiring manual approval
+    allowedAssetClasses: v.array(v.union(
+      v.literal("prediction"),
+      v.literal("rwa"),
+      v.literal("crypto")
+    )),
+    allowedStrategies: v.array(v.union(
+      v.literal("dca"),
+      v.literal("rebalance"),
+      v.literal("stop_loss"),
+      v.literal("take_profit"),
+      v.literal("opportunistic_buy")
+    )),
+    morningBriefEnabled: v.boolean(),
+    morningBriefTime: v.string(), // HH:MM format in user timezone
+    timezone: v.string(),
+    notifyOnExecution: v.boolean(),
+    notifyOnOpportunity: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_active", ["isActive"]),
+
+  /**
+   * Portfolio Strategies - Active automated strategies for users
+   */
+  portfolioStrategies: defineTable({
+    userId: v.id("users"),
+    configId: v.id("portfolioAgentConfigs"),
+    type: v.union(
+      v.literal("dca"),
+      v.literal("rebalance"),
+      v.literal("stop_loss"),
+      v.literal("take_profit"),
+      v.literal("opportunistic_buy")
+    ),
+    status: v.union(
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("completed"),
+      v.literal("cancelled"),
+      v.literal("failed")
+    ),
+    name: v.string(),
+    description: v.optional(v.string()),
+
+    // DCA-specific
+    dcaAmount: v.optional(v.number()), // USD per interval
+    dcaInterval: v.optional(v.union(
+      v.literal("hourly"),
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("biweekly"),
+      v.literal("monthly")
+    )),
+    dcaTargetSymbol: v.optional(v.string()),
+    dcaTargetSide: v.optional(v.union(v.literal("yes"), v.literal("no"), v.literal("buy"))),
+    dcaTotalBudget: v.optional(v.number()),
+    dcaSpentSoFar: v.optional(v.number()),
+
+    // Rebalancing-specific
+    rebalanceTargetAllocations: v.optional(v.array(v.object({
+      symbol: v.string(),
+      assetClass: v.string(),
+      targetPercent: v.number(),
+      tolerance: v.number(), // % deviation before triggering
+    }))),
+    rebalanceFrequency: v.optional(v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly"),
+      v.literal("threshold_only") // Only rebalance when tolerance exceeded
+    )),
+
+    // Stop-loss / Take-profit specific
+    triggerSymbol: v.optional(v.string()),
+    triggerSide: v.optional(v.union(v.literal("long"), v.literal("short"))),
+    triggerPrice: v.optional(v.number()), // Price that triggers the action
+    triggerType: v.optional(v.union(
+      v.literal("absolute"),
+      v.literal("percent_from_entry"),
+      v.literal("trailing_percent")
+    )),
+    triggerValue: v.optional(v.number()), // % or $ value for trigger
+    actionOnTrigger: v.optional(v.union(
+      v.literal("sell_all"),
+      v.literal("sell_half"),
+      v.literal("sell_quarter"),
+      v.literal("notify_only")
+    )),
+
+    // Opportunistic buy specific
+    opportunitySymbol: v.optional(v.string()),
+    opportunityMaxPrice: v.optional(v.number()),
+    opportunityBudget: v.optional(v.number()),
+    opportunityConditions: v.optional(v.string()), // AI-interpreted conditions
+
+    // Execution tracking
+    lastExecutedAt: v.optional(v.number()),
+    nextExecutionAt: v.optional(v.number()),
+    executionCount: v.number(),
+    totalValueExecuted: v.number(),
+    lastError: v.optional(v.string()),
+
+    // Temporal workflow tracking
+    workflowId: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId", "status"])
+    .index("by_config", ["configId"])
+    .index("by_type", ["type", "status"])
+    .index("by_next_execution", ["status", "nextExecutionAt"]),
+
+  /**
+   * Portfolio Agent Actions - Log of all actions taken or proposed by the agent
+   */
+  portfolioAgentActions: defineTable({
+    userId: v.id("users"),
+    strategyId: v.optional(v.id("portfolioStrategies")),
+    type: v.union(
+      v.literal("order_placed"),
+      v.literal("order_proposed"),
+      v.literal("rebalance_executed"),
+      v.literal("stop_loss_triggered"),
+      v.literal("take_profit_triggered"),
+      v.literal("opportunity_detected"),
+      v.literal("dca_executed"),
+      v.literal("alert_sent"),
+      v.literal("morning_brief_sent")
+    ),
+    status: v.union(
+      v.literal("pending_approval"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("executed"),
+      v.literal("failed"),
+      v.literal("expired")
+    ),
+    title: v.string(),
+    description: v.string(),
+    reasoning: v.optional(v.string()), // AI reasoning for the action
+
+    // Order details if applicable
+    orderDetails: v.optional(v.object({
+      symbol: v.string(),
+      side: v.string(),
+      quantity: v.number(),
+      price: v.optional(v.number()),
+      estimatedCost: v.number(),
+      assetClass: v.string(),
+    })),
+    orderId: v.optional(v.id("orders")),
+
+    // Context that led to this action
+    triggerContext: v.optional(v.object({
+      signalIds: v.optional(v.array(v.string())),
+      marketData: v.optional(v.any()),
+      portfolioSnapshot: v.optional(v.any()),
+    })),
+
+    approvedAt: v.optional(v.number()),
+    approvedBy: v.optional(v.string()), // "user" or "auto"
+    rejectedAt: v.optional(v.number()),
+    rejectionReason: v.optional(v.string()),
+    executedAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "status"])
+    .index("by_strategy", ["strategyId"])
+    .index("by_user_type", ["userId", "type"])
+    .index("by_pending", ["userId", "status", "createdAt"]),
+
+  /**
+   * Morning Briefs - AI-generated daily portfolio summaries
+   */
+  morningBriefs: defineTable({
+    userId: v.id("users"),
+    date: v.string(), // YYYY-MM-DD
+    status: v.union(
+      v.literal("generating"),
+      v.literal("ready"),
+      v.literal("sent"),
+      v.literal("read"),
+      v.literal("failed")
+    ),
+
+    // Portfolio summary
+    portfolioSummary: v.object({
+      totalValue: v.number(),
+      dailyChange: v.number(),
+      dailyChangePercent: v.number(),
+      weeklyChange: v.number(),
+      weeklyChangePercent: v.number(),
+      topGainer: v.optional(v.object({
+        symbol: v.string(),
+        changePercent: v.number(),
+      })),
+      topLoser: v.optional(v.object({
+        symbol: v.string(),
+        changePercent: v.number(),
+      })),
+    }),
+
+    // AI-generated content
+    headline: v.string(), // Brief headline like "Portfolio up 12%"
+    summary: v.string(), // 2-3 sentence summary
+    highlights: v.array(v.object({
+      type: v.union(
+        v.literal("gain"),
+        v.literal("loss"),
+        v.literal("opportunity"),
+        v.literal("risk"),
+        v.literal("action_needed"),
+        v.literal("market_event")
+      ),
+      title: v.string(),
+      description: v.string(),
+      actionable: v.boolean(),
+      suggestedAction: v.optional(v.string()),
+    })),
+
+    // Opportunities detected
+    opportunities: v.array(v.object({
+      symbol: v.string(),
+      assetClass: v.string(),
+      description: v.string(),
+      confidence: v.number(),
+      estimatedUpside: v.optional(v.number()),
+      suggestedAction: v.string(), // e.g., "Buy 5 shares at $2,400"
+    })),
+
+    // Strategy execution report
+    strategyReport: v.optional(v.object({
+      executedCount: v.number(),
+      pendingCount: v.number(),
+      totalValueTraded: v.number(),
+      strategyNotes: v.array(v.string()),
+    })),
+
+    // Risk alerts
+    riskAlerts: v.array(v.object({
+      severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+      title: v.string(),
+      description: v.string(),
+    })),
+
+    sentAt: v.optional(v.number()),
+    readAt: v.optional(v.number()),
+    generatedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_date", ["userId", "date"])
+    .index("by_status", ["status"]),
+
+  // ============================================================================
+  // AI SIGNAL DETECTION TABLES
+  // ============================================================================
+
   /**
    * UserSignalPreferences - User preferences for signal detection
    */

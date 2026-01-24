@@ -25,6 +25,7 @@ import { kycRoutes } from "./routes/kyc";
 import { webhookRoutes } from "./routes/webhooks";
 import { signalsRoutes } from "./routes/signals";
 import { analyticsRoutes, experimentsRoutes } from "./routes/admin";
+import { portfolioAgentRoutes } from "./routes/portfolio-agent";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -98,6 +99,7 @@ app.route("/api/v1/rewards", rewardsRoutes);
 app.route("/api/v1/social", socialRoutes);
 app.route("/api/v1/kyc", kycRoutes);
 app.route("/api/v1/signals", signalsRoutes);
+app.route("/api/v1/portfolio-agent", portfolioAgentRoutes);
 
 // Admin routes (require auth + admin role)
 // TODO: Add admin role check middleware

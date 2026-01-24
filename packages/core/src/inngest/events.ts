@@ -138,6 +138,26 @@ export const tradingSignalDetectedPayloadSchema = z.object({
   source: z.string(),
 });
 
+// Portfolio Agent Events
+export const portfolioStrategyExecutedPayloadSchema = z.object({
+  userId: z.string(),
+  strategyId: z.string(),
+  type: z.enum(["dca", "rebalance", "stop_loss", "take_profit", "opportunistic_buy"]),
+  result: z.enum(["success", "failed", "pending_approval"]),
+  amount: z.number().optional(),
+  symbol: z.string().optional(),
+  timestamp: z.string().datetime(),
+});
+
+export const portfolioBriefGeneratedPayloadSchema = z.object({
+  userId: z.string(),
+  briefId: z.string(),
+  headline: z.string(),
+  opportunityCount: z.number(),
+  riskAlertCount: z.number(),
+  timestamp: z.string().datetime(),
+});
+
 // AI Signal Detection Events
 export const emailSyncedPayloadSchema = z.object({
   emailId: z.string(),
@@ -165,6 +185,8 @@ export type KycExpiringPayload = z.infer<typeof kycExpiringPayloadSchema>;
 export type WatchlistMatchPayload = z.infer<typeof watchlistMatchPayloadSchema>;
 export type TradingSignalDetectedPayload = z.infer<typeof tradingSignalDetectedPayloadSchema>;
 export type EmailSyncedPayload = z.infer<typeof emailSyncedPayloadSchema>;
+export type PortfolioStrategyExecutedPayload = z.infer<typeof portfolioStrategyExecutedPayloadSchema>;
+export type PortfolioBriefGeneratedPayload = z.infer<typeof portfolioBriefGeneratedPayloadSchema>;
 
 // =============================================================================
 // Inngest Event Map
@@ -223,6 +245,14 @@ export interface InngestEvents {
   "email/synced": {
     data: EmailSyncedPayload;
   };
+
+  // Portfolio agent events
+  "portfolio-agent/strategy.executed": {
+    data: PortfolioStrategyExecutedPayload;
+  };
+  "portfolio-agent/brief.generated": {
+    data: PortfolioBriefGeneratedPayload;
+  };
 }
 
 // =============================================================================
@@ -241,6 +271,8 @@ export const EVENT_NAMES = {
   COMPLIANCE_KYC_EXPIRING: "compliance/kyc-expiring",
   COMPLIANCE_WATCHLIST_MATCH: "compliance/watchlist-match",
   TRADING_SIGNAL_DETECTED: "trading/signal-detected",
+  PORTFOLIO_STRATEGY_EXECUTED: "portfolio-agent/strategy.executed",
+  PORTFOLIO_BRIEF_GENERATED: "portfolio-agent/brief.generated",
 } as const;
 
 export type EventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];
@@ -268,6 +300,8 @@ export function validateEventPayload<T extends keyof InngestEvents>(
     "compliance/kyc-expiring": kycExpiringPayloadSchema,
     "compliance/watchlist-match": watchlistMatchPayloadSchema,
     "trading/signal-detected": tradingSignalDetectedPayloadSchema,
+    "portfolio-agent/strategy.executed": portfolioStrategyExecutedPayloadSchema,
+    "portfolio-agent/brief.generated": portfolioBriefGeneratedPayloadSchema,
   };
 
   const schema = schemas[eventName];

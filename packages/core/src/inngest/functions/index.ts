@@ -41,6 +41,18 @@ export {
   signalFunctions,
 } from "./signals";
 
+// Portfolio agent functions
+export {
+  generateMorningBriefs,
+  executePortfolioStrategies,
+  checkPriceTriggers,
+  detectPortfolioOpportunities,
+  portfolioHealthCheck,
+  handleMarketPriceUpdate,
+  handleRwaPriceAlert,
+  portfolioAgentFunctions,
+} from "./portfolio-agent";
+
 // =============================================================================
 // All Functions (for Inngest serve handler)
 // =============================================================================
@@ -51,6 +63,7 @@ import { rewardsFunctions } from "./rewards";
 import { notificationFunctions } from "./notifications";
 import { complianceFunctions } from "./compliance";
 import { signalFunctions } from "./signals";
+import { portfolioAgentFunctions } from "./portfolio-agent";
 
 /**
  * All Inngest functions combined for easy registration.
@@ -73,4 +86,5 @@ export const allFunctions = [
   ...notificationFunctions,
   ...complianceFunctions,
   ...signalFunctions,
+  ...portfolioAgentFunctions,
 ];
