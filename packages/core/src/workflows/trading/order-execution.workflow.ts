@@ -13,6 +13,7 @@ import {
   ApplicationFailure,
   CancellationScope,
   isCancellation,
+  uuid4,
 } from "@temporalio/workflow";
 
 import type * as activities from "./activities";
@@ -105,7 +106,7 @@ export async function orderExecutionWorkflow(
   const { userId, assetType, assetId, side, orderType, quantity, limitPrice } = input;
 
   // Generate order ID
-  const orderId = `ord_${crypto.randomUUID()}`;
+  const orderId = `ord_${uuid4()}`;
 
   // Initialize status
   const status: OrderStatus = {
@@ -249,8 +250,7 @@ export async function orderExecutionWorkflow(
         if (isCancellation(error)) {
           throw error;
         }
-        // Log error but continue polling
-        console.error("Poll error:", error);
+        // Continue polling on non-cancellation errors
       }
 
       if (!orderComplete) {
@@ -329,8 +329,8 @@ export async function orderExecutionWorkflow(
     if (status.holdAmount) {
       try {
         await releaseBuyingPower(userId, `hold_${orderId}`, status.holdAmount);
-      } catch (releaseError) {
-        console.error("Failed to release hold:", releaseError);
+      } catch {
+        // Best-effort release; will be reconciled by the system
       }
     }
 

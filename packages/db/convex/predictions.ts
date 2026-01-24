@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { authenticatedQuery, systemMutation } from "./lib/auth";
+import { Id } from "./_generated/dataModel";
 
 /**
  * Prediction market queries and mutations for PULL
@@ -131,12 +133,13 @@ export const getMarketByTicker = query({
 /**
  * Get user's prediction positions
  */
-export const getUserPositions = query({
-  args: { userId: v.id("users") },
+export const getUserPositions = authenticatedQuery({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const positions = await ctx.db
       .query("positions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .filter((q) => q.eq(q.field("assetClass"), "prediction"))
       .collect();
 
@@ -172,7 +175,7 @@ export const getUserPositions = query({
 /**
  * Sync/upsert prediction events from external source
  */
-export const syncEvents = mutation({
+export const syncEvents = systemMutation({
   args: {
     events: v.array(
       v.object({
@@ -246,7 +249,7 @@ export const syncEvents = mutation({
 /**
  * Sync/upsert prediction markets
  */
-export const syncMarkets = mutation({
+export const syncMarkets = systemMutation({
   args: {
     eventId: v.id("predictionEvents"),
     markets: v.array(
@@ -314,7 +317,7 @@ export const syncMarkets = mutation({
 /**
  * Cache orderbook for a market
  */
-export const cacheOrderbook = mutation({
+export const cacheOrderbook = systemMutation({
   args: {
     ticker: v.string(),
     yesPrice: v.number(),
@@ -349,7 +352,7 @@ export const cacheOrderbook = mutation({
 /**
  * Settle an event
  */
-export const settleEvent = mutation({
+export const settleEvent = systemMutation({
   args: {
     eventId: v.id("predictionEvents"),
     winningOutcomeId: v.string(),

@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+import { authenticatedQuery, authenticatedMutation, systemMutation } from "./lib/auth";
 
 /**
  * Order queries and mutations for PULL
@@ -11,26 +13,30 @@ import { mutation, query } from "./_generated/server";
 
 /**
  * Get order by ID
+ * Only returns the order if it belongs to the authenticated user.
  */
-export const getById = query({
+export const getById = authenticatedQuery({
   args: { id: v.id("orders") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const order = await ctx.db.get(args.id);
+    if (!order) return null;
+    if (order.userId !== (ctx.userId as Id<"users">)) return null;
+    return order;
   },
 });
 
 /**
  * Get orders by user
  */
-export const getByUser = query({
+export const getByUser = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("orders")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .take(args.limit ?? 100);
   },
@@ -39,12 +45,13 @@ export const getByUser = query({
 /**
  * Get open orders for user
  */
-export const getOpenOrders = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
+export const getOpenOrders = authenticatedQuery({
+  args: {},
+  handler: async (ctx, _args) => {
+    const userId = ctx.userId as Id<"users">;
     const orders = await ctx.db
       .query("orders")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
     return orders.filter((o) =>
@@ -56,9 +63,8 @@ export const getOpenOrders = query({
 /**
  * Get orders by status
  */
-export const getByStatus = query({
+export const getByStatus = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     status: v.union(
       v.literal("pending"),
       v.literal("submitted"),
@@ -72,10 +78,11 @@ export const getByStatus = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("orders")
       .withIndex("by_user_status", (q) =>
-        q.eq("userId", args.userId).eq("status", args.status)
+        q.eq("userId", userId).eq("status", args.status)
       )
       .order("desc")
       .take(args.limit ?? 50);
@@ -85,9 +92,8 @@ export const getByStatus = query({
 /**
  * Get order history with filters
  */
-export const getOrderHistory = query({
+export const getOrderHistory = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     assetClass: v.optional(
       v.union(v.literal("crypto"), v.literal("prediction"), v.literal("rwa"))
     ),
@@ -98,9 +104,10 @@ export const getOrderHistory = query({
     offset: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     let orders = await ctx.db
       .query("orders")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .collect();
 
@@ -132,12 +139,15 @@ export const getOrderHistory = query({
 
 /**
  * Get order with fills
+ * Verifies the order belongs to the authenticated user.
  */
-export const getOrderWithFills = query({
+export const getOrderWithFills = authenticatedQuery({
   args: { orderId: v.id("orders") },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const order = await ctx.db.get(args.orderId);
     if (!order) return null;
+    if (order.userId !== userId) return null;
 
     const trades = await ctx.db
       .query("trades")
@@ -153,8 +163,9 @@ export const getOrderWithFills = query({
 
 /**
  * Get order by external ID
+ * System-only: used by internal services to look up orders by external ID.
  */
-export const getByExternalId = query({
+export const getByExternalId = systemMutation({
   args: { externalOrderId: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db
@@ -173,9 +184,8 @@ export const getByExternalId = query({
 /**
  * Create a new order
  */
-export const create = mutation({
+export const create = authenticatedMutation({
   args: {
-    userId: v.id("users"),
     clientOrderId: v.optional(v.string()),
     assetClass: v.union(
       v.literal("crypto"),
@@ -203,6 +213,7 @@ export const create = mutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
 
     // Validate order parameters
@@ -228,7 +239,7 @@ export const create = mutation({
       const balance = await ctx.db
         .query("balances")
         .withIndex("by_user_asset", (q) =>
-          q.eq("userId", args.userId).eq("assetType", "usd").eq("assetId", "USD")
+          q.eq("userId", userId).eq("assetType", "usd").eq("assetId", "USD")
         )
         .unique();
 
@@ -248,7 +259,7 @@ export const create = mutation({
         .query("positions")
         .withIndex("by_user_asset", (q) =>
           q
-            .eq("userId", args.userId)
+            .eq("userId", userId)
             .eq("assetClass", args.assetClass)
             .eq("symbol", args.symbol)
         )
@@ -260,7 +271,7 @@ export const create = mutation({
     }
 
     const orderId = await ctx.db.insert("orders", {
-      userId: args.userId,
+      userId,
       clientOrderId: args.clientOrderId,
       assetClass: args.assetClass,
       symbol: args.symbol,
@@ -283,7 +294,7 @@ export const create = mutation({
 
     // Log audit
     await ctx.db.insert("auditLog", {
-      userId: args.userId,
+      userId,
       action: "order.created",
       resourceType: "orders",
       resourceId: orderId,
@@ -303,6 +314,7 @@ export const create = mutation({
 
 /**
  * Update order status
+ * System-only: called by the trading engine, not directly by users.
  */
 export const update = mutation({
   args: {
@@ -380,18 +392,24 @@ export const update = mutation({
 
 /**
  * Cancel order
+ * Verifies the order belongs to the authenticated user before cancelling.
  */
-export const cancel = mutation({
+export const cancel = authenticatedMutation({
   args: {
     id: v.id("orders"),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
 
     const order = await ctx.db.get(args.id);
     if (!order) {
       throw new Error("Order not found");
+    }
+
+    if (order.userId !== userId) {
+      throw new Error("Not authorized to cancel this order");
     }
 
     if (!["pending", "submitted", "accepted", "partial_fill"].includes(order.status)) {
@@ -447,6 +465,7 @@ export const cancel = mutation({
 
 /**
  * Record a trade/fill
+ * System-only: called by the trading engine, not directly by users.
  */
 export const recordTrade = mutation({
   args: {

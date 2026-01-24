@@ -10,6 +10,7 @@ import {
   setHandler,
   condition,
   ApplicationFailure,
+  uuid4,
 } from "@temporalio/workflow";
 
 import type * as activities from "./activities";
@@ -20,6 +21,7 @@ const {
   getTokenConversionRate,
   validateWalletAddress,
   debitPoints,
+  creditPoints,
   initiateTokenMint,
   checkMintTransaction,
   creditTokenBalance,
@@ -94,7 +96,7 @@ export async function tokenConversionWorkflow(
   const { userId, pointsAmount, walletAddress } = input;
 
   // Generate conversion ID
-  const conversionId = `conv_${crypto.randomUUID()}`;
+  const conversionId = `conv_${uuid4()}`;
 
   // Initialize status
   const status: TokenConversionStatus = {
@@ -222,7 +224,21 @@ export async function tokenConversionWorkflow(
         status.status = "failed";
         status.failureReason = "Token mint transaction failed or timed out";
 
-        // TODO: Refund points
+        // Refund points for failed mint
+        await creditPoints({
+          userId,
+          amount: pointsAmount,
+          description: `Refund: Token conversion ${conversionId} failed`,
+          referenceType: "conversion",
+          referenceId: conversionId,
+        });
+
+        await sendTokenNotification(userId, {
+          type: "conversion_failed",
+          conversionId,
+          pointsRefunded: pointsAmount,
+          reason: "Token mint transaction failed or timed out",
+        });
         throw ApplicationFailure.nonRetryable("Token mint failed");
       }
 

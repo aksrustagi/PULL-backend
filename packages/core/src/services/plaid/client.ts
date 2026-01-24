@@ -30,6 +30,7 @@ export interface PlaidClientConfig {
   secret: string;
   env: PlaidEnvironment;
   timeout?: number;
+  maxRetries?: number;
   logger?: Logger;
 }
 
@@ -56,6 +57,7 @@ export class PlaidClient {
   private readonly env: PlaidEnvironment;
   private readonly baseUrl: string;
   private readonly timeout: number;
+  private readonly maxRetries: number;
   private readonly logger: Logger;
 
   constructor(config: PlaidClientConfig) {
@@ -64,6 +66,7 @@ export class PlaidClient {
     this.env = config.env;
     this.baseUrl = BASE_URLS[config.env];
     this.timeout = config.timeout ?? 30000;
+    this.maxRetries = config.maxRetries ?? 3;
     this.logger = config.logger ?? this.createDefaultLogger();
   }
 
@@ -91,68 +94,107 @@ export class PlaidClient {
       ...data,
     };
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    let lastError: Error | null = null;
 
-    try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Plaid-Version": "2020-09-14",
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      clearTimeout(timeoutId);
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new PlaidApiError(responseData, response.status);
-      }
-
-      return responseData as T;
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof PlaidApiError) {
-        this.logger.error("Plaid API error", {
-          errorType: error.errorType,
-          errorCode: error.errorCode,
-          message: error.message,
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Plaid-Version": "2020-09-14",
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
         });
-        throw error;
-      }
 
-      if (error instanceof Error) {
-        if (error.name === "AbortError") {
+        clearTimeout(timeoutId);
+
+        const responseData = await response.json();
+
+        if (!response.ok) {
+          const error = new PlaidApiError(responseData, response.status);
+
+          // Don't retry 4xx errors (except 429)
+          if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+            this.logger.error("Plaid API error", {
+              errorType: error.errorType,
+              errorCode: error.errorCode,
+              message: error.message,
+            });
+            throw error;
+          }
+
+          // Retry on 429 and 5xx
+          lastError = error;
+          if (attempt < this.maxRetries) {
+            const waitTime = response.status === 429
+              ? Math.min(5000 * Math.pow(2, attempt), 60000)
+              : Math.min(1000 * Math.pow(2, attempt), 15000);
+            this.logger.warn(`Plaid request failed (${response.status}), retrying in ${waitTime}ms`, { attempt, endpoint });
+            await this.sleep(waitTime);
+            continue;
+          }
+          throw error;
+        }
+
+        return responseData as T;
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof PlaidApiError) {
+          throw error;
+        }
+
+        lastError = error as Error;
+
+        if (error instanceof Error && error.name === "AbortError") {
+          if (attempt < this.maxRetries) {
+            const waitTime = Math.min(1000 * Math.pow(2, attempt), 15000);
+            this.logger.warn(`Plaid request timeout, retrying in ${waitTime}ms`, { attempt, endpoint });
+            await this.sleep(waitTime);
+            continue;
+          }
           throw new PlaidApiError(
             {
               error_type: "API_ERROR",
               error_code: "TIMEOUT",
-              error_message: "Request timeout",
+              error_message: "Request timeout after retries",
               display_message: null,
               request_id: "",
             },
             408
           );
         }
+
+        if (attempt < this.maxRetries) {
+          const waitTime = Math.min(1000 * Math.pow(2, attempt), 15000);
+          this.logger.warn(`Plaid request failed, retrying in ${waitTime}ms`, { attempt, endpoint, error: (error as Error).message });
+          await this.sleep(waitTime);
+          continue;
+        }
+
         throw new PlaidApiError(
           {
             error_type: "API_ERROR",
             error_code: "INTERNAL_ERROR",
-            error_message: error.message,
+            error_message: (error as Error).message ?? "Unknown error",
             display_message: null,
             request_id: "",
           },
           500
         );
       }
-
-      throw error;
     }
+
+    throw lastError ?? new Error("Request failed after retries");
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   // ==========================================================================

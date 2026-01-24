@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { authenticatedQuery, authenticatedMutation, adminMutation } from "./lib/auth";
+import { Id } from "./_generated/dataModel";
 
 /**
  * RWA (Real World Asset) queries and mutations for PULL
@@ -75,14 +77,15 @@ export const getAssetById = query({
 });
 
 /**
- * Get assets owned by user
+ * Get assets owned by the authenticated user
  */
-export const getAssetsByOwner = query({
-  args: { ownerId: v.id("users") },
+export const getAssetsByOwner = authenticatedQuery({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("rwaAssets")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
       .collect();
   },
 });
@@ -158,14 +161,15 @@ export const getActiveListings = query({
 });
 
 /**
- * Get ownership records for a user
+ * Get ownership records for the authenticated user
  */
-export const getOwnership = query({
-  args: { userId: v.id("users") },
+export const getOwnership = authenticatedQuery({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const ownership = await ctx.db
       .query("rwaOwnership")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.userId))
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
       .collect();
 
     // Enrich with asset data
@@ -185,9 +189,8 @@ export const getOwnership = query({
 /**
  * Create a new RWA asset
  */
-export const createAsset = mutation({
+export const createAsset = authenticatedMutation({
   args: {
-    ownerId: v.id("users"),
     type: v.union(
       v.literal("pokemon_card"),
       v.literal("sports_card"),
@@ -213,6 +216,7 @@ export const createAsset = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const ownerId = ctx.userId as Id<"users">;
 
     const assetId = await ctx.db.insert("rwaAssets", {
       type: args.type,
@@ -220,7 +224,7 @@ export const createAsset = mutation({
       description: args.description,
       imageUrls: args.imageUrls,
       status: "pending_verification",
-      ownerId: args.ownerId,
+      ownerId,
       totalShares: args.totalShares,
       availableShares: args.totalShares,
       pricePerShare: args.pricePerShare,
@@ -242,7 +246,7 @@ export const createAsset = mutation({
     // Create initial ownership record
     await ctx.db.insert("rwaOwnership", {
       assetId,
-      ownerId: args.ownerId,
+      ownerId,
       shares: args.totalShares,
       sharePercentage: 100,
       averageCost: args.pricePerShare,
@@ -251,7 +255,7 @@ export const createAsset = mutation({
     });
 
     await ctx.db.insert("auditLog", {
-      userId: args.ownerId,
+      userId: ownerId,
       action: "rwa.asset_created",
       resourceType: "rwaAssets",
       resourceId: assetId,
@@ -264,9 +268,9 @@ export const createAsset = mutation({
 });
 
 /**
- * Update asset status/details
+ * Update asset status/details (admin only)
  */
-export const updateAsset = mutation({
+export const updateAsset = adminMutation({
   args: {
     id: v.id("rwaAssets"),
     name: v.optional(v.string()),
@@ -292,7 +296,7 @@ export const updateAsset = mutation({
     });
 
     await ctx.db.insert("auditLog", {
-      userId: asset.ownerId,
+      userId: ctx.userId as Id<"users">,
       action: "rwa.asset_updated",
       resourceType: "rwaAssets",
       resourceId: id,
@@ -307,10 +311,9 @@ export const updateAsset = mutation({
 /**
  * Create a listing
  */
-export const createListing = mutation({
+export const createListing = authenticatedMutation({
   args: {
     assetId: v.id("rwaAssets"),
-    sellerId: v.id("users"),
     listingType: v.union(
       v.literal("fixed_price"),
       v.literal("auction"),
@@ -326,6 +329,7 @@ export const createListing = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const sellerId = ctx.userId as Id<"users">;
 
     const asset = await ctx.db.get(args.assetId);
     if (!asset) {
@@ -340,7 +344,7 @@ export const createListing = mutation({
     const ownership = await ctx.db
       .query("rwaOwnership")
       .withIndex("by_asset_owner", (q) =>
-        q.eq("assetId", args.assetId).eq("ownerId", args.sellerId)
+        q.eq("assetId", args.assetId).eq("ownerId", sellerId)
       )
       .unique();
 
@@ -350,7 +354,7 @@ export const createListing = mutation({
 
     const listingId = await ctx.db.insert("rwaListings", {
       assetId: args.assetId,
-      sellerId: args.sellerId,
+      sellerId,
       listingType: args.listingType,
       status: "active",
       pricePerShare: args.pricePerShare,
@@ -375,7 +379,7 @@ export const createListing = mutation({
     });
 
     await ctx.db.insert("auditLog", {
-      userId: args.sellerId,
+      userId: sellerId,
       action: "rwa.listing_created",
       resourceType: "rwaListings",
       resourceId: listingId,
@@ -390,14 +394,14 @@ export const createListing = mutation({
 /**
  * Purchase shares from a listing
  */
-export const purchaseShares = mutation({
+export const purchaseShares = authenticatedMutation({
   args: {
     listingId: v.id("rwaListings"),
-    buyerId: v.id("users"),
     shares: v.number(),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const buyerId = ctx.userId as Id<"users">;
 
     const listing = await ctx.db.get(args.listingId);
     if (!listing) {
@@ -422,7 +426,7 @@ export const purchaseShares = mutation({
     const buyerBalance = await ctx.db
       .query("balances")
       .withIndex("by_user_asset", (q) =>
-        q.eq("userId", args.buyerId).eq("assetType", "usd").eq("assetId", "USD")
+        q.eq("userId", buyerId).eq("assetType", "usd").eq("assetId", "USD")
       )
       .unique();
 
@@ -477,7 +481,7 @@ export const purchaseShares = mutation({
     const buyerOwnership = await ctx.db
       .query("rwaOwnership")
       .withIndex("by_asset_owner", (q) =>
-        q.eq("assetId", listing.assetId).eq("ownerId", args.buyerId)
+        q.eq("assetId", listing.assetId).eq("ownerId", buyerId)
       )
       .unique();
 
@@ -496,7 +500,7 @@ export const purchaseShares = mutation({
     } else {
       await ctx.db.insert("rwaOwnership", {
         assetId: listing.assetId,
-        ownerId: args.buyerId,
+        ownerId: buyerId,
         shares: args.shares,
         sharePercentage: asset ? (args.shares / asset.totalShares) * 100 : 0,
         averageCost: listing.pricePerShare,
@@ -514,7 +518,7 @@ export const purchaseShares = mutation({
     });
 
     await ctx.db.insert("auditLog", {
-      userId: args.buyerId,
+      userId: buyerId,
       action: "rwa.shares_purchased",
       resourceType: "rwaListings",
       resourceId: args.listingId,

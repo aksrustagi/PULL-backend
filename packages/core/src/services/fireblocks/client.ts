@@ -29,6 +29,7 @@ export interface FireblocksClientConfig {
   apiSecret: string; // RSA private key in PEM format
   baseUrl?: string;
   timeout?: number;
+  maxRetries?: number;
   logger?: Logger;
 }
 
@@ -50,6 +51,7 @@ export class FireblocksClient {
   private readonly apiSecret: string;
   private readonly baseUrl: string;
   private readonly timeout: number;
+  private readonly maxRetries: number;
   private readonly logger: Logger;
 
   constructor(config: FireblocksClientConfig) {
@@ -57,6 +59,7 @@ export class FireblocksClient {
     this.apiSecret = config.apiSecret;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeout = config.timeout ?? 30000;
+    this.maxRetries = config.maxRetries ?? 3;
     this.logger = config.logger ?? this.createDefaultLogger();
   }
 
@@ -95,66 +98,97 @@ export class FireblocksClient {
   // HTTP Methods
   // ==========================================================================
 
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   private async request<T>(
     method: string,
     path: string,
     body?: Record<string, unknown>
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
-    const bodyStr = body ? JSON.stringify(body) : undefined;
-    const token = this.signRequest(path, bodyStr);
+    let lastError: Error | null = null;
 
-    const headers: Record<string, string> = {
-      "X-API-Key": this.apiKey,
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      const bodyStr = body ? JSON.stringify(body) : undefined;
+      // Re-sign on each attempt (JWT has 30s expiry)
+      const token = this.signRequest(path, bodyStr);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+      const headers: Record<string, string> = {
+        "X-API-Key": this.apiKey,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
 
-    try {
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: bodyStr,
-        signal: controller.signal,
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      clearTimeout(timeoutId);
-
-      const responseData = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new FireblocksApiError(
-          responseData.message ?? `HTTP ${response.status}`,
-          responseData.code ?? -1,
-          response.status
-        );
-      }
-
-      return responseData as T;
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof FireblocksApiError) {
-        this.logger.error("Fireblocks API error", {
-          message: error.message,
-          code: error.code,
-          statusCode: error.statusCode,
+      try {
+        const response = await fetch(url, {
+          method,
+          headers,
+          body: bodyStr,
+          signal: controller.signal,
         });
-        throw error;
-      }
 
-      if (error instanceof Error) {
-        if (error.name === "AbortError") {
-          throw new FireblocksApiError("Request timeout", -1, 408);
+        clearTimeout(timeoutId);
+
+        const responseData = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const error = new FireblocksApiError(
+            responseData.message ?? `HTTP ${response.status}`,
+            responseData.code ?? -1,
+            response.status
+          );
+
+          // Don't retry 4xx errors (permanent failures)
+          if (response.status >= 400 && response.status < 500) {
+            this.logger.error("Fireblocks API error", {
+              message: error.message,
+              code: error.code,
+              statusCode: error.statusCode,
+            });
+            throw error;
+          }
+
+          // Retry on 5xx
+          lastError = error;
+          if (attempt < this.maxRetries) {
+            const waitTime = Math.min(1000 * Math.pow(2, attempt), 15000);
+            this.logger.warn(`Fireblocks request failed (${response.status}), retrying in ${waitTime}ms`, { attempt, path });
+            await this.sleep(waitTime);
+            continue;
+          }
+          throw error;
         }
-        throw new FireblocksApiError(error.message, -1, 500);
-      }
 
-      throw error;
+        return responseData as T;
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof FireblocksApiError) {
+          throw error;
+        }
+
+        lastError = error as Error;
+
+        if (attempt < this.maxRetries) {
+          const waitTime = Math.min(1000 * Math.pow(2, attempt), 15000);
+          this.logger.warn(`Fireblocks request error, retrying in ${waitTime}ms`, { attempt, path, error: (error as Error).message });
+          await this.sleep(waitTime);
+          continue;
+        }
+
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new FireblocksApiError("Request timeout after retries", -1, 408);
+        }
+        throw new FireblocksApiError((error as Error).message ?? "Unknown error", -1, 500);
+      }
     }
+
+    throw lastError ?? new Error("Request failed after retries");
   }
 
   private buildQueryString(params?: Record<string, unknown>): string {
