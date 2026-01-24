@@ -525,11 +525,23 @@ export const suspend = adminMutation({
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
-  // Use crypto.getRandomValues for unpredictable referral codes
-  const randomBytes = new Uint8Array(8);
+  // Use crypto.getRandomValues with rejection sampling to avoid modulo bias
+  const randomBytes = new Uint8Array(16); // Extra bytes for rejection sampling
   crypto.getRandomValues(randomBytes);
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(randomBytes[i] % chars.length);
+  let byteIndex = 0;
+  
+  while (code.length < 8 && byteIndex < randomBytes.length) {
+    const byte = randomBytes[byteIndex++];
+    // Reject bytes that would introduce bias
+    if (byte < 256 - (256 % chars.length)) {
+      code += chars.charAt(byte % chars.length);
+    }
   }
+  
+  // Fallback if we run out of bytes (extremely unlikely)
+  if (code.length < 8) {
+    return generateReferralCode();
+  }
+  
   return code;
 }

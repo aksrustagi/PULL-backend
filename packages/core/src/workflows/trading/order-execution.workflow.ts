@@ -192,11 +192,12 @@ export async function orderExecutionWorkflow(
     await sendOrderNotification(userId, orderId, "submitted");
 
     // =========================================================================
-    // Step 4: Poll for execution (with cancellation support)
+    // Step 4: Poll for execution (with cancellation support and exponential backoff)
     // =========================================================================
     let orderComplete = false;
-    const MAX_POLL_ITERATIONS = 720; // Max ~1 hour of polling (720 * 5s)
+    const MAX_POLL_ITERATIONS = 720; // Max ~1 hour of polling
     let pollCount = 0;
+    let currentBackoff = 1; // Start with 1 second
 
     while (!orderComplete && pollCount < MAX_POLL_ITERATIONS) {
       pollCount++;
@@ -258,8 +259,11 @@ export async function orderExecutionWorkflow(
       }
 
       if (!orderComplete) {
-        // Wait before next poll
-        await sleep("5 seconds");
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+        // Reduces system load while maintaining responsiveness
+        const sleepSeconds = Math.min(currentBackoff, 30);
+        await sleep(`${sleepSeconds} seconds`);
+        currentBackoff = Math.min(currentBackoff * 2, 30);
       }
     }
 

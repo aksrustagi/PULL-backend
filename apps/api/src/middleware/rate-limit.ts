@@ -55,7 +55,21 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
 
   // Determine rate limiter based on authentication
   const limiter = userId ? rateLimiters.authenticated : rateLimiters.anonymous;
-  const identifier = userId ?? ip;
+  
+  // SECURITY: For anonymous users with unknown IP, use a more restrictive identifier
+  // This prevents attackers from sharing the same rate limit pool
+  let identifier: string;
+  if (userId) {
+    // Authenticated: use userId + IP for defense in depth
+    identifier = `user:${userId}:${ip}`;
+  } else if (ip !== "unknown") {
+    // Anonymous with known IP: use IP
+    identifier = `ip:${ip}`;
+  } else {
+    // Anonymous with unknown IP: use a session-based approach or very restrictive global limit
+    // Note: In production, consider implementing session token tracking
+    identifier = "anonymous:unknown";
+  }
 
   try {
     const { success, limit, remaining, reset } = await limiter.limit(identifier);

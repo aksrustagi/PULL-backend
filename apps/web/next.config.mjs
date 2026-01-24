@@ -18,6 +18,16 @@ const nextConfig = {
     ],
   },
   async headers() {
+    // SECURITY NOTE: 'unsafe-eval' and 'unsafe-inline' in CSP weaken XSS protection
+    // TODO: Remove these directives by:
+    // 1. Using nonces for legitimate inline scripts
+    // 2. Moving inline styles to CSS modules
+    // 3. Refactoring any eval() usage
+    const isDev = process.env.NODE_ENV === 'development';
+    const scriptSrc = isDev 
+      ? "'self' 'unsafe-eval' 'unsafe-inline'" 
+      : "'self' 'unsafe-inline'"; // Keep unsafe-inline temporarily, remove unsafe-eval in prod
+    
     return [
       {
         source: "/(.*)",
@@ -32,7 +42,7 @@ const nextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.pull.app data:; connect-src 'self' https://*.pull.app https://*.convex.cloud wss://*.convex.cloud; font-src 'self'; frame-ancestors 'none';",
+            value: `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.pull.app data:; connect-src 'self' https://*.pull.app https://*.convex.cloud wss://*.convex.cloud; font-src 'self'; frame-ancestors 'none';`,
           },
         ],
       },
