@@ -7,6 +7,7 @@ import { NativeConnection, Worker, Runtime } from "@temporalio/worker";
 import * as kycActivities from "./activities/kyc";
 import * as tradingActivities from "./activities/trading";
 import * as rewardsActivities from "./activities/rewards";
+import * as gamificationActivities from "./activities/gamification";
 import * as emailActivities from "./activities/email";
 import * as messagingActivities from "./activities/messaging";
 import * as rwaActivities from "./activities/rwa";
@@ -30,6 +31,7 @@ export const TASK_QUEUES = {
   TRADING: "pull-trading",
   RWA: "pull-rwa",
   REWARDS: "pull-rewards",
+  GAMIFICATION: "pull-gamification",
   EMAIL: "pull-email",
   MESSAGING: "pull-messaging",
   PORTFOLIO: "pull-portfolio",
@@ -87,6 +89,7 @@ async function run() {
     ...kycActivities,
     ...tradingActivities,
     ...rewardsActivities,
+    ...gamificationActivities,
     ...emailActivities,
     ...messagingActivities,
     ...rwaActivities,
@@ -153,6 +156,17 @@ async function run() {
     });
     workers.push(rewardsWorker);
     console.log(`📋 Rewards worker registered on queue: ${TASK_QUEUES.REWARDS}`);
+  }
+
+  if (workerType === "all" || workerType === "gamification") {
+    const gamificationWorker = await createWorker(connection, {
+      taskQueue: TASK_QUEUES.GAMIFICATION,
+      workflowsPath,
+      activities: { ...gamificationActivities, ...rewardsActivities },
+      maxConcurrentActivityTaskExecutions: 150,
+    });
+    workers.push(gamificationWorker);
+    console.log(`📋 Gamification worker registered on queue: ${TASK_QUEUES.GAMIFICATION}`);
   }
 
   if (workerType === "all" || workerType === "email") {
