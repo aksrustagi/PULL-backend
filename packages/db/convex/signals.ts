@@ -6,6 +6,13 @@ import { mutation, query } from "./_generated/server";
  */
 
 // ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const DEFAULT_QUERY_LIMIT = 50;
+const DEFAULT_SEARCH_LIMIT = 20;
+
+// ============================================================================
 // SIGNAL QUERIES
 // ============================================================================
 
@@ -22,7 +29,7 @@ export const getSignals = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 50;
+    const limit = args.limit ?? DEFAULT_QUERY_LIMIT;
 
     // Get user signals
     let userSignalsQuery;
@@ -150,7 +157,7 @@ export const searchSignals = query({
         return search;
       });
 
-    return await searchQuery.take(args.limit ?? 20);
+    return await searchQuery.take(args.limit ?? DEFAULT_SEARCH_LIMIT);
   },
 });
 
@@ -173,7 +180,7 @@ export const getSignalsByType = query({
       .query("signals")
       .withIndex("by_type", (q) => q.eq("type", args.type))
       .order("desc")
-      .take(args.limit ?? 50);
+      .take(args.limit ?? DEFAULT_QUERY_LIMIT);
   },
 });
 
@@ -190,7 +197,7 @@ export const getHighUrgencySignals = query({
       .query("signals")
       .withIndex("by_urgency", (q) => q.eq("urgency", "high"))
       .order("desc")
-      .take(args.limit ?? 20);
+      .take(args.limit ?? DEFAULT_SEARCH_LIMIT);
 
     // Get user signal status for each
     const withStatus = await Promise.all(
@@ -241,7 +248,7 @@ export const getUserInsights = query({
         .withIndex("by_user", (q) => q.eq("userId", args.userId));
     }
 
-    let insights = await query.order("desc").take(args.limit ?? 20);
+    let insights = await query.order("desc").take(args.limit ?? DEFAULT_SEARCH_LIMIT);
 
     if (args.type) {
       insights = insights.filter((i) => i.insightType === args.type);
@@ -324,7 +331,7 @@ export const getCorrelatedMarkets = query({
     return allCorrelations
       .filter((c) => Math.abs(c.correlation) >= minCorr)
       .sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation))
-      .slice(0, args.limit ?? 20);
+      .slice(0, args.limit ?? DEFAULT_SEARCH_LIMIT);
   },
 });
 
@@ -352,7 +359,7 @@ export const getStrongestCorrelations = query({
 
     return filtered
       .sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation))
-      .slice(0, args.limit ?? 20);
+      .slice(0, args.limit ?? DEFAULT_SEARCH_LIMIT);
   },
 });
 
