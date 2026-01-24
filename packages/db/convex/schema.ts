@@ -1078,6 +1078,137 @@ export default defineSchema({
     }),
 
   // ============================================================================
+  // AI SIGNAL DETECTION TABLES
+  // ============================================================================
+
+  /**
+   * Signals - AI-detected trading signals from multiple data sources
+   */
+  signals: defineTable({
+    signalId: v.string(), // Unique external ID
+    type: v.union(
+      v.literal("email"),
+      v.literal("social"),
+      v.literal("market"),
+      v.literal("news"),
+      v.literal("correlation")
+    ),
+    source: v.string(), // Where the signal originated from
+    title: v.string(),
+    description: v.string(),
+    confidence: v.number(), // 0-100 confidence score
+    sentiment: v.union(
+      v.literal("bullish"),
+      v.literal("bearish"),
+      v.literal("neutral")
+    ),
+    urgency: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high")
+    ),
+    relatedMarkets: v.array(v.string()), // Market tickers
+    relatedAssets: v.array(v.string()), // RWA asset identifiers
+    metadata: v.optional(v.any()), // Source-specific data
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_type", ["type", "createdAt"])
+    .index("by_urgency", ["urgency", "createdAt"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_signalId", ["signalId"])
+    .searchIndex("search_signals", {
+      searchField: "title",
+      filterFields: ["type", "urgency", "sentiment"],
+    }),
+
+  /**
+   * User Signals - Personalized signal delivery and tracking
+   */
+  userSignals: defineTable({
+    userId: v.id("users"),
+    signalId: v.id("signals"),
+    relevanceScore: v.number(), // Personalized relevance 0-100
+    seen: v.boolean(),
+    dismissed: v.boolean(),
+    actedOn: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_user_unseen", ["userId", "seen", "createdAt"])
+    .index("by_signal", ["signalId"]),
+
+  /**
+   * Market Correlations - Statistical relationships between markets
+   */
+  marketCorrelations: defineTable({
+    marketA: v.string(), // First market ticker
+    marketB: v.string(), // Second market ticker
+    correlation: v.number(), // -1 to 1 Pearson correlation
+    sampleSize: v.number(), // Number of data points
+    pValue: v.number(), // Statistical significance
+    updatedAt: v.number(),
+  })
+    .index("by_marketA", ["marketA", "correlation"])
+    .index("by_marketB", ["marketB", "correlation"])
+    .index("by_correlation", ["correlation"])
+    .index("by_pair", ["marketA", "marketB"]),
+
+  /**
+   * User Insights - Personalized AI-generated insights
+   */
+  userInsights: defineTable({
+    userId: v.id("users"),
+    insightType: v.string(), // portfolio, opportunity, risk, trend, social
+    title: v.string(),
+    content: v.string(),
+    priority: v.number(), // 1-5 priority level
+    relatedSignals: v.array(v.id("signals")),
+    dismissed: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_user_active", ["userId", "dismissed", "createdAt"])
+    .index("by_type", ["insightType", "createdAt"]),
+
+  /**
+   * Signal Processing Log - Track processed emails/sources for deduplication
+   */
+  signalProcessingLog: defineTable({
+    sourceType: v.string(), // email, social, market, etc.
+    sourceId: v.string(), // External ID of processed item
+    userId: v.optional(v.id("users")),
+    signalsGenerated: v.number(),
+    processedAt: v.number(),
+  })
+    .index("by_source", ["sourceType", "sourceId"])
+    .index("by_user", ["userId", "processedAt"]),
+
+  /**
+   * User Signal Preferences - Privacy controls and preferences
+   */
+  userSignalPreferences: defineTable({
+    userId: v.id("users"),
+    emailAnalysisEnabled: v.boolean(),
+    socialAnalysisEnabled: v.boolean(),
+    marketAlertsEnabled: v.boolean(),
+    dailyInsightsEnabled: v.boolean(),
+    pushNotificationsEnabled: v.boolean(),
+    minConfidenceThreshold: v.number(), // 0-100
+    preferredUrgencyLevel: v.union(
+      v.literal("all"),
+      v.literal("medium_high"),
+      v.literal("high_only")
+    ),
+    interests: v.array(v.string()), // User interest tags
+    excludedMarkets: v.array(v.string()), // Markets to ignore
+    timezone: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  // ============================================================================
   // MARKET DATA TABLES (Real-time from Kalshi)
   // ============================================================================
 
