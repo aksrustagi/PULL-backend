@@ -18,6 +18,9 @@ import type {
   Transfer,
   ListTransfersParams,
   ProcessorType,
+  CreateIDVParams,
+  CreateLinkTokenForIDVParams,
+  IdentityVerification,
 } from "./types";
 import { PlaidApiError } from "./types";
 
@@ -608,6 +611,137 @@ export class PlaidClient {
     });
 
     return response.institutions;
+  }
+
+  // ==========================================================================
+  // Identity Verification
+  // ==========================================================================
+
+  /**
+   * Create a Link token for Identity Verification
+   */
+  async createLinkTokenForIDV(params: CreateLinkTokenForIDVParams): Promise<LinkToken> {
+    this.logger.info("Creating IDV link token", { userId: params.userId });
+
+    const response = await this.request<LinkToken>("/link/token/create", {
+      user: {
+        client_user_id: params.userId,
+      },
+      client_name: "PULL",
+      products: ["identity_verification"],
+      country_codes: ["US"],
+      language: "en",
+      identity_verification: {
+        template_id: params.templateId,
+        gave_consent: params.gaveConsent ?? false,
+        is_shareable: params.isShareable ?? false,
+      },
+    });
+
+    this.logger.info("IDV link token created", { expiration: response.expiration });
+    return response;
+  }
+
+  /**
+   * Create identity verification session
+   */
+  async createIdentityVerification(params: CreateIDVParams): Promise<IdentityVerification> {
+    this.logger.info("Creating identity verification", { userId: params.clientUserId });
+
+    const body: Record<string, unknown> = {
+      template_id: params.templateId,
+      client_user_id: params.clientUserId,
+      is_shareable: params.isShareable ?? false,
+      is_idempotent: params.isIdempotent ?? true,
+    };
+
+    if (params.user) {
+      const user: Record<string, unknown> = {};
+      if (params.user.emailAddress) user.email_address = params.user.emailAddress;
+      if (params.user.phoneNumber) user.phone_number = params.user.phoneNumber;
+      if (params.user.dateOfBirth) user.date_of_birth = params.user.dateOfBirth;
+      if (params.user.name) {
+        user.name = {
+          given_name: params.user.name.givenName,
+          family_name: params.user.name.familyName,
+        };
+      }
+      if (params.user.address) {
+        user.address = {
+          street: params.user.address.street,
+          street2: params.user.address.street2,
+          city: params.user.address.city,
+          region: params.user.address.region,
+          postal_code: params.user.address.postalCode,
+          country: params.user.address.country,
+        };
+      }
+      body.user = user;
+    }
+
+    const response = await this.request<IdentityVerification>(
+      "/identity_verification/create",
+      body
+    );
+
+    this.logger.info("Identity verification created", { id: response.id });
+    return response;
+  }
+
+  /**
+   * Get identity verification status
+   */
+  async getIdentityVerification(idvId: string): Promise<IdentityVerification> {
+    this.logger.debug("Getting identity verification", { idvId });
+
+    const response = await this.request<IdentityVerification>(
+      "/identity_verification/get",
+      { identity_verification_id: idvId }
+    );
+
+    return response;
+  }
+
+  /**
+   * List identity verifications for a user
+   */
+  async listIdentityVerifications(
+    clientUserId: string,
+    templateId: string
+  ): Promise<IdentityVerification[]> {
+    this.logger.debug("Listing identity verifications", { clientUserId });
+
+    const response = await this.request<{
+      identity_verifications: IdentityVerification[];
+      request_id: string;
+    }>("/identity_verification/list", {
+      client_user_id: clientUserId,
+      template_id: templateId,
+    });
+
+    return response.identity_verifications;
+  }
+
+  /**
+   * Retry identity verification
+   */
+  async retryIdentityVerification(
+    clientUserId: string,
+    templateId: string,
+    strategy: "reset" | "incomplete" = "reset"
+  ): Promise<IdentityVerification> {
+    this.logger.info("Retrying identity verification", { clientUserId });
+
+    const response = await this.request<IdentityVerification>(
+      "/identity_verification/retry",
+      {
+        client_user_id: clientUserId,
+        template_id: templateId,
+        strategy,
+      }
+    );
+
+    return response;
   }
 
   // ==========================================================================

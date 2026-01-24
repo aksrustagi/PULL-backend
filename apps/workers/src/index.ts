@@ -4,12 +4,19 @@
  */
 
 import { NativeConnection, Worker, Runtime } from "@temporalio/worker";
+import { initSentry, captureException } from "./lib/sentry";
 import * as kycActivities from "./activities/kyc";
 import * as tradingActivities from "./activities/trading";
 import * as rewardsActivities from "./activities/rewards";
+import * as gamificationActivities from "./activities/gamification";
 import * as emailActivities from "./activities/email";
 import * as messagingActivities from "./activities/messaging";
 import * as rwaActivities from "./activities/rwa";
+import * as signalsActivities from "./activities/signals";
+import * as portfolioActivities from "./activities/portfolio";
+
+// Initialize Sentry for error tracking
+initSentry();
 
 // Configure runtime telemetry
 Runtime.install({
@@ -29,8 +36,11 @@ export const TASK_QUEUES = {
   TRADING: "pull-trading",
   RWA: "pull-rwa",
   REWARDS: "pull-rewards",
+  GAMIFICATION: "pull-gamification",
   EMAIL: "pull-email",
   MESSAGING: "pull-messaging",
+  SIGNALS: "pull-signals",
+  PORTFOLIO: "pull-portfolio",
 } as const;
 
 interface WorkerConfig {
@@ -85,9 +95,12 @@ async function run() {
     ...kycActivities,
     ...tradingActivities,
     ...rewardsActivities,
+    ...gamificationActivities,
     ...emailActivities,
     ...messagingActivities,
     ...rwaActivities,
+    ...signalsActivities,
+    ...portfolioActivities,
   };
 
   // Create workers based on environment configuration
@@ -152,6 +165,17 @@ async function run() {
     console.log(`📋 Rewards worker registered on queue: ${TASK_QUEUES.REWARDS}`);
   }
 
+  if (workerType === "all" || workerType === "gamification") {
+    const gamificationWorker = await createWorker(connection, {
+      taskQueue: TASK_QUEUES.GAMIFICATION,
+      workflowsPath,
+      activities: { ...gamificationActivities, ...rewardsActivities },
+      maxConcurrentActivityTaskExecutions: 150,
+    });
+    workers.push(gamificationWorker);
+    console.log(`📋 Gamification worker registered on queue: ${TASK_QUEUES.GAMIFICATION}`);
+  }
+
   if (workerType === "all" || workerType === "email") {
     const emailWorker = await createWorker(connection, {
       taskQueue: TASK_QUEUES.EMAIL,
@@ -172,6 +196,28 @@ async function run() {
     });
     workers.push(messagingWorker);
     console.log(`📋 Messaging worker registered on queue: ${TASK_QUEUES.MESSAGING}`);
+  }
+
+  if (workerType === "all" || workerType === "signals") {
+    const signalsWorker = await createWorker(connection, {
+      taskQueue: TASK_QUEUES.SIGNALS,
+      workflowsPath,
+      activities: { ...signalsActivities },
+      maxConcurrentActivityTaskExecutions: 100,
+    });
+    workers.push(signalsWorker);
+    console.log(`📋 Signals worker registered on queue: ${TASK_QUEUES.SIGNALS}`);
+  }
+
+  if (workerType === "all" || workerType === "portfolio") {
+    const portfolioWorker = await createWorker(connection, {
+      taskQueue: TASK_QUEUES.PORTFOLIO,
+      workflowsPath,
+      activities: { ...portfolioActivities },
+      maxConcurrentActivityTaskExecutions: 100,
+    });
+    workers.push(portfolioWorker);
+    console.log(`📋 Portfolio worker registered on queue: ${TASK_QUEUES.PORTFOLIO}`);
   }
 
   if (workers.length === 0) {
@@ -201,6 +247,7 @@ async function run() {
 }
 
 run().catch((err) => {
-  console.error("❌ Worker failed:", err);
+  console.error("Worker failed:", err);
+  captureException(err, { context: "worker-startup" });
   process.exit(1);
 });

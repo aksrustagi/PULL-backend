@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+artifacts/
+cache/
+typechain-types/
+dist/
+
+# Coverage
+coverage/
+coverage.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Fireblocks secrets
+*.key
+fireblocks_secret.key
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test files
+gas-report.txt
+
+# Deployment logs (but keep the directory)
+deployments/*
+!deployments/.gitkeep
+
+# Hardhat
+hardhat-console-history
+
+# TypeScript build info
+*.tsbuildinfo

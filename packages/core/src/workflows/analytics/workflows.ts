@@ -79,7 +79,7 @@ export async function calculateDailyMetricsWorkflow(
   setHandler(getStatusQuery, () => status);
 
   // Determine date (default to yesterday)
-  const date = input.date || getYesterdayDate();
+  const date = input.date ?? getYesterdayDate();
   status = `calculating metrics for ${date}`;
 
   // Calculate daily metrics
@@ -143,7 +143,7 @@ export async function updateCohortRetentionWorkflow(
   setHandler(getStatusQuery, () => status);
 
   // Determine cohort dates (default to last 30 days)
-  const cohortDates = input.cohortDates || getLast30Days();
+  const cohortDates = input.cohortDates ?? getLast30Days();
 
   const retentionData: Array<{
     cohortDate: string;
@@ -208,7 +208,7 @@ export interface WeeklyReportWorkflowResult {
 
 /**
  * Generate and send weekly report
- * Trigger: cron "0 8 * * 1" (Monday 8am UTC)
+ * Runs Mondays at 8am UTC
  */
 export async function generateWeeklyReportWorkflow(
   input: WeeklyReportInput
@@ -218,7 +218,7 @@ export async function generateWeeklyReportWorkflow(
   setHandler(getStatusQuery, () => status);
 
   // Determine week end date (default to yesterday/Sunday)
-  const weekEndDate = input.weekEndDate || getYesterdayDate();
+  const weekEndDate = input.weekEndDate ?? getYesterdayDate();
   status = `generating report for week ending ${weekEndDate}`;
 
   // Generate report
@@ -258,7 +258,11 @@ export interface ExperimentMonitoringResult {
 
 /**
  * Monitor running experiments for statistical significance
+
  * Trigger: cron "0 */4 * * *" (every 4 hours)
+
+ * Runs every 4 hours
+
  */
 export async function monitorExperimentsWorkflow(
   input: ExperimentMonitoringInput
