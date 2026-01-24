@@ -110,37 +110,73 @@ export default defineSchema({
     .index("by_provider", ["provider", "providerAccountId"]),
 
   /**
-   * KYC Records - Identity verification history
+   * KYC Records - Comprehensive KYC verification records
    */
   kycRecords: defineTable({
     userId: v.id("users"),
-    type: v.union(
-      v.literal("identity"),
-      v.literal("address"),
-      v.literal("background"),
-      v.literal("wallet_screening")
+
+    // Tier tracking
+    currentTier: v.union(
+      v.literal("none"),
+      v.literal("basic"),
+      v.literal("enhanced"),
+      v.literal("accredited")
     ),
-    provider: v.string(),
-    externalId: v.string(),
+    targetTier: v.union(
+      v.literal("basic"),
+      v.literal("enhanced"),
+      v.literal("accredited")
+    ),
     status: v.union(
       v.literal("pending"),
       v.literal("in_progress"),
-      v.literal("completed"),
-      v.literal("failed"),
+      v.literal("approved"),
+      v.literal("rejected"),
       v.literal("expired")
     ),
-    result: v.optional(
-      v.union(v.literal("pass"), v.literal("fail"), v.literal("review"))
-    ),
-    riskScore: v.optional(v.number()),
-    data: v.optional(v.any()),
-    expiresAt: v.optional(v.number()),
-    createdAt: v.number(),
+
+    // Sumsub
+    sumsubApplicantId: v.optional(v.string()),
+    sumsubReviewStatus: v.optional(v.string()),
+    sumsubReviewResult: v.optional(v.string()),
+    sumsubCompletedAt: v.optional(v.number()),
+
+    // Checkr
+    checkrCandidateId: v.optional(v.string()),
+    checkrReportId: v.optional(v.string()),
+    checkrStatus: v.optional(v.string()),
+    checkrResult: v.optional(v.string()),
+    checkrCompletedAt: v.optional(v.number()),
+
+    // Parallel Markets
+    parallelRequestId: v.optional(v.string()),
+    accreditationStatus: v.optional(v.string()),
+    accreditationMethod: v.optional(v.string()),
+    accreditationExpiresAt: v.optional(v.number()),
+
+    // Plaid
+    plaidItemId: v.optional(v.string()),
+    plaidAccessToken: v.optional(v.string()),
+    plaidAccountId: v.optional(v.string()),
+    bankLinked: v.boolean(),
+
+    // Sanctions
+    sanctionsScreeningId: v.optional(v.string()),
+    sanctionsResult: v.optional(v.string()),
+    sanctionsRiskScore: v.optional(v.number()),
+
+    // Metadata
+    rejectionReason: v.optional(v.string()),
+    workflowId: v.optional(v.string()),
+    startedAt: v.number(),
     completedAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
-    .index("by_type", ["userId", "type"])
-    .index("by_external", ["provider", "externalId"]),
+    .index("by_status", ["status"])
+    .index("by_sumsub", ["sumsubApplicantId"])
+    .index("by_checkr", ["checkrReportId"])
+    .index("by_parallel", ["parallelRequestId"]),
 
   // ============================================================================
   // FINANCIAL TABLES
