@@ -23,6 +23,7 @@ import { rewardsRoutes } from "./routes/rewards";
 import { socialRoutes } from "./routes/social";
 import { kycRoutes } from "./routes/kyc";
 import { webhookRoutes } from "./routes/webhooks";
+import { signalsRoutes } from "./routes/signals";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -95,6 +96,7 @@ app.route("/api/v1/rwa", rwaRoutes);
 app.route("/api/v1/rewards", rewardsRoutes);
 app.route("/api/v1/social", socialRoutes);
 app.route("/api/v1/kyc", kycRoutes);
+app.route("/api/v1/signals", signalsRoutes);
 
 // tRPC endpoint
 app.use(
