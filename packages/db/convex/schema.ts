@@ -448,6 +448,579 @@ export default defineSchema({
     .index("by_ticker", ["ticker"]),
 
   // ============================================================================
+  // REAL ESTATE PREDICTION MARKET TABLES
+  // ============================================================================
+
+  /**
+   * Real Estate Prediction Events - Market predictions on real estate metrics
+   */
+  realEstatePredictionEvents: defineTable({
+    ticker: v.string(),
+    title: v.string(),
+    description: v.string(),
+    category: v.union(
+      v.literal("median_price"),
+      v.literal("mortgage_rates"),
+      v.literal("housing_inventory"),
+      v.literal("development_sellout"),
+      v.literal("rent_prices"),
+      v.literal("days_on_market"),
+      v.literal("home_sales_volume"),
+      v.literal("price_per_sqft"),
+      v.literal("foreclosure_rate"),
+      v.literal("new_construction"),
+      v.literal("custom")
+    ),
+    subcategory: v.optional(v.string()),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("pending_review"),
+      v.literal("upcoming"),
+      v.literal("open"),
+      v.literal("trading_halted"),
+      v.literal("closed"),
+      v.literal("resolving"),
+      v.literal("settled"),
+      v.literal("cancelled"),
+      v.literal("disputed")
+    ),
+
+    // Geographic targeting
+    geographicScope: v.union(
+      v.literal("national"),
+      v.literal("state"),
+      v.literal("metro"),
+      v.literal("city"),
+      v.literal("zip_code"),
+      v.literal("neighborhood"),
+      v.literal("development")
+    ),
+    country: v.string(),
+    state: v.optional(v.string()),
+    metro: v.optional(v.string()),
+    city: v.optional(v.string()),
+    zipCode: v.optional(v.string()),
+    neighborhood: v.optional(v.string()),
+    developmentId: v.optional(v.string()),
+
+    // Market parameters
+    targetMetric: v.string(),
+    targetValue: v.number(),
+    comparisonOperator: v.union(
+      v.literal("gt"),
+      v.literal("gte"),
+      v.literal("lt"),
+      v.literal("lte"),
+      v.literal("eq")
+    ),
+    currentValue: v.optional(v.number()),
+    baselineValue: v.optional(v.number()),
+
+    // Resolution
+    resolutionSource: v.string(),
+    resolutionSourceUrl: v.optional(v.string()),
+    resolutionDetails: v.optional(v.string()),
+    resolutionDate: v.number(),
+    settlementValue: v.optional(v.number()),
+    outcome: v.optional(v.union(v.literal("yes"), v.literal("no"))),
+
+    // Trading data
+    yesPrice: v.number(),
+    noPrice: v.number(),
+    yesVolume: v.number(),
+    noVolume: v.number(),
+    totalVolume: v.number(),
+    openInterest: v.number(),
+    liquidity: v.number(),
+
+    // Timing
+    openTime: v.number(),
+    closeTime: v.number(),
+    settledAt: v.optional(v.number()),
+
+    // Metadata
+    imageUrl: v.optional(v.string()),
+    tags: v.array(v.string()),
+    dataUpdateFrequency: v.union(
+      v.literal("hourly"),
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly")
+    ),
+    lastDataUpdate: v.optional(v.number()),
+
+    // Sponsorship (B2B)
+    sponsoredBy: v.optional(v.string()),
+    sponsorBrokerageId: v.optional(v.id("brokerages")),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_ticker", ["ticker"])
+    .index("by_status", ["status"])
+    .index("by_category", ["category", "status"])
+    .index("by_location", ["geographicScope", "state", "city"])
+    .index("by_sponsor", ["sponsorBrokerageId"])
+    .searchIndex("search_re_events", {
+      searchField: "title",
+      filterFields: ["status", "category", "geographicScope"],
+    }),
+
+  /**
+   * Real Estate Market Data Points - Historical price/volume data
+   */
+  realEstateMarketDataPoints: defineTable({
+    eventId: v.id("realEstatePredictionEvents"),
+    timestamp: v.number(),
+    yesPrice: v.number(),
+    noPrice: v.number(),
+    volume: v.number(),
+    openInterest: v.number(),
+    targetMetricValue: v.optional(v.number()),
+  })
+    .index("by_event", ["eventId", "timestamp"]),
+
+  /**
+   * Brokerages - Real estate brokerage companies
+   */
+  brokerages: defineTable({
+    name: v.string(),
+    legalName: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("active"),
+      v.literal("suspended"),
+      v.literal("inactive")
+    ),
+    tier: v.union(
+      v.literal("starter"),
+      v.literal("growth"),
+      v.literal("professional"),
+      v.literal("enterprise")
+    ),
+
+    // Contact info
+    email: v.string(),
+    phone: v.optional(v.string()),
+    website: v.optional(v.string()),
+
+    // Address
+    address: v.string(),
+    city: v.string(),
+    state: v.string(),
+    zipCode: v.string(),
+    country: v.string(),
+
+    // Branding
+    logoUrl: v.optional(v.string()),
+    primaryColor: v.optional(v.string()),
+    secondaryColor: v.optional(v.string()),
+
+    // Licensing
+    licenseNumber: v.string(),
+    licenseState: v.string(),
+    licenseExpiry: v.number(),
+
+    // Settings
+    whitelabelEnabled: v.boolean(),
+    customDomain: v.optional(v.string()),
+
+    // Stats
+    agentCount: v.number(),
+    activeAgentCount: v.number(),
+    totalReferrals: v.number(),
+    totalVolume: v.number(),
+
+    // Billing
+    billingEmail: v.optional(v.string()),
+    stripeCustomerId: v.optional(v.string()),
+    subscriptionId: v.optional(v.string()),
+    subscriptionStatus: v.optional(
+      v.union(
+        v.literal("active"),
+        v.literal("past_due"),
+        v.literal("cancelled")
+      )
+    ),
+
+    // Admin
+    primaryContactId: v.optional(v.id("users")),
+
+    // Zillow integration
+    zillowFlexEnabled: v.boolean(),
+    zillowFlexTeamId: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_status", ["status"])
+    .index("by_tier", ["tier", "status"])
+    .index("by_state", ["state", "status"])
+    .searchIndex("search_brokerages", {
+      searchField: "name",
+      filterFields: ["status", "tier", "state"],
+    }),
+
+  /**
+   * Real Estate Agents - Licensed agents affiliated with brokerages
+   */
+  realEstateAgents: defineTable({
+    userId: v.id("users"),
+    brokerageId: v.id("brokerages"),
+    status: v.union(
+      v.literal("pending_verification"),
+      v.literal("active"),
+      v.literal("suspended"),
+      v.literal("inactive")
+    ),
+
+    // Profile
+    firstName: v.string(),
+    lastName: v.string(),
+    displayName: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    photoUrl: v.optional(v.string()),
+    bio: v.optional(v.string()),
+
+    // Licensing
+    licenseNumber: v.string(),
+    licenseState: v.string(),
+    licenseExpiry: v.number(),
+
+    // Professional info
+    title: v.optional(v.string()),
+    team: v.optional(v.string()),
+    specializations: v.array(v.string()),
+    serviceAreas: v.array(v.string()),
+    languages: v.array(v.string()),
+    yearsExperience: v.number(),
+
+    // Social/marketing
+    website: v.optional(v.string()),
+    linkedinUrl: v.optional(v.string()),
+    instagramUrl: v.optional(v.string()),
+    youtubeUrl: v.optional(v.string()),
+    tiktokUrl: v.optional(v.string()),
+
+    // Performance
+    totalTransactions: v.number(),
+    totalVolume: v.number(),
+    averageRating: v.number(),
+    reviewCount: v.number(),
+
+    // PULL stats
+    totalReferrals: v.number(),
+    activeReferrals: v.number(),
+    referralEarnings: v.number(),
+    predictionAccuracy: v.optional(v.number()),
+    marketsParticipated: v.number(),
+    clientsReferred: v.number(),
+
+    // Referral settings
+    referralCode: v.string(),
+    referralCommissionRate: v.number(),
+
+    // Zillow integration
+    zillowAgentId: v.optional(v.string()),
+    zillowFlexAgent: v.boolean(),
+
+    // Verification
+    verifiedAt: v.optional(v.number()),
+    verificationDocuments: v.array(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_brokerage", ["brokerageId"])
+    .index("by_email", ["email"])
+    .index("by_status", ["status"])
+    .index("by_referral_code", ["referralCode"])
+    .index("by_license", ["licenseState", "licenseNumber"])
+    .searchIndex("search_agents", {
+      searchField: "displayName",
+      filterFields: ["status", "brokerageId"],
+    }),
+
+  /**
+   * Agent Referrals - Track client referrals from agents
+   */
+  agentReferrals: defineTable({
+    agentId: v.id("realEstateAgents"),
+    referredUserId: v.id("users"),
+    brokerageId: v.id("brokerages"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("signed_up"),
+      v.literal("verified"),
+      v.literal("active_trader"),
+      v.literal("churned"),
+      v.literal("expired")
+    ),
+
+    // Referral details
+    referralCode: v.string(),
+    referralSource: v.union(
+      v.literal("direct_link"),
+      v.literal("qr_code"),
+      v.literal("email"),
+      v.literal("sms"),
+      v.literal("social"),
+      v.literal("in_person")
+    ),
+
+    // Conversion tracking
+    signedUpAt: v.optional(v.number()),
+    verifiedAt: v.optional(v.number()),
+    firstTradeAt: v.optional(v.number()),
+
+    // Earnings
+    totalReferralEarnings: v.number(),
+    pendingEarnings: v.number(),
+    paidEarnings: v.number(),
+
+    // Attribution
+    attributionWindow: v.number(),
+    expiresAt: v.number(),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_agent", ["agentId"])
+    .index("by_user", ["referredUserId"])
+    .index("by_brokerage", ["brokerageId"])
+    .index("by_status", ["status"])
+    .index("by_referral_code", ["referralCode"]),
+
+  /**
+   * Agent Points - Points ledger for agents
+   */
+  agentPoints: defineTable({
+    agentId: v.id("realEstateAgents"),
+    type: v.string(),
+    amount: v.number(),
+    balance: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("reversed")
+    ),
+    description: v.string(),
+    referenceType: v.optional(v.string()),
+    referenceId: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_agent", ["agentId"])
+    .index("by_type", ["agentId", "type"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Market Sentiment - Aggregated market sentiment data
+   */
+  marketSentiment: defineTable({
+    geographicScope: v.union(
+      v.literal("national"),
+      v.literal("state"),
+      v.literal("metro"),
+      v.literal("city"),
+      v.literal("zip_code"),
+      v.literal("neighborhood"),
+      v.literal("development")
+    ),
+    location: v.string(),
+
+    // Sentiment scores
+    overallSentiment: v.number(),
+    buyerSentiment: v.number(),
+    sellerSentiment: v.number(),
+    investorSentiment: v.number(),
+
+    // Derived from predictions
+    priceUpProbability: v.number(),
+    priceDownProbability: v.number(),
+    inventoryUpProbability: v.number(),
+    ratesDownProbability: v.number(),
+
+    // Volume indicators
+    predictionVolume: v.number(),
+    activeMarkets: v.number(),
+    uniqueTraders: v.number(),
+
+    // Trend
+    sentimentTrend: v.union(
+      v.literal("bullish"),
+      v.literal("bearish"),
+      v.literal("neutral")
+    ),
+    trendStrength: v.number(),
+
+    // Historical comparison
+    weekOverWeekChange: v.number(),
+    monthOverMonthChange: v.number(),
+
+    calculatedAt: v.number(),
+  })
+    .index("by_scope_location", ["geographicScope", "location"])
+    .index("by_calculated", ["calculatedAt"]),
+
+  /**
+   * PULL Real Estate Index - Composite market index
+   */
+  pullRealEstateIndex: defineTable({
+    name: v.string(),
+    ticker: v.string(),
+    geographicScope: v.union(
+      v.literal("national"),
+      v.literal("state"),
+      v.literal("metro"),
+      v.literal("city"),
+      v.literal("zip_code"),
+      v.literal("neighborhood"),
+      v.literal("development")
+    ),
+    location: v.string(),
+
+    // Index value
+    value: v.number(),
+    previousValue: v.number(),
+    change: v.number(),
+    changePercent: v.number(),
+
+    // Trend
+    trend: v.union(v.literal("up"), v.literal("down"), v.literal("stable")),
+    trendStrength: v.number(),
+
+    // Components (stored as JSON)
+    components: v.array(
+      v.object({
+        category: v.string(),
+        weight: v.number(),
+        currentValue: v.number(),
+        previousValue: v.number(),
+        change: v.number(),
+        changePercent: v.number(),
+        sentiment: v.string(),
+      })
+    ),
+
+    // Derived metrics
+    marketSentiment: v.number(),
+    volatility: v.number(),
+    tradingVolume: v.number(),
+    activeMarkets: v.number(),
+
+    // Time series bounds
+    high52Week: v.number(),
+    low52Week: v.number(),
+    high52WeekDate: v.number(),
+    low52WeekDate: v.number(),
+
+    calculatedAt: v.number(),
+    nextUpdateAt: v.number(),
+  })
+    .index("by_ticker", ["ticker"])
+    .index("by_scope_location", ["geographicScope", "location"])
+    .index("by_calculated", ["calculatedAt"]),
+
+  /**
+   * PULL Index Historical - Historical index data points
+   */
+  pullIndexHistorical: defineTable({
+    indexId: v.id("pullRealEstateIndex"),
+    timestamp: v.number(),
+    value: v.number(),
+    volume: v.number(),
+    marketCount: v.number(),
+  })
+    .index("by_index", ["indexId", "timestamp"]),
+
+  /**
+   * White Label Configs - Brokerage white-label settings
+   */
+  whiteLabelConfigs: defineTable({
+    brokerageId: v.id("brokerages"),
+
+    // Branding
+    appName: v.string(),
+    logoUrl: v.string(),
+    faviconUrl: v.optional(v.string()),
+    primaryColor: v.string(),
+    secondaryColor: v.string(),
+    accentColor: v.optional(v.string()),
+
+    // Domain
+    customDomain: v.optional(v.string()),
+    sslCertificateId: v.optional(v.string()),
+
+    // Features
+    enabledFeatures: v.array(v.string()),
+    disabledMarketCategories: v.array(v.string()),
+
+    // Legal
+    termsUrl: v.optional(v.string()),
+    privacyUrl: v.optional(v.string()),
+    disclaimerText: v.optional(v.string()),
+
+    // Analytics
+    googleAnalyticsId: v.optional(v.string()),
+    facebookPixelId: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_brokerage", ["brokerageId"])
+    .index("by_domain", ["customDomain"]),
+
+  /**
+   * Lead Scores - Trading behavior based lead scoring
+   */
+  leadScores: defineTable({
+    userId: v.id("users"),
+    agentId: v.optional(v.id("realEstateAgents")),
+
+    // Trading behavior
+    totalTrades: v.number(),
+    tradingVolume: v.number(),
+    predictionAccuracy: v.number(),
+    marketCategories: v.array(v.string()),
+
+    // Interest signals
+    priceRangeMin: v.number(),
+    priceRangeMax: v.number(),
+    locationInterest: v.array(v.string()),
+    propertyTypeInterest: v.array(v.string()),
+    timeHorizon: v.union(
+      v.literal("immediate"),
+      v.literal("short_term"),
+      v.literal("long_term")
+    ),
+
+    // Engagement
+    lastActiveAt: v.number(),
+    sessionCount: v.number(),
+    averageSessionDuration: v.number(),
+
+    // Calculated scores
+    overallLeadScore: v.number(),
+    buyerIntentScore: v.number(),
+    sellerIntentScore: v.number(),
+    investorIntentScore: v.number(),
+    engagementScore: v.number(),
+
+    // Classification
+    leadTier: v.union(v.literal("hot"), v.literal("warm"), v.literal("cold")),
+    recommendedAction: v.string(),
+
+    calculatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_agent", ["agentId"])
+    .index("by_tier", ["leadTier", "overallLeadScore"]),
+
+  // ============================================================================
   // RWA TABLES
   // ============================================================================
 

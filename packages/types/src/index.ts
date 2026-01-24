@@ -204,6 +204,54 @@ export type {
   SubscriptionChannel,
 } from "./api";
 
+// Real Estate Prediction Market types
+export type {
+  // Market types
+  RealEstatePredictionEvent,
+  RealEstateMarketDataPoint,
+  RealEstatePredictionPosition,
+  RealEstateMarketCategory,
+  RealEstateMarketStatus,
+  GeographicScope,
+  // Brokerage & Agent types
+  Brokerage,
+  RealEstateAgent,
+  AgentPerformanceSnapshot,
+  BrokerageStatus,
+  BrokerageTier,
+  AgentStatus,
+  AgentSpecialization,
+  // Referral types
+  AgentReferral,
+  AgentPointsTransaction,
+  AgentPointsTransactionType,
+  ReferralStatus,
+  // Market sentiment types
+  MarketSentiment,
+  AgentMarketInsight,
+  CommissionPredictionMarket,
+  // PULL Index types
+  PullRealEstateIndex,
+  PullRealEstateIndexComponent,
+  PullRealEstateIndexHistorical,
+  // Content types
+  MarketPredictionNewsletter,
+  NewsletterPrediction,
+  MarketHighlight,
+  // White-label types
+  WhiteLabelConfig,
+  WhiteLabelFeature,
+  // Lead qualification types
+  TradingBehaviorLeadScore,
+  // API request types
+  CreateRealEstateMarketRequest,
+  CreateBrokerageRequest,
+  RegisterAgentRequest,
+  AgentInviteClientRequest,
+  GetMarketSentimentRequest,
+  GetPullIndexRequest,
+} from "./realEstate";
+
 // Social Trading types
 export type {
   // Social Graph
