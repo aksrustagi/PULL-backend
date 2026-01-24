@@ -1534,4 +1534,132 @@ export default defineSchema({
   })
     .index("by_user_feed", ["userId", "feedType", "activityAt"])
     .index("by_user_unread", ["userId", "feedType", "isRead"]),
+
+  // ============================================================================
+  // AI SIGNAL DETECTION TABLES
+  // ============================================================================
+
+  /**
+   * Signals - AI-detected trading signals from multiple sources
+   */
+  signals: defineTable({
+    signalId: v.string(), // Unique external ID
+    type: v.union(
+      v.literal("email"),
+      v.literal("social"),
+      v.literal("market"),
+      v.literal("news"),
+      v.literal("correlation")
+    ),
+    source: v.string(), // e.g., "email:user@example.com", "market:BTC-USD"
+    title: v.string(),
+    description: v.string(),
+    confidence: v.number(), // 0-100
+    sentiment: v.union(
+      v.literal("bullish"),
+      v.literal("bearish"),
+      v.literal("neutral")
+    ),
+    urgency: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high")
+    ),
+    relatedMarkets: v.array(v.string()), // Market tickers
+    relatedAssets: v.array(v.string()), // Asset symbols
+    metadata: v.optional(v.any()), // Type-specific metadata
+    expiresAt: v.optional(v.number()), // When signal becomes stale
+    createdAt: v.number(),
+  })
+    .index("by_signalId", ["signalId"])
+    .index("by_type", ["type"])
+    .index("by_urgency", ["urgency"])
+    .searchIndex("search_signals", {
+      searchField: "title",
+      filterFields: ["type", "urgency", "sentiment"],
+    }),
+
+  /**
+   * UserSignals - Junction table linking signals to users with relevance
+   */
+  userSignals: defineTable({
+    userId: v.id("users"),
+    signalId: v.id("signals"),
+    relevanceScore: v.number(), // 0-100, how relevant this signal is to user
+    seen: v.boolean(),
+    dismissed: v.boolean(),
+    actedOn: v.boolean(), // Did user take action based on this signal?
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_signal", ["signalId"])
+    .index("by_user_unseen", ["userId", "seen"]),
+
+  /**
+   * MarketCorrelations - Detected correlations between markets
+   */
+  marketCorrelations: defineTable({
+    marketA: v.string(), // Always alphabetically first
+    marketB: v.string(), // Always alphabetically second
+    correlation: v.number(), // -1 to 1, Pearson correlation coefficient
+    sampleSize: v.number(), // Number of data points used
+    pValue: v.number(), // Statistical significance
+    updatedAt: v.number(),
+  })
+    .index("by_marketA", ["marketA"])
+    .index("by_marketB", ["marketB"])
+    .index("by_pair", ["marketA", "marketB"])
+    .index("by_correlation", ["correlation"]),
+
+  /**
+   * UserInsights - Personalized AI-generated insights for users
+   */
+  userInsights: defineTable({
+    userId: v.id("users"),
+    insightType: v.string(), // "portfolio", "opportunity", "risk", "trend", "social"
+    title: v.string(),
+    content: v.string(),
+    priority: v.number(), // 1-5, higher is more important
+    relatedSignals: v.array(v.id("signals")),
+    dismissed: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_active", ["userId", "dismissed"]),
+
+  /**
+   * SignalProcessingLog - Track what sources have been processed
+   */
+  signalProcessingLog: defineTable({
+    sourceType: v.string(), // "email", "chat_room", "market_data"
+    sourceId: v.string(), // External ID of the source
+    userId: v.optional(v.id("users")), // Relevant user if applicable
+    signalsGenerated: v.number(), // How many signals were created
+    processedAt: v.number(),
+  })
+    .index("by_source", ["sourceType", "sourceId"])
+    .index("by_user", ["userId", "processedAt"]),
+
+  /**
+   * UserSignalPreferences - User preferences for signal detection
+   */
+  userSignalPreferences: defineTable({
+    userId: v.id("users"),
+    emailAnalysisEnabled: v.boolean(), // Opt-in for email scanning
+    socialAnalysisEnabled: v.boolean(),
+    marketAlertsEnabled: v.boolean(),
+    dailyInsightsEnabled: v.boolean(),
+    pushNotificationsEnabled: v.boolean(),
+    minConfidenceThreshold: v.number(), // Min confidence to show signal (0-100)
+    preferredUrgencyLevel: v.union(
+      v.literal("all"),
+      v.literal("medium_high"),
+      v.literal("high_only")
+    ),
+    interests: v.array(v.string()), // Topics/markets of interest
+    excludedMarkets: v.array(v.string()), // Markets to never show signals for
+    timezone: v.string(), // For daily insights timing
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

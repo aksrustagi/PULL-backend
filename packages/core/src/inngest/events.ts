@@ -138,6 +138,18 @@ export const tradingSignalDetectedPayloadSchema = z.object({
   source: z.string(),
 });
 
+// AI Signal Detection Events
+export const emailSyncedPayloadSchema = z.object({
+  emailId: z.string(),
+  userId: z.string(),
+  externalId: z.string(),
+  from: z.string(),
+  fromName: z.string().optional(),
+  subject: z.string(),
+  body: z.string().optional(),
+  receivedAt: z.string(),
+});
+
 // =============================================================================
 // Event Type Definitions
 // =============================================================================
@@ -152,6 +164,7 @@ export type RwaPriceAlertPayload = z.infer<typeof rwaPriceAlertPayloadSchema>;
 export type KycExpiringPayload = z.infer<typeof kycExpiringPayloadSchema>;
 export type WatchlistMatchPayload = z.infer<typeof watchlistMatchPayloadSchema>;
 export type TradingSignalDetectedPayload = z.infer<typeof tradingSignalDetectedPayloadSchema>;
+export type EmailSyncedPayload = z.infer<typeof emailSyncedPayloadSchema>;
 
 // =============================================================================
 // Inngest Event Map
@@ -205,6 +218,11 @@ export interface InngestEvents {
   "trading/signal-detected": {
     data: TradingSignalDetectedPayload;
   };
+
+  // AI Signal events
+  "email/synced": {
+    data: EmailSyncedPayload;
+  };
 }
 
 // =============================================================================
@@ -214,6 +232,7 @@ export interface InngestEvents {
 export const EVENT_NAMES = {
   EMAIL_SYNC_REQUESTED: "email/sync.requested",
   EMAIL_RECEIVED: "email/received",
+  EMAIL_SYNCED: "email/synced",
   REWARDS_ACTION_COMPLETED: "rewards/action.completed",
   NOTIFICATION_SEND: "notification/send",
   MARKET_DATA_UPDATED: "market-data/updated",
@@ -240,6 +259,7 @@ export function validateEventPayload<T extends keyof InngestEvents>(
   const schemas: Record<string, z.ZodSchema> = {
     "email/sync.requested": emailSyncRequestedPayloadSchema,
     "email/received": emailReceivedPayloadSchema,
+    "email/synced": emailSyncedPayloadSchema,
     "rewards/action.completed": rewardsActionCompletedPayloadSchema,
     "notification/send": notificationSendPayloadSchema,
     "market-data/updated": marketDataUpdatedPayloadSchema,
