@@ -15,3 +15,4 @@ export * from "./email";
 export * from "./messaging";
 export * from "./signals";
 export * from "./dataFlywheel";
+export * from "./market-data";

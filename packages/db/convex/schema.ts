@@ -1076,4 +1076,57 @@ export default defineSchema({
       dimensions: 1536,
       filterFields: ["userId", "agentType"],
     }),
+
+  // ============================================================================
+  // MARKET DATA TABLES (Real-time from Kalshi)
+  // ============================================================================
+
+  /**
+   * Market Prices - Current price data per market
+   * Updated by Temporal worker, consumed via Convex subscriptions
+   */
+  marketPrices: defineTable({
+    ticker: v.string(),
+    price: v.number(),
+    change24h: v.number(),
+    changePercent24h: v.number(),
+    volume24h: v.number(),
+    high24h: v.optional(v.number()),
+    low24h: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_ticker", ["ticker"])
+    .index("by_updated", ["updatedAt"]),
+
+  /**
+   * Market Orderbooks - Current orderbook state per market
+   */
+  marketOrderbooks: defineTable({
+    ticker: v.string(),
+    bids: v.array(v.array(v.number())), // [[price, size], ...]
+    asks: v.array(v.array(v.number())),
+    spread: v.optional(v.number()),
+    midPrice: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_ticker", ["ticker"])
+    .index("by_updated", ["updatedAt"]),
+
+  /**
+   * Market Trades - Recent trade history
+   */
+  marketTrades: defineTable({
+    ticker: v.string(),
+    tradeId: v.string(),
+    price: v.number(),
+    size: v.number(),
+    side: v.union(v.literal("buy"), v.literal("sell")),
+    timestamp: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_ticker", ["ticker", "timestamp"])
+    .index("by_trade_id", ["tradeId"])
+    .index("by_timestamp", ["timestamp"]),
 });
