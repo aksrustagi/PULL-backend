@@ -208,7 +208,7 @@ export interface WeeklyReportWorkflowResult {
 
 /**
  * Generate and send weekly report
- * Trigger: cron "0 8 * * 1" (Monday 8am UTC)
+ * Runs Mondays at 8am UTC
  */
 export async function generateWeeklyReportWorkflow(
   input: WeeklyReportInput
@@ -258,7 +258,7 @@ export interface ExperimentMonitoringResult {
 
 /**
  * Monitor running experiments for statistical significance
- * Trigger: cron "0 */4 * * *" (every 4 hours)
+ * Runs every 4 hours
  */
 export async function monitorExperimentsWorkflow(
   input: ExperimentMonitoringInput
