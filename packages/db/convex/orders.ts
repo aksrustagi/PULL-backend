@@ -456,191 +456,231 @@ export const recordTrade = mutation({
     price: v.number(),
     fee: v.number(),
     liquidity: v.union(v.literal("maker"), v.literal("taker")),
+    expectedVersion: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const MAX_RETRIES = 3;
+    let retryCount = 0;
 
-    const order = await ctx.db.get(args.orderId);
-    if (!order) {
-      throw new Error("Order not found");
-    }
-
-    const notionalValue = args.quantity * args.price;
-
-    // Record the trade
-    const tradeId = await ctx.db.insert("trades", {
-      orderId: args.orderId,
-      userId: order.userId,
-      externalTradeId: args.externalTradeId,
-      symbol: order.symbol,
-      side: order.side,
-      quantity: args.quantity,
-      price: args.price,
-      notionalValue,
-      fee: args.fee,
-      feeCurrency: "USD",
-      liquidity: args.liquidity,
-      executedAt: now,
-      settlementStatus: "pending",
-    });
-
-    // Update order
-    const newFilledQuantity = order.filledQuantity + args.quantity;
-    const isFullyFilled = newFilledQuantity >= order.quantity;
-
-    // Calculate new average price
-    const totalFilled =
-      order.filledQuantity * (order.averageFilledPrice ?? 0) +
-      args.quantity * args.price;
-    const newAvgPrice = totalFilled / newFilledQuantity;
-
-    await ctx.db.patch(args.orderId, {
-      status: isFullyFilled ? "filled" : "partial_fill",
-      filledQuantity: newFilledQuantity,
-      remainingQuantity: order.quantity - newFilledQuantity,
-      averageFilledPrice: newAvgPrice,
-      fees: order.fees + args.fee,
-      filledAt: isFullyFilled ? now : undefined,
-      updatedAt: now,
-    });
-
-    // Update balances and positions
-    if (order.side === "buy") {
-      // Release hold and debit actual cost
-      const actualCost = notionalValue + args.fee;
-      const estimatedCost = args.quantity * (order.price ?? order.stopPrice ?? args.price);
-
-      const balance = await ctx.db
-        .query("balances")
-        .withIndex("by_user_asset", (q) =>
-          q
-            .eq("userId", order.userId)
-            .eq("assetType", "usd")
-            .eq("assetId", "USD")
-        )
-        .unique();
-
-      if (balance) {
-        const refund = Math.max(0, estimatedCost - actualCost);
-        await ctx.db.patch(balance._id, {
-          held: Math.max(0, balance.held - estimatedCost),
-          available: balance.available + refund,
-          updatedAt: now,
-        });
+    while (retryCount < MAX_RETRIES) {
+      const order = await ctx.db.get(args.orderId);
+      if (!order) {
+        throw new Error("Order not found");
       }
 
-      // Update or create position
-      let position = await ctx.db
-        .query("positions")
-        .withIndex("by_user_asset", (q) =>
-          q
-            .eq("userId", order.userId)
-            .eq("assetClass", order.assetClass)
-            .eq("symbol", order.symbol)
-        )
-        .unique();
+      // Initialize version if not present (for backwards compatibility)
+      const currentVersion = (order as Record<string, unknown>).version as number ?? 0;
 
-      if (position) {
-        const newQuantity = position.quantity + args.quantity;
-        const newCostBasis = position.costBasis + notionalValue;
-        const newAvgEntry = newCostBasis / newQuantity;
-
-        await ctx.db.patch(position._id, {
-          quantity: newQuantity,
-          averageEntryPrice: newAvgEntry,
-          costBasis: newCostBasis,
-          currentPrice: args.price,
-          unrealizedPnL:
-            newQuantity * args.price - newCostBasis,
-          updatedAt: now,
-        });
-      } else {
-        await ctx.db.insert("positions", {
-          userId: order.userId,
-          assetClass: order.assetClass,
-          symbol: order.symbol,
-          side: "long",
-          quantity: args.quantity,
-          averageEntryPrice: args.price,
-          currentPrice: args.price,
-          costBasis: notionalValue,
-          unrealizedPnL: 0,
-          realizedPnL: 0,
-          openedAt: now,
-          updatedAt: now,
-        });
-      }
-    } else {
-      // Sell - credit proceeds and reduce position
-      const proceeds = notionalValue - args.fee;
-
-      const balance = await ctx.db
-        .query("balances")
-        .withIndex("by_user_asset", (q) =>
-          q
-            .eq("userId", order.userId)
-            .eq("assetType", "usd")
-            .eq("assetId", "USD")
-        )
-        .unique();
-
-      if (balance) {
-        await ctx.db.patch(balance._id, {
-          available: balance.available + proceeds,
-          updatedAt: now,
-        });
+      // If expectedVersion is provided, verify it matches
+      if (args.expectedVersion !== undefined && args.expectedVersion !== currentVersion) {
+        throw new Error(
+          `Concurrent modification detected. Expected version ${args.expectedVersion}, but found ${currentVersion}. Please retry with the latest version.`
+        );
       }
 
-      // Update position
-      const position = await ctx.db
-        .query("positions")
-        .withIndex("by_user_asset", (q) =>
-          q
-            .eq("userId", order.userId)
-            .eq("assetClass", order.assetClass)
-            .eq("symbol", order.symbol)
-        )
-        .unique();
+      const notionalValue = args.quantity * args.price;
 
-      if (position) {
-        const newQuantity = position.quantity - args.quantity;
-        const soldCostBasis =
-          (args.quantity / position.quantity) * position.costBasis;
-        const realizedPnL = notionalValue - soldCostBasis;
-
-        if (newQuantity <= 0) {
-          await ctx.db.delete(position._id);
-        } else {
-          await ctx.db.patch(position._id, {
-            quantity: newQuantity,
-            costBasis: position.costBasis - soldCostBasis,
-            currentPrice: args.price,
-            unrealizedPnL:
-              newQuantity * args.price -
-              (position.costBasis - soldCostBasis),
-            realizedPnL: position.realizedPnL + realizedPnL,
-            updatedAt: now,
-          });
-        }
-      }
-    }
-
-    await ctx.db.insert("auditLog", {
-      userId: order.userId,
-      action: "trade.executed",
-      resourceType: "trades",
-      resourceId: tradeId,
-      metadata: {
+      // Record the trade
+      const tradeId = await ctx.db.insert("trades", {
         orderId: args.orderId,
+        userId: order.userId,
+        externalTradeId: args.externalTradeId,
         symbol: order.symbol,
         side: order.side,
         quantity: args.quantity,
         price: args.price,
         notionalValue,
-      },
-      timestamp: now,
-    });
+        fee: args.fee,
+        feeCurrency: "USD",
+        liquidity: args.liquidity,
+        executedAt: now,
+        settlementStatus: "pending",
+      });
 
-    return tradeId;
+      // Update order with version check
+      const newFilledQuantity = order.filledQuantity + args.quantity;
+      const isFullyFilled = newFilledQuantity >= order.quantity;
+
+      // Calculate new average price
+      const totalFilled =
+        order.filledQuantity * (order.averageFilledPrice ?? 0) +
+        args.quantity * args.price;
+      const newAvgPrice = totalFilled / newFilledQuantity;
+
+      // Re-fetch order to verify version hasn't changed during our processing
+      const orderCheck = await ctx.db.get(args.orderId);
+      if (!orderCheck) {
+        // Order was deleted during processing
+        throw new Error("Order was deleted during trade processing");
+      }
+
+      const checkVersion = (orderCheck as Record<string, unknown>).version as number ?? 0;
+      if (checkVersion !== currentVersion) {
+        // Version changed, another transaction modified the order
+        retryCount++;
+        if (retryCount >= MAX_RETRIES) {
+          throw new Error(
+            `Concurrent modification detected after ${MAX_RETRIES} retries. Order version changed from ${currentVersion} to ${checkVersion}. Please retry.`
+          );
+        }
+        // Continue to retry
+        continue;
+      }
+
+      await ctx.db.patch(args.orderId, {
+        status: isFullyFilled ? "filled" : "partial_fill",
+        filledQuantity: newFilledQuantity,
+        remainingQuantity: order.quantity - newFilledQuantity,
+        averageFilledPrice: newAvgPrice,
+        fees: order.fees + args.fee,
+        filledAt: isFullyFilled ? now : undefined,
+        updatedAt: now,
+        version: currentVersion + 1,
+      } as Record<string, unknown>);
+
+      // Update balances and positions
+      if (order.side === "buy") {
+        // Release hold and debit actual cost
+        const actualCost = notionalValue + args.fee;
+        const estimatedCost = args.quantity * (order.price ?? order.stopPrice ?? args.price);
+
+        const balance = await ctx.db
+          .query("balances")
+          .withIndex("by_user_asset", (q) =>
+            q
+              .eq("userId", order.userId)
+              .eq("assetType", "usd")
+              .eq("assetId", "USD")
+          )
+          .unique();
+
+        if (balance) {
+          const refund = Math.max(0, estimatedCost - actualCost);
+          await ctx.db.patch(balance._id, {
+            held: Math.max(0, balance.held - estimatedCost),
+            available: balance.available + refund,
+            updatedAt: now,
+          });
+        }
+
+        // Update or create position
+        let position = await ctx.db
+          .query("positions")
+          .withIndex("by_user_asset", (q) =>
+            q
+              .eq("userId", order.userId)
+              .eq("assetClass", order.assetClass)
+              .eq("symbol", order.symbol)
+          )
+          .unique();
+
+        if (position) {
+          const newQuantity = position.quantity + args.quantity;
+          const newCostBasis = position.costBasis + notionalValue;
+          const newAvgEntry = newCostBasis / newQuantity;
+
+          await ctx.db.patch(position._id, {
+            quantity: newQuantity,
+            averageEntryPrice: newAvgEntry,
+            costBasis: newCostBasis,
+            currentPrice: args.price,
+            unrealizedPnL:
+              newQuantity * args.price - newCostBasis,
+            updatedAt: now,
+          });
+        } else {
+          await ctx.db.insert("positions", {
+            userId: order.userId,
+            assetClass: order.assetClass,
+            symbol: order.symbol,
+            side: "long",
+            quantity: args.quantity,
+            averageEntryPrice: args.price,
+            currentPrice: args.price,
+            costBasis: notionalValue,
+            unrealizedPnL: 0,
+            realizedPnL: 0,
+            openedAt: now,
+            updatedAt: now,
+          });
+        }
+      } else {
+        // Sell - credit proceeds and reduce position
+        const proceeds = notionalValue - args.fee;
+
+        const balance = await ctx.db
+          .query("balances")
+          .withIndex("by_user_asset", (q) =>
+            q
+              .eq("userId", order.userId)
+              .eq("assetType", "usd")
+              .eq("assetId", "USD")
+          )
+          .unique();
+
+        if (balance) {
+          await ctx.db.patch(balance._id, {
+            available: balance.available + proceeds,
+            updatedAt: now,
+          });
+        }
+
+        // Update position
+        const position = await ctx.db
+          .query("positions")
+          .withIndex("by_user_asset", (q) =>
+            q
+              .eq("userId", order.userId)
+              .eq("assetClass", order.assetClass)
+              .eq("symbol", order.symbol)
+          )
+          .unique();
+
+        if (position) {
+          const newQuantity = position.quantity - args.quantity;
+          const soldCostBasis =
+            (args.quantity / position.quantity) * position.costBasis;
+          const realizedPnL = notionalValue - soldCostBasis;
+
+          if (newQuantity <= 0) {
+            await ctx.db.delete(position._id);
+          } else {
+            await ctx.db.patch(position._id, {
+              quantity: newQuantity,
+              costBasis: position.costBasis - soldCostBasis,
+              currentPrice: args.price,
+              unrealizedPnL:
+                newQuantity * args.price -
+                (position.costBasis - soldCostBasis),
+              realizedPnL: position.realizedPnL + realizedPnL,
+              updatedAt: now,
+            });
+          }
+        }
+      }
+
+      await ctx.db.insert("auditLog", {
+        userId: order.userId,
+        action: "trade.executed",
+        resourceType: "trades",
+        resourceId: tradeId,
+        metadata: {
+          orderId: args.orderId,
+          symbol: order.symbol,
+          side: order.side,
+          quantity: args.quantity,
+          price: args.price,
+          notionalValue,
+        },
+        timestamp: now,
+      });
+
+      // Successfully processed, break out of retry loop
+      return tradeId;
+    }
+
+    // Should never reach here due to MAX_RETRIES check in loop
+    throw new Error("Failed to record trade after maximum retries");
   },
 });
