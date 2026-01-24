@@ -227,17 +227,17 @@ export async function updateLeaderboardWorkflow(
     };
 
     // Store snapshot
-    await storeLeaderboardSnapshot(snapshot);
+    const snapshotId = await storeLeaderboardSnapshot(snapshot);
 
     // Update user leaderboard history
-    const historyEntries = entries.map((entry, index) => ({
+    const historyEntries = entries.map((entry) => ({
       userId: entry.userId,
       leaderboardType,
       period,
       rank: entry.rank,
       value: entry.value,
-      percentile: (index / traders.length) * 100,
-      snapshotId: "snapshot_id", // Would be returned from storeLeaderboardSnapshot
+      percentile: (entry.rank / traders.length) * 100,
+      snapshotId,
       periodStart,
     }));
 

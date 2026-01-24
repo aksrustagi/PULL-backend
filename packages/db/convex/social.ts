@@ -260,7 +260,7 @@ export const updateFollowSettings = mutation({
       throw new Error("Not following this trader");
     }
 
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
     if (args.notificationsEnabled !== undefined) {
       updates.notificationsEnabled = args.notificationsEnabled;
     }
@@ -380,7 +380,7 @@ export const upsertTraderProfile = mutation({
 
     if (existing) {
       // Update existing profile
-      const updates: any = { updatedAt: now };
+      const updates: Record<string, unknown> = { updatedAt: now };
       Object.keys(args).forEach((key) => {
         if (key !== "userId" && args[key as keyof typeof args] !== undefined) {
           updates[key] = args[key as keyof typeof args];
@@ -787,7 +787,7 @@ export const updateCopySettings = mutation({
       throw new Error("Subscription not found");
     }
 
-    const updates: any = { updatedAt: Date.now() };
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
     Object.keys(args).forEach((key) => {
       if (key !== "subscriptionId" && args[key as keyof typeof args] !== undefined) {
         updates[key] = args[key as keyof typeof args];

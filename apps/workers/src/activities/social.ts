@@ -451,7 +451,36 @@ export async function calculateTraderStats(input: {
 /**
  * Store trader stats
  */
-export async function storeTraderStats(stats: any): Promise<void> {
+export async function storeTraderStats(stats: {
+  userId: string;
+  period: string;
+  periodStart: number;
+  periodEnd: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  totalPnL: number;
+  totalPnLPercent: number;
+  avgPnLPerTrade: number;
+  avgWinAmount: number;
+  avgLossAmount: number;
+  largestWin: number;
+  largestLoss: number;
+  sharpeRatio: number;
+  sortinoRatio: number;
+  maxDrawdown: number;
+  maxDrawdownPercent: number;
+  volatility: number;
+  calmarRatio: number;
+  totalVolume: number;
+  avgPositionSize: number;
+  avgHoldingPeriod: number;
+  currentWinStreak: number;
+  currentLossStreak: number;
+  longestWinStreak: number;
+  longestLossStreak: number;
+}): Promise<void> {
   console.log(`Storing trader stats for ${stats.userId}, period: ${stats.period}`);
   
   await convexMutation("traderStats:upsert", {
@@ -503,14 +532,36 @@ export async function getQualifiedTraders(input: {
 /**
  * Store leaderboard snapshot
  */
-export async function storeLeaderboardSnapshot(snapshot: any): Promise<void> {
+export async function storeLeaderboardSnapshot(snapshot: {
+  leaderboardType: string;
+  period: string;
+  assetClass?: string;
+  periodStart: number;
+  periodEnd: number;
+  entries: Array<{
+    rank: number;
+    previousRank?: number;
+    userId: string;
+    username?: string;
+    displayName?: string;
+    avatarUrl?: string;
+    value: number;
+    change?: number;
+    changePercent?: number;
+    tier?: string;
+    isVerified: boolean;
+  }>;
+  totalParticipants: number;
+}): Promise<string> {
   console.log(`Storing leaderboard snapshot: ${snapshot.leaderboardType} / ${snapshot.period}`);
   
-  await convexMutation("leaderboardSnapshots:create", {
+  const snapshotId = await convexMutation<string>("leaderboardSnapshots:create", {
     ...snapshot,
     calculatedAt: Date.now(),
     createdAt: Date.now(),
   });
+  
+  return snapshotId;
 }
 
 /**
