@@ -31,6 +31,16 @@ export {
 // Compliance functions
 export { periodicKYCCheck, complianceFunctions } from "./compliance";
 
+// Signal detection functions
+export {
+  detectEmailSignals,
+  detectMarketAnomalies,
+  aggregateSocialSentiment,
+  calculateCorrelations,
+  generateDailyInsights,
+  signalFunctions,
+} from "./signals";
+
 // =============================================================================
 // All Functions (for Inngest serve handler)
 // =============================================================================
@@ -40,6 +50,7 @@ import { marketDataFunctions } from "./market-data";
 import { rewardsFunctions } from "./rewards";
 import { notificationFunctions } from "./notifications";
 import { complianceFunctions } from "./compliance";
+import { signalFunctions } from "./signals";
 
 /**
  * All Inngest functions combined for easy registration.
@@ -61,4 +72,5 @@ export const allFunctions = [
   ...rewardsFunctions,
   ...notificationFunctions,
   ...complianceFunctions,
+  ...signalFunctions,
 ];
