@@ -4,10 +4,12 @@
  */
 
 import { ConvexHttpClient } from "convex/browser";
-import { api } from "@pull/db";
 
 const convexUrl = process.env.CONVEX_URL || "";
 const convex = new ConvexHttpClient(convexUrl);
+
+// Note: These API calls will need to be updated to use the actual Convex generated API
+// For now, using direct query/mutation calls with proper type casting
 
 // ============================================================================
 // SOCIAL GRAPH SERVICE
@@ -23,7 +25,8 @@ export class SocialGraphService {
     notificationsEnabled?: boolean;
     positionVisibility?: "all" | "entry_only" | "none";
   }) {
-    return await convex.mutation(api.social.mutations.follow, {
+    // TODO: Update to use generated API types once available
+    return await convex.mutation("social/mutations:follow" as any, {
       followerId: params.followerId as any,
       followeeId: params.followeeId as any,
       notificationsEnabled: params.notificationsEnabled,

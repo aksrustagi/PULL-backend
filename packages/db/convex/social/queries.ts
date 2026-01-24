@@ -241,15 +241,21 @@ export const searchTraders = query({
   handler: async (ctx, args) => {
     const limit = args.limit ?? 20;
     
-    // Search by username/displayName
-    const users = await ctx.db
+    // Search by username/displayName using filter instead of search index
+    // Note: For production, consider adding a search index to schema
+    const allUsers = await ctx.db
       .query("users")
-      .withSearchIndex("search_users", (q) => q.search("displayName", args.query))
+      .filter((q) => 
+        q.or(
+          q.like(q.field("displayName"), args.query),
+          q.like(q.field("username"), args.query)
+        )
+      )
       .take(limit);
 
     // Get trader profiles for found users
     const traders = await Promise.all(
-      users.map(async (user) => {
+      allUsers.map(async (user) => {
         const profile = await ctx.db
           .query("traderProfiles")
           .withIndex("by_user", (q) => q.eq("userId", user._id))

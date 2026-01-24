@@ -4,6 +4,7 @@
  */
 
 import { ConvexHttpClient } from "convex/browser";
+import { randomUUID } from "crypto";
 
 const convexUrl = process.env.CONVEX_URL || "";
 const convex = new ConvexHttpClient(convexUrl);
@@ -273,7 +274,7 @@ export async function executeCopyTrade(
 
     return {
       success: true,
-      copyOrderId: `copy_order_${crypto.randomUUID()}`,
+      copyOrderId: `copy_order_${randomUUID()}`,
       copyQuantity,
       copyPrice: params.originalPrice,
       slippage: 0,

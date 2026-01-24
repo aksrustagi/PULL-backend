@@ -325,7 +325,7 @@ export function CopySettingsModal({
                 value={symbolInput}
                 onChange={(e) => setSymbolInput(e.target.value)}
                 placeholder="Enter symbol"
-                onKeyPress={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
                     addExcludedSymbol();

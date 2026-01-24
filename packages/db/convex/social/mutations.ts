@@ -68,7 +68,7 @@ export const follow = mutation({
       targetId: args.followeeId,
       data: { followeeId: args.followeeId },
       visibility: "public",
-      relatedUserIds: [args.followeeId],
+      relatedUserIds: [args.followerId, args.followeeId], // Include both for proper tracking
       createdAt: now,
     });
 
