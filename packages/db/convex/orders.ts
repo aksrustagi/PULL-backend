@@ -6,6 +6,17 @@ import { mutation, query } from "./_generated/server";
  */
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Safely get the version of an order for optimistic concurrency control
+ */
+function getOrderVersion(order: Record<string, unknown>): number {
+  return (order.version as number | undefined) ?? 0;
+}
+
+// ============================================================================
 // QUERIES
 // ============================================================================
 
@@ -470,7 +481,7 @@ export const recordTrade = mutation({
       }
 
       // Initialize version if not present (for backwards compatibility)
-      const currentVersion = (order as Record<string, unknown>).version as number ?? 0;
+      const currentVersion = getOrderVersion(order as Record<string, unknown>);
 
       // If expectedVersion is provided, verify it matches
       if (args.expectedVersion !== undefined && args.expectedVersion !== currentVersion) {
@@ -515,7 +526,7 @@ export const recordTrade = mutation({
         throw new Error("Order was deleted during trade processing");
       }
 
-      const checkVersion = (orderCheck as Record<string, unknown>).version as number ?? 0;
+      const checkVersion = getOrderVersion(orderCheck as Record<string, unknown>);
       if (checkVersion !== currentVersion) {
         // Version changed, another transaction modified the order
         retryCount++;

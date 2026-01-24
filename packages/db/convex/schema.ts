@@ -249,6 +249,7 @@ export default defineSchema({
     ),
     fees: v.number(),
     feeCurrency: v.string(),
+    version: v.optional(v.number()), // For optimistic concurrency control
     metadata: v.optional(v.any()),
     expiresAt: v.optional(v.number()),
     submittedAt: v.optional(v.number()),

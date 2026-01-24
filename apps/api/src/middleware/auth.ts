@@ -2,15 +2,7 @@ import { createMiddleware } from "hono/factory";
 import * as jose from "jose";
 import type { Env } from "../index";
 import { isTokenBlacklisted } from "../lib/redis";
-
-const JWT_SECRET_STRING = process.env.JWT_SECRET;
-if (!JWT_SECRET_STRING) {
-  throw new Error("JWT_SECRET environment variable is required");
-}
-if (JWT_SECRET_STRING.length < 32) {
-  throw new Error("JWT_SECRET must be at least 32 characters");
-}
-const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);
+import { JWT_SECRET } from "../lib/jwt-config";
 
 export const authMiddleware = createMiddleware<Env>(async (c, next) => {
   const authHeader = c.req.header("Authorization");
