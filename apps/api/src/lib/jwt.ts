@@ -4,17 +4,13 @@
  */
 
 import * as jose from "jose";
-
-// Configuration
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "your-secret-key-min-32-chars-long"
-);
-const JWT_ISSUER = "pull-api";
-const JWT_AUDIENCE = "pull-app";
-
-// Token expiration times
-const ACCESS_TOKEN_EXPIRY = process.env.JWT_EXPIRY ?? "15m";
-const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY ?? "30d";
+import {
+  JWT_SECRET,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
+  ACCESS_TOKEN_EXPIRY,
+  REFRESH_TOKEN_EXPIRY,
+} from "./jwt-config";
 
 /**
  * JWT Token Claims

@@ -568,3 +568,4 @@ kyc.post(
 );
 
 export default kyc;
+export { kyc as kycRoutes };

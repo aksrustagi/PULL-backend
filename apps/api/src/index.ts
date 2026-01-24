@@ -1,12 +1,19 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { secureHeaders } from "hono/secure-headers";
-import { timing } from "hono/timing";
 import { trpcServer } from "@hono/trpc-server";
 
+import { initSentry } from "./lib/sentry";
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import {
+  securityHeaders,
+  csrfProtection,
+  requestId,
+  requestTiming,
+} from "./middleware/security";
+import { errorHandler } from "./middleware/error-handler";
+import { sentryMiddleware } from "./middleware/sentry";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { tradingRoutes } from "./routes/trading";
@@ -14,24 +21,48 @@ import { predictionsRoutes } from "./routes/predictions";
 import { rwaRoutes } from "./routes/rwa";
 import { rewardsRoutes } from "./routes/rewards";
 import { socialRoutes } from "./routes/social";
+import { kycRoutes } from "./routes/kyc";
 import { webhookRoutes } from "./routes/webhooks";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
+
+// Initialize Sentry for error tracking
+initSentry();
 
 // Types
 export type Env = {
   Variables: {
     userId?: string;
     requestId: string;
+    sanitizedBody?: unknown;
   };
 };
 
 const app = new Hono<Env>();
 
-// Global middleware
-app.use("*", timing());
+// Global middleware - order matters!
+// 1. Request ID first for tracking
+app.use("*", requestId);
+
+// 2. Request timing for performance monitoring
+app.use("*", requestTiming);
+
+// 3. Security headers for all responses
+app.use("*", securityHeaders);
+
+// 4. CSRF protection for state-changing requests
+app.use("*", csrfProtection);
+
+// 5. Sentry middleware for error tracking
+app.use("*", sentryMiddleware);
+
+// 6. Error handler wraps entire app
+app.use("*", errorHandler);
+
+// 7. Logging
 app.use("*", logger());
-app.use("*", secureHeaders());
+
+// 8. CORS configuration
 app.use(
   "*",
   cors({
@@ -41,21 +72,12 @@ app.use(
       "https://*.pull.app",
     ],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID"],
-    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-API-Key"],
+    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-Response-Time"],
     credentials: true,
     maxAge: 86400,
   })
 );
-
-// Request ID middleware
-app.use("*", async (c, next) => {
-  const requestId =
-    c.req.header("X-Request-ID") ?? crypto.randomUUID();
-  c.set("requestId", requestId);
-  c.header("X-Request-ID", requestId);
-  await next();
-});
 
 // Rate limiting for non-webhook routes
 app.use("/api/*", rateLimitMiddleware);
@@ -72,6 +94,7 @@ app.route("/api/v1/predictions", predictionsRoutes);
 app.route("/api/v1/rwa", rwaRoutes);
 app.route("/api/v1/rewards", rewardsRoutes);
 app.route("/api/v1/social", socialRoutes);
+app.route("/api/v1/kyc", kycRoutes);
 
 // tRPC endpoint
 app.use(
