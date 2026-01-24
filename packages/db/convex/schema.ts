@@ -1,9 +1,10 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { dataFlywheelTables } from "./dataFlywheel";
 
 /**
  * PULL Super App - Convex Database Schema
- * 42 tables covering all platform features including Social Trading Graph
+ * 50+ tables covering all platform features including Data Flywheel and Social Trading
  */
 export default defineSchema({
   // ============================================================================
@@ -1859,6 +1860,11 @@ export default defineSchema({
     }),
 
   // ============================================================================
+  // DATA FLYWHEEL TABLES
+  // ============================================================================
+  ...dataFlywheelTables,
+
+  // ============================================================================
   // SOCIAL TRADING GRAPH TABLES
   // ============================================================================
 
@@ -3129,5 +3135,4 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_date", ["date"]),
 });
