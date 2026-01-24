@@ -1,6 +1,6 @@
 /**
  * Order Execution Workflow
- * Handles the complete lifecycle of a trading order
+ * Handles the complete lifecycle of a trading order using new activities
  */
 
 import {
@@ -8,27 +8,28 @@ import {
   defineSignal,
   defineQuery,
   setHandler,
-  condition,
   sleep,
   ApplicationFailure,
   CancellationScope,
   isCancellation,
 } from "@temporalio/workflow";
 
-import type * as activities from "./activities";
+import type * as activities from "../../activities/trading";
 
 // Activity proxies with retry policies
 const {
-  validateKYCStatus,
+  validateUserKYC,
+  validateKYCForAssetType,
   checkBuyingPower,
   holdBuyingPower,
   releaseBuyingPower,
-  submitOrderToKalshi,
-  cancelKalshiOrder,
-  settleOrder,
-  updateConvexBalances,
+  submitOrderToExchange,
+  pollOrderStatus,
+  recordOrderFill,
+  updateOrderStatus,
+  cancelOrderOnExchange,
   sendOrderNotification,
-  recordAuditLog,
+  recordTradingAuditLog,
 } = proxyActivities<typeof activities>({
   startToCloseTimeout: "30 seconds",
   retry: {
@@ -40,7 +41,7 @@ const {
 });
 
 // Activities with longer timeout for order polling
-const { pollOrderStatus } = proxyActivities<typeof activities>({
+const pollActivities = proxyActivities<typeof activities>({
   startToCloseTimeout: "5 minutes",
   heartbeatTimeout: "30 seconds",
   retry: {
@@ -53,6 +54,7 @@ const { pollOrderStatus } = proxyActivities<typeof activities>({
 
 // Workflow input type
 export interface OrderExecutionInput {
+  orderId: string;
   userId: string;
   assetType: "prediction" | "rwa" | "crypto";
   assetId: string;
@@ -60,11 +62,12 @@ export interface OrderExecutionInput {
   orderType: "market" | "limit";
   quantity: number;
   limitPrice?: number;
+  estimatedCost: number;
 }
 
 // Order status type
 export interface OrderStatus {
-  orderId?: string;
+  orderId: string;
   externalOrderId?: string;
   status:
     | "validating"
@@ -84,6 +87,7 @@ export interface OrderStatus {
   fills: Array<{
     quantity: number;
     price: number;
+    fee: number;
     timestamp: string;
   }>;
   failureReason?: string;
@@ -91,21 +95,93 @@ export interface OrderStatus {
 }
 
 // Signals
+export const cancelSignal = defineSignal("cancel");
 export const cancelOrderSignal = defineSignal("cancelOrder");
 
 // Queries
 export const getOrderStatusQuery = defineQuery<OrderStatus>("getOrderStatus");
 
+// Simplified workflow interface for basic use cases
+export interface OrderWorkflowInput {
+  orderId: string;
+  userId: string;
+  estimatedCost: number;
+}
+
 /**
- * Order Execution Workflow
+ * Simplified Order Execution Workflow
+ * For basic order execution with KYC validation and buying power check
  */
 export async function orderExecutionWorkflow(
+  input: OrderWorkflowInput
+): Promise<{ success: boolean; message: string }> {
+  let cancelled = false;
+  setHandler(cancelSignal, () => {
+    cancelled = true;
+  });
+
+  // 1. Validate KYC
+  const kycResult = await validateUserKYC(input.userId);
+  if (!kycResult.valid) {
+    return { success: false, message: kycResult.reason ?? "KYC validation failed" };
+  }
+
+  // 2. Check buying power
+  const buyingPower = await checkBuyingPower(input.userId, input.estimatedCost);
+  if (!buyingPower.sufficient) {
+    return { success: false, message: "Insufficient buying power" };
+  }
+
+  // Check for cancellation
+  if (cancelled) {
+    return { success: false, message: "Order cancelled" };
+  }
+
+  // 3. Submit to exchange
+  const submission = await submitOrderToExchange(input.orderId);
+
+  if (submission.status === "rejected") {
+    return { success: false, message: submission.reason ?? "Order rejected by exchange" };
+  }
+
+  // 4. Poll for completion
+  let attempts = 0;
+  const maxAttempts = 60; // 5 minutes max
+
+  while (attempts < maxAttempts && !cancelled) {
+    const status = await pollActivities.pollOrderStatus(input.orderId, submission.externalOrderId);
+
+    if (status.status === "filled" && status.filled) {
+      // Record the fill
+      await recordOrderFill(input.orderId, status.filled, status.averagePrice ?? 0, 0);
+      return { success: true, message: "Order filled" };
+    }
+
+    if (status.status === "cancelled" || status.status === "rejected") {
+      return { success: false, message: `Order ${status.status}` };
+    }
+
+    await sleep("5 seconds");
+    attempts++;
+  }
+
+  // Cancelled or timed out
+  if (cancelled) {
+    await cancelOrderOnExchange(submission.externalOrderId);
+    return { success: false, message: "Order cancelled by user" };
+  }
+
+  return { success: false, message: "Order timed out" };
+}
+
+/**
+ * Full Order Execution Workflow
+ * Complete lifecycle management with detailed status tracking
+ */
+export async function fullOrderExecutionWorkflow(
   input: OrderExecutionInput
 ): Promise<{ orderId: string; status: OrderStatus }> {
-  const { userId, assetType, assetId, side, orderType, quantity, limitPrice } = input;
-
-  // Generate order ID
-  const orderId = `ord_${crypto.randomUUID()}`;
+  const { orderId, userId, assetType, assetId, side, orderType, quantity, limitPrice, estimatedCost } = input;
 
   // Initialize status
   const status: OrderStatus = {
@@ -129,7 +205,7 @@ export async function orderExecutionWorkflow(
     // =========================================================================
     // Step 1: Validate KYC status for trade type
     // =========================================================================
-    await recordAuditLog({
+    await recordTradingAuditLog({
       userId,
       action: "order_submitted",
       resourceType: "order",
@@ -137,9 +213,9 @@ export async function orderExecutionWorkflow(
       metadata: { assetType, assetId, side, orderType, quantity, limitPrice },
     });
 
-    const kycValidation = await validateKYCStatus(userId, assetType);
+    const kycValidation = await validateKYCForAssetType(userId, assetType);
 
-    if (!kycValidation.allowed) {
+    if (!kycValidation.valid) {
       status.status = "rejected";
       status.failureReason = kycValidation.reason;
       await sendOrderNotification(userId, orderId, "rejected", kycValidation.reason);
@@ -151,10 +227,9 @@ export async function orderExecutionWorkflow(
     // =========================================================================
     status.status = "holding_funds";
 
-    const buyingPower = await checkBuyingPower(userId, assetType);
-    const estimatedCost = calculateEstimatedCost(side, orderType, quantity, limitPrice);
+    const buyingPower = await checkBuyingPower(userId, estimatedCost);
 
-    if (buyingPower.available < estimatedCost) {
+    if (!buyingPower.sufficient) {
       status.status = "rejected";
       status.failureReason = "Insufficient buying power";
       await sendOrderNotification(userId, orderId, "rejected", "Insufficient buying power");
@@ -175,15 +250,15 @@ export async function orderExecutionWorkflow(
 
     status.status = "submitted";
 
-    const submission = await submitOrderToKalshi({
-      userId,
-      orderId,
-      assetId,
-      side,
-      orderType,
-      quantity,
-      limitPrice,
-    });
+    const submission = await submitOrderToExchange(orderId);
+
+    if (submission.status === "rejected") {
+      status.status = "rejected";
+      status.failureReason = submission.reason;
+      await releaseBuyingPower(userId, hold.holdId, hold.amount);
+      await sendOrderNotification(userId, orderId, "rejected", submission.reason);
+      throw ApplicationFailure.nonRetryable(`Order rejected: ${submission.reason}`);
+    }
 
     status.externalOrderId = submission.externalOrderId;
     status.status = "pending";
@@ -194,42 +269,38 @@ export async function orderExecutionWorkflow(
     // Step 4: Poll for execution (with cancellation support)
     // =========================================================================
     let orderComplete = false;
+    let pollAttempts = 0;
+    const maxPollAttempts = 60; // 5 minutes with 5 second intervals
 
-    while (!orderComplete) {
+    while (!orderComplete && pollAttempts < maxPollAttempts) {
       // Check for cancellation request
       if (status.cancellationRequested) {
-        await handleCancellation(
-          userId,
-          orderId,
-          status,
-          hold.holdId,
-          submission.externalOrderId
-        );
+        await handleCancellation(userId, orderId, status, hold.holdId, submission.externalOrderId);
         return { orderId, status };
       }
 
       // Poll order status with cancellation scope
       try {
         const pollResult = await CancellationScope.nonCancellable(async () => {
-          return pollOrderStatus(submission.externalOrderId);
+          return pollActivities.pollOrderStatus(orderId, submission.externalOrderId);
         });
 
-        // Update fills
-        if (pollResult.fills.length > status.fills.length) {
-          const newFills = pollResult.fills.slice(status.fills.length);
-          status.fills.push(...newFills);
+        // Handle fills
+        if (pollResult.status === "filled" && pollResult.filled) {
+          status.filledQuantity = pollResult.filled;
+          status.remainingQuantity = quantity - pollResult.filled;
+          status.averagePrice = pollResult.averagePrice;
+          status.totalCost = (pollResult.averagePrice ?? 0) * pollResult.filled;
 
-          // Calculate filled quantity and average price
-          status.filledQuantity = status.fills.reduce((sum, f) => sum + f.quantity, 0);
-          status.remainingQuantity = quantity - status.filledQuantity;
+          // Record the fill
+          await recordOrderFill(orderId, pollResult.filled, pollResult.averagePrice ?? 0, 0);
 
-          const totalValue = status.fills.reduce((sum, f) => sum + f.quantity * f.price, 0);
-          status.averagePrice = totalValue / status.filledQuantity;
-          status.totalCost = totalValue;
-
-          if (status.filledQuantity > 0 && status.filledQuantity < quantity) {
-            status.status = "partially_filled";
-          }
+          status.fills.push({
+            quantity: pollResult.filled,
+            price: pollResult.averagePrice ?? 0,
+            fee: 0,
+            timestamp: new Date().toISOString(),
+          });
         }
 
         // Check if order is complete
@@ -244,6 +315,8 @@ export async function orderExecutionWorkflow(
           if (pollResult.status === "rejected") {
             status.failureReason = pollResult.reason;
           }
+        } else if (pollResult.status === "partially_filled") {
+          status.status = "partially_filled";
         }
       } catch (error) {
         if (isCancellation(error)) {
@@ -256,6 +329,7 @@ export async function orderExecutionWorkflow(
       if (!orderComplete) {
         // Wait before next poll
         await sleep("5 seconds");
+        pollAttempts++;
       }
     }
 
@@ -263,29 +337,8 @@ export async function orderExecutionWorkflow(
     // Step 5: Settle order and update balances
     // =========================================================================
     if (status.status === "filled" || status.filledQuantity > 0) {
-      // Settle the filled portion
-      await settleOrder({
-        userId,
-        orderId,
-        assetId,
-        side,
-        filledQuantity: status.filledQuantity,
-        averagePrice: status.averagePrice!,
-        totalCost: status.totalCost!,
-      });
-
-      // Update Convex balances
-      await updateConvexBalances({
-        userId,
-        orderId,
-        assetId,
-        side,
-        quantity: status.filledQuantity,
-        price: status.averagePrice!,
-      });
-
       // Release unused hold
-      const usedAmount = status.totalCost!;
+      const usedAmount = status.totalCost ?? 0;
       const unusedHold = (status.holdAmount ?? 0) - usedAmount;
 
       if (unusedHold > 0) {
@@ -306,7 +359,7 @@ export async function orderExecutionWorkflow(
     // =========================================================================
     // Step 6: Record audit log
     // =========================================================================
-    await recordAuditLog({
+    await recordTradingAuditLog({
       userId,
       action: "order_completed",
       resourceType: "order",
@@ -334,7 +387,7 @@ export async function orderExecutionWorkflow(
       }
     }
 
-    await recordAuditLog({
+    await recordTradingAuditLog({
       userId,
       action: "order_failed",
       resourceType: "order",
@@ -346,26 +399,6 @@ export async function orderExecutionWorkflow(
 
     throw error;
   }
-}
-
-// Helper function to calculate estimated cost
-function calculateEstimatedCost(
-  side: "buy" | "sell",
-  orderType: "market" | "limit",
-  quantity: number,
-  limitPrice?: number
-): number {
-  if (side === "sell") {
-    return 0; // No funds needed for sell orders (will use position)
-  }
-
-  if (orderType === "limit" && limitPrice) {
-    return quantity * limitPrice;
-  }
-
-  // For market orders, estimate with a buffer
-  const estimatedPrice = 0.5; // Default for prediction markets (0-1 range)
-  return quantity * estimatedPrice * 1.1; // 10% buffer
 }
 
 // Helper function to handle order cancellation
@@ -380,7 +413,7 @@ async function handleCancellation(
 
   // Cancel on exchange if submitted
   if (externalOrderId) {
-    await cancelKalshiOrder(externalOrderId);
+    await cancelOrderOnExchange(externalOrderId);
   }
 
   // Release any unfilled hold
@@ -393,22 +426,9 @@ async function handleCancellation(
     }
   }
 
-  // Settle any partial fills
-  if (status.filledQuantity > 0) {
-    await settleOrder({
-      userId,
-      orderId,
-      assetId: "", // Will be filled from context
-      side: "buy",
-      filledQuantity: status.filledQuantity,
-      averagePrice: status.averagePrice!,
-      totalCost: status.totalCost!,
-    });
-  }
-
   await sendOrderNotification(userId, orderId, "cancelled");
 
-  await recordAuditLog({
+  await recordTradingAuditLog({
     userId,
     action: "order_cancelled",
     resourceType: "order",

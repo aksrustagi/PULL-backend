@@ -1,0 +1,305 @@
+name: Deploy Contracts
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: "Target network"
+        required: true
+        type: choice
+        options:
+          - polygon-amoy
+          - polygon-mainnet
+      contract:
+        description: "Contract to deploy"
+        required: true
+        type: choice
+        options:
+          - PullToken
+          - PullStaking
+          - all
+      verify:
+        description: "Verify on Polygonscan"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-contracts-${{ github.event.inputs.network }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9"
+
+jobs:
+  # ==========================================================================
+  # Pre-deployment Checks
+  # ==========================================================================
+  validate:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile contracts
+        run: pnpm --filter contracts compile
+
+      - name: Run contract tests
+        run: pnpm --filter contracts test
+
+      - name: Check deployment requirements
+        id: check
+        run: |
+          if [[ "${{ github.event.inputs.network }}" == "polygon-mainnet" ]]; then
+            echo "⚠️ MAINNET DEPLOYMENT REQUESTED"
+            echo "Requires manual approval"
+          fi
+          echo "proceed=true" >> $GITHUB_OUTPUT
+
+  # ==========================================================================
+  # Deploy to Testnet
+  # ==========================================================================
+  deploy-testnet:
+    name: Deploy to Testnet
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event.inputs.network == 'polygon-amoy'
+    environment:
+      name: testnet
+    outputs:
+      contract_address: ${{ steps.deploy.outputs.address }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy contract
+        id: deploy
+        run: |
+          cd contracts
+
+          CONTRACT="${{ github.event.inputs.contract }}"
+
+          if [[ "$CONTRACT" == "all" ]]; then
+            npx hardhat run scripts/deploy-all.ts --network polygon-amoy
+          else
+            npx hardhat run scripts/deploy-${CONTRACT}.ts --network polygon-amoy
+          fi
+
+          # Extract deployed address from output
+          ADDRESS=$(cat deployments/polygon-amoy/${CONTRACT}.json | jq -r '.address')
+          echo "address=$ADDRESS" >> $GITHUB_OUTPUT
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY_TESTNET }}
+          POLYGON_AMOY_RPC_URL: ${{ secrets.POLYGON_AMOY_RPC_URL }}
+
+      - name: Verify on Polygonscan
+        if: github.event.inputs.verify == 'true'
+        run: |
+          cd contracts
+          npx hardhat verify --network polygon-amoy ${{ steps.deploy.outputs.address }}
+        env:
+          POLYGONSCAN_API_KEY: ${{ secrets.POLYGONSCAN_API_KEY }}
+
+      - name: Update deployment records
+        run: |
+          echo "Contract deployed to testnet at: ${{ steps.deploy.outputs.address }}"
+
+          # Save deployment info
+          cat << EOF > deployments/polygon-amoy-latest.json
+          {
+            "network": "polygon-amoy",
+            "contract": "${{ github.event.inputs.contract }}",
+            "address": "${{ steps.deploy.outputs.address }}",
+            "deployer": "${{ github.actor }}",
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+
+      - name: Upload deployment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: testnet-deployment
+          path: |
+            contracts/deployments/
+            contracts/artifacts/
+
+  # ==========================================================================
+  # Deploy to Mainnet
+  # ==========================================================================
+  deploy-mainnet:
+    name: Deploy to Mainnet
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event.inputs.network == 'polygon-mainnet'
+    environment:
+      name: mainnet
+    outputs:
+      contract_address: ${{ steps.deploy.outputs.address }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Estimate gas costs
+        run: |
+          cd contracts
+          npx hardhat run scripts/estimate-gas.ts --network polygon-mainnet
+        env:
+          POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
+
+      - name: Deploy contract
+        id: deploy
+        run: |
+          cd contracts
+
+          CONTRACT="${{ github.event.inputs.contract }}"
+
+          if [[ "$CONTRACT" == "all" ]]; then
+            npx hardhat run scripts/deploy-all.ts --network polygon-mainnet
+          else
+            npx hardhat run scripts/deploy-${CONTRACT}.ts --network polygon-mainnet
+          fi
+
+          # Extract deployed address from output
+          ADDRESS=$(cat deployments/polygon-mainnet/${CONTRACT}.json | jq -r '.address')
+          echo "address=$ADDRESS" >> $GITHUB_OUTPUT
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY_MAINNET }}
+          POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
+
+      - name: Wait for confirmations
+        run: |
+          echo "Waiting for 20 block confirmations..."
+          sleep 60
+
+      - name: Verify on Polygonscan
+        if: github.event.inputs.verify == 'true'
+        run: |
+          cd contracts
+          npx hardhat verify --network polygon-mainnet ${{ steps.deploy.outputs.address }}
+        env:
+          POLYGONSCAN_API_KEY: ${{ secrets.POLYGONSCAN_API_KEY }}
+
+      - name: Update contract addresses config
+        run: |
+          # Update the contract addresses in the codebase
+          cat << EOF > packages/core/src/config/contracts.json
+          {
+            "polygon": {
+              "chainId": 137,
+              "contracts": {
+                "PullToken": "${{ steps.deploy.outputs.address }}",
+                "deployedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+              }
+            }
+          }
+          EOF
+
+      - name: Create deployment record
+        run: |
+          cat << EOF > deployments/polygon-mainnet-$(date +%Y%m%d-%H%M%S).json
+          {
+            "network": "polygon-mainnet",
+            "chainId": 137,
+            "contract": "${{ github.event.inputs.contract }}",
+            "address": "${{ steps.deploy.outputs.address }}",
+            "deployer": "${{ github.actor }}",
+            "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "commit": "${{ github.sha }}",
+            "verified": ${{ github.event.inputs.verify }}
+          }
+          EOF
+
+      - name: Upload deployment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainnet-deployment
+          path: |
+            contracts/deployments/
+            contracts/artifacts/
+
+      - name: Notify on success
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "Contract Deployed to Mainnet",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Contract Deployed to Polygon Mainnet* :white_check_mark:\n\nContract: `${{ github.event.inputs.contract }}`\nAddress: `${{ steps.deploy.outputs.address }}`\nVerified: ${{ github.event.inputs.verify }}\n\n<https://polygonscan.com/address/${{ steps.deploy.outputs.address }}|View on Polygonscan>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "Contract Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Contract Deployment Failed* :x:\n\nNetwork: `${{ github.event.inputs.network }}`\nContract: `${{ github.event.inputs.contract }}`\n\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
