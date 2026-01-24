@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { trpcServer } from "@hono/trpc-server";
 
-import { initSentry } from "./lib/sentry";
+import { initSentry, captureException } from "./lib/sentry";
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import {
@@ -25,7 +25,9 @@ import { kycRoutes } from "./routes/kyc";
 import { webhookRoutes } from "./routes/webhooks";
 import { signalsRoutes } from "./routes/signals";
 import { analyticsRoutes, experimentsRoutes } from "./routes/admin";
+import { adminRoutes } from "./routes/admin";
 import { portfolioAgentRoutes } from "./routes/portfolio-agent";
+import { docsRoutes } from "./routes/docs";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -89,6 +91,7 @@ app.use("/api/*", rateLimitMiddleware);
 app.route("/health", healthRoutes);
 app.route("/api/auth", authRoutes);
 app.route("/webhooks", webhookRoutes);
+app.route("/docs", docsRoutes);
 
 // Protected routes (require auth)
 app.use("/api/v1/*", authMiddleware);
@@ -106,6 +109,10 @@ app.route("/api/v1/portfolio-agent", portfolioAgentRoutes);
 app.use("/admin/*", authMiddleware);
 app.route("/admin/analytics", analyticsRoutes);
 app.route("/admin/experiments", experimentsRoutes);
+
+// Admin routes (require auth + admin role)
+app.use("/api/admin/*", authMiddleware);
+app.route("/api/admin", adminRoutes);
 
 // tRPC endpoint
 app.use(
@@ -134,7 +141,15 @@ app.notFound((c) => {
 
 // Error handler
 app.onError((err, c) => {
-  console.error(`[${c.get("requestId")}] Error:`, err);
+  const requestId = c.get("requestId");
+  console.error(`[${requestId}] Error:`, err);
+
+  // Capture error with Sentry
+  captureException(err, {
+    requestId,
+    path: c.req.path,
+    method: c.req.method,
+  });
 
   const status = "status" in err ? (err.status as number) : 500;
 
@@ -148,7 +163,7 @@ app.onError((err, c) => {
             ? "An unexpected error occurred"
             : err.message,
       },
-      requestId: c.get("requestId"),
+      requestId,
       timestamp: new Date().toISOString(),
     },
     status

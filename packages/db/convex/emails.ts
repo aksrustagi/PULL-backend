@@ -46,6 +46,42 @@ export const getEmails = query({
 });
 
 /**
+ * Get emails by user (simplified)
+ */
+export const getByUser = query({
+  args: {
+    userId: v.id("users"),
+    status: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let q = ctx.db
+      .query("emails")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId));
+
+    const emails = await q.order("desc").take(args.limit ?? 50);
+
+    if (args.status) {
+      return emails.filter(e => e.status === args.status);
+    }
+    return emails;
+  },
+});
+
+/**
+ * Get emails by thread ID
+ */
+export const getByThread = query({
+  args: { threadId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("emails")
+      .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
+      .collect();
+  },
+});
+
+/**
  * Get email by ID
  */
 export const getById = query({
@@ -384,6 +420,28 @@ export const deleteEmail = mutation({
     });
 
     return args.id;
+  },
+});
+
+/**
+ * Update email status (generic)
+ */
+export const updateStatus = mutation({
+  args: {
+    id: v.id("emails"),
+    status: v.union(
+      v.literal("unread"),
+      v.literal("read"),
+      v.literal("archived"),
+      v.literal("deleted"),
+      v.literal("snoozed")
+    ),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      status: args.status,
+      updatedAt: Date.now(),
+    });
   },
 });
 

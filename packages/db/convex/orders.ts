@@ -458,6 +458,7 @@ export const cancel = mutation({
 
 /**
  * Record a trade/fill
+ * Uses optimistic concurrency control with version field to detect concurrent modifications
  */
 export const recordTrade = mutation({
   args: {
@@ -576,7 +577,7 @@ export const recordTrade = mutation({
         }
 
         // Update or create position
-        let position = await ctx.db
+        const position = await ctx.db
           .query("positions")
           .withIndex("by_user_asset", (q) =>
             q
@@ -683,6 +684,7 @@ export const recordTrade = mutation({
           quantity: args.quantity,
           price: args.price,
           notionalValue,
+          version: currentVersion + 1,
         },
         timestamp: now,
       });
