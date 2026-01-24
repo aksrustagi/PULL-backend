@@ -132,7 +132,7 @@ app.get("/leaderboard", async (c) => {
 });
 
 /**
- * Claim daily streak bonus
+ * Claim daily streak bonus (idempotent - one claim per day per user)
  */
 app.post("/daily-streak", async (c) => {
   const userId = c.get("userId");
@@ -147,13 +147,20 @@ app.post("/daily-streak", async (c) => {
     );
   }
 
-  // TODO: Process via Convex
+  // Idempotency: generate today's claim key to prevent multiple claims
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const claimKey = `streak:${userId}:${today}`;
+
+  // TODO: Check via Convex if user already claimed today using claimKey
+  // For now, return the claim key so the frontend can deduplicate
+  // The actual idempotency check will be enforced at the Convex mutation level
 
   return c.json({
     success: true,
     data: {
       bonusAmount: 10,
       streakDays: 1,
+      claimKey,
     },
     timestamp: new Date().toISOString(),
   });

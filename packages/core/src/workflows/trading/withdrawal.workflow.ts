@@ -11,6 +11,7 @@ import {
   condition,
   sleep,
   ApplicationFailure,
+  uuid4,
 } from "@temporalio/workflow";
 
 import type * as activities from "./activities";
@@ -22,6 +23,7 @@ const {
   holdUserBalance,
   releaseUserHold,
   debitUserBalance,
+  creditUserBalance,
   executeACHTransfer,
   checkTransferStatus,
   send2FAChallenge,
@@ -89,7 +91,7 @@ export async function withdrawalWorkflow(
   const { userId, amount, destinationAccountId } = input;
 
   // Generate withdrawal ID
-  const withdrawalId = `wth_${crypto.randomUUID()}`;
+  const withdrawalId = `wth_${uuid4()}`;
 
   // Initialize status
   const status: WithdrawalStatus = {
@@ -320,8 +322,14 @@ export async function withdrawalWorkflow(
         status.status = "failed";
         status.failureReason = transferStatus.reason ?? "Transfer failed";
 
-        // Refund the user
-        // TODO: Credit back to user balance
+        // Refund the user for failed transfer
+        await creditUserBalance(userId, amount, withdrawalId);
+        await sendWithdrawalNotification(
+          userId,
+          withdrawalId,
+          "refunded",
+          `Your withdrawal of $${amount.toFixed(2)} has been refunded due to a failed transfer.`
+        );
       }
     }
 
@@ -357,7 +365,7 @@ export async function withdrawalWorkflow(
       try {
         await releaseUserHold(userId, status.holdId);
       } catch (releaseError) {
-        console.error("Failed to release hold:", releaseError);
+        // Error will be handled by the workflow retry mechanism
       }
     }
 

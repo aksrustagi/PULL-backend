@@ -1,12 +1,8 @@
 /**
  * Workflows
- * Export all workflow modules and shared utilities
+ * Export all workflow modules
  */
 
-// Shared utilities (config, errors, saga, observability, validation)
-export * from "./shared";
-
-// Domain workflows
 export * from "./kyc";
 export * from "./trading";
 export * from "./rwa";

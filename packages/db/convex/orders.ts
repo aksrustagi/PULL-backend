@@ -1,20 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+import { authenticatedQuery, authenticatedMutation, systemMutation } from "./lib/auth";
 
 /**
  * Order queries and mutations for PULL
  */
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-/**
- * Safely get the version of an order for optimistic concurrency control
- */
-function getOrderVersion(order: Record<string, unknown>): number {
-  return (order.version as number | undefined) ?? 0;
-}
 
 // ============================================================================
 // QUERIES
@@ -22,26 +13,30 @@ function getOrderVersion(order: Record<string, unknown>): number {
 
 /**
  * Get order by ID
+ * Only returns the order if it belongs to the authenticated user.
  */
-export const getById = query({
+export const getById = authenticatedQuery({
   args: { id: v.id("orders") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const order = await ctx.db.get(args.id);
+    if (!order) return null;
+    if (order.userId !== (ctx.userId as Id<"users">)) return null;
+    return order;
   },
 });
 
 /**
  * Get orders by user
  */
-export const getByUser = query({
+export const getByUser = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("orders")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .take(args.limit ?? 100);
   },
@@ -50,12 +45,13 @@ export const getByUser = query({
 /**
  * Get open orders for user
  */
-export const getOpenOrders = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
+export const getOpenOrders = authenticatedQuery({
+  args: {},
+  handler: async (ctx, _args) => {
+    const userId = ctx.userId as Id<"users">;
     const orders = await ctx.db
       .query("orders")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
     return orders.filter((o) =>
@@ -67,9 +63,8 @@ export const getOpenOrders = query({
 /**
  * Get orders by status
  */
-export const getByStatus = query({
+export const getByStatus = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     status: v.union(
       v.literal("pending"),
       v.literal("submitted"),
@@ -83,10 +78,11 @@ export const getByStatus = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("orders")
       .withIndex("by_user_status", (q) =>
-        q.eq("userId", args.userId).eq("status", args.status)
+        q.eq("userId", userId).eq("status", args.status)
       )
       .order("desc")
       .take(args.limit ?? 50);
@@ -96,9 +92,8 @@ export const getByStatus = query({
 /**
  * Get order history with filters
  */
-export const getOrderHistory = query({
+export const getOrderHistory = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     assetClass: v.optional(
       v.union(v.literal("crypto"), v.literal("prediction"), v.literal("rwa"))
     ),
@@ -109,9 +104,10 @@ export const getOrderHistory = query({
     offset: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     let orders = await ctx.db
       .query("orders")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .collect();
 
@@ -143,12 +139,15 @@ export const getOrderHistory = query({
 
 /**
  * Get order with fills
+ * Verifies the order belongs to the authenticated user.
  */
-export const getOrderWithFills = query({
+export const getOrderWithFills = authenticatedQuery({
   args: { orderId: v.id("orders") },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const order = await ctx.db.get(args.orderId);
     if (!order) return null;
+    if (order.userId !== userId) return null;
 
     const trades = await ctx.db
       .query("trades")
@@ -164,8 +163,9 @@ export const getOrderWithFills = query({
 
 /**
  * Get order by external ID
+ * System-only: used by internal services to look up orders by external ID.
  */
-export const getByExternalId = query({
+export const getByExternalId = systemMutation({
   args: { externalOrderId: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db
@@ -184,9 +184,8 @@ export const getByExternalId = query({
 /**
  * Create a new order
  */
-export const create = mutation({
+export const create = authenticatedMutation({
   args: {
-    userId: v.id("users"),
     clientOrderId: v.optional(v.string()),
     assetClass: v.union(
       v.literal("crypto"),
@@ -214,6 +213,7 @@ export const create = mutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
 
     // Validate order parameters
@@ -229,17 +229,25 @@ export const create = mutation({
       throw new Error("Stop orders require a stop price");
     }
 
+    // Market orders MUST have a price for buy orders to prevent $0 holds
+    if (args.type === "market" && args.side === "buy" && !args.price) {
+      throw new Error("Market buy orders require an estimated price");
+    }
+
     // Calculate estimated cost for buys
     let estimatedCost = 0;
     if (args.side === "buy") {
-      const priceToUse = args.price ?? args.stopPrice ?? 0;
+      const priceToUse = args.price ?? args.stopPrice;
+      if (!priceToUse || priceToUse <= 0) {
+        throw new Error("Buy orders require a valid price for fund holding");
+      }
       estimatedCost = args.quantity * priceToUse;
 
       // Check buying power
       const balance = await ctx.db
         .query("balances")
         .withIndex("by_user_asset", (q) =>
-          q.eq("userId", args.userId).eq("assetType", "usd").eq("assetId", "USD")
+          q.eq("userId", userId).eq("assetType", "usd").eq("assetId", "USD")
         )
         .unique();
 
@@ -254,12 +262,12 @@ export const create = mutation({
         updatedAt: now,
       });
     } else {
-      // For sells, check position
+      // For sells, check position AND lock it (prevent double-spend)
       const position = await ctx.db
         .query("positions")
         .withIndex("by_user_asset", (q) =>
           q
-            .eq("userId", args.userId)
+            .eq("userId", userId)
             .eq("assetClass", args.assetClass)
             .eq("symbol", args.symbol)
         )
@@ -268,10 +276,30 @@ export const create = mutation({
       if (!position || position.quantity < args.quantity) {
         throw new Error("Insufficient position to sell");
       }
+
+      // Check for existing open sell orders on this position to prevent double-spend
+      const openSellOrders = await ctx.db
+        .query("orders")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect();
+
+      const pendingSellQuantity = openSellOrders
+        .filter(
+          (o) =>
+            o.symbol === args.symbol &&
+            o.assetClass === args.assetClass &&
+            o.side === "sell" &&
+            ["pending", "submitted", "accepted", "partial_fill"].includes(o.status)
+        )
+        .reduce((sum, o) => sum + o.remainingQuantity, 0);
+
+      if (position.quantity - pendingSellQuantity < args.quantity) {
+        throw new Error("Insufficient available position (shares already committed to pending sell orders)");
+      }
     }
 
     const orderId = await ctx.db.insert("orders", {
-      userId: args.userId,
+      userId,
       clientOrderId: args.clientOrderId,
       assetClass: args.assetClass,
       symbol: args.symbol,
@@ -294,7 +322,7 @@ export const create = mutation({
 
     // Log audit
     await ctx.db.insert("auditLog", {
-      userId: args.userId,
+      userId,
       action: "order.created",
       resourceType: "orders",
       resourceId: orderId,
@@ -314,6 +342,7 @@ export const create = mutation({
 
 /**
  * Update order status
+ * System-only: called by the trading engine, not directly by users.
  */
 export const update = mutation({
   args: {
@@ -391,18 +420,24 @@ export const update = mutation({
 
 /**
  * Cancel order
+ * Verifies the order belongs to the authenticated user before cancelling.
  */
-export const cancel = mutation({
+export const cancel = authenticatedMutation({
   args: {
     id: v.id("orders"),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
 
     const order = await ctx.db.get(args.id);
     if (!order) {
       throw new Error("Order not found");
+    }
+
+    if (order.userId !== userId) {
+      throw new Error("Not authorized to cancel this order");
     }
 
     if (!["pending", "submitted", "accepted", "partial_fill"].includes(order.status)) {
@@ -458,6 +493,7 @@ export const cancel = mutation({
 
 /**
  * Record a trade/fill
+ * System-only: called by the trading engine, not directly by users.
  */
 export const recordTrade = mutation({
   args: {
@@ -467,231 +503,191 @@ export const recordTrade = mutation({
     price: v.number(),
     fee: v.number(),
     liquidity: v.union(v.literal("maker"), v.literal("taker")),
-    expectedVersion: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const MAX_RETRIES = 3;
-    let retryCount = 0;
 
-    while (retryCount < MAX_RETRIES) {
-      const order = await ctx.db.get(args.orderId);
-      if (!order) {
-        throw new Error("Order not found");
+    const order = await ctx.db.get(args.orderId);
+    if (!order) {
+      throw new Error("Order not found");
+    }
+
+    const notionalValue = args.quantity * args.price;
+
+    // Record the trade
+    const tradeId = await ctx.db.insert("trades", {
+      orderId: args.orderId,
+      userId: order.userId,
+      externalTradeId: args.externalTradeId,
+      symbol: order.symbol,
+      side: order.side,
+      quantity: args.quantity,
+      price: args.price,
+      notionalValue,
+      fee: args.fee,
+      feeCurrency: "USD",
+      liquidity: args.liquidity,
+      executedAt: now,
+      settlementStatus: "pending",
+    });
+
+    // Update order
+    const newFilledQuantity = order.filledQuantity + args.quantity;
+    const isFullyFilled = newFilledQuantity >= order.quantity;
+
+    // Calculate new average price
+    const totalFilled =
+      order.filledQuantity * (order.averageFilledPrice ?? 0) +
+      args.quantity * args.price;
+    const newAvgPrice = totalFilled / newFilledQuantity;
+
+    await ctx.db.patch(args.orderId, {
+      status: isFullyFilled ? "filled" : "partial_fill",
+      filledQuantity: newFilledQuantity,
+      remainingQuantity: order.quantity - newFilledQuantity,
+      averageFilledPrice: newAvgPrice,
+      fees: order.fees + args.fee,
+      filledAt: isFullyFilled ? now : undefined,
+      updatedAt: now,
+    });
+
+    // Update balances and positions
+    if (order.side === "buy") {
+      // Release hold and debit actual cost
+      const actualCost = notionalValue + args.fee;
+      const estimatedCost = args.quantity * (order.price ?? order.stopPrice ?? args.price);
+
+      const balance = await ctx.db
+        .query("balances")
+        .withIndex("by_user_asset", (q) =>
+          q
+            .eq("userId", order.userId)
+            .eq("assetType", "usd")
+            .eq("assetId", "USD")
+        )
+        .unique();
+
+      if (balance) {
+        const refund = Math.max(0, estimatedCost - actualCost);
+        await ctx.db.patch(balance._id, {
+          held: Math.max(0, balance.held - estimatedCost),
+          available: balance.available + refund,
+          updatedAt: now,
+        });
       }
 
-      // Initialize version if not present (for backwards compatibility)
-      const currentVersion = getOrderVersion(order as Record<string, unknown>);
+      // Update or create position
+      let position = await ctx.db
+        .query("positions")
+        .withIndex("by_user_asset", (q) =>
+          q
+            .eq("userId", order.userId)
+            .eq("assetClass", order.assetClass)
+            .eq("symbol", order.symbol)
+        )
+        .unique();
 
-      // If expectedVersion is provided, verify it matches
-      if (args.expectedVersion !== undefined && args.expectedVersion !== currentVersion) {
-        throw new Error(
-          `Concurrent modification detected. Expected version ${args.expectedVersion}, but found ${currentVersion}. Please retry with the latest version.`
-        );
+      if (position) {
+        const newQuantity = position.quantity + args.quantity;
+        const newCostBasis = position.costBasis + notionalValue;
+        const newAvgEntry = newCostBasis / newQuantity;
+
+        await ctx.db.patch(position._id, {
+          quantity: newQuantity,
+          averageEntryPrice: newAvgEntry,
+          costBasis: newCostBasis,
+          currentPrice: args.price,
+          unrealizedPnL:
+            newQuantity * args.price - newCostBasis,
+          updatedAt: now,
+        });
+      } else {
+        await ctx.db.insert("positions", {
+          userId: order.userId,
+          assetClass: order.assetClass,
+          symbol: order.symbol,
+          side: "long",
+          quantity: args.quantity,
+          averageEntryPrice: args.price,
+          currentPrice: args.price,
+          costBasis: notionalValue,
+          unrealizedPnL: 0,
+          realizedPnL: 0,
+          openedAt: now,
+          updatedAt: now,
+        });
+      }
+    } else {
+      // Sell - credit proceeds and reduce position
+      const proceeds = notionalValue - args.fee;
+
+      const balance = await ctx.db
+        .query("balances")
+        .withIndex("by_user_asset", (q) =>
+          q
+            .eq("userId", order.userId)
+            .eq("assetType", "usd")
+            .eq("assetId", "USD")
+        )
+        .unique();
+
+      if (balance) {
+        await ctx.db.patch(balance._id, {
+          available: balance.available + proceeds,
+          updatedAt: now,
+        });
       }
 
-      const notionalValue = args.quantity * args.price;
+      // Update position
+      const position = await ctx.db
+        .query("positions")
+        .withIndex("by_user_asset", (q) =>
+          q
+            .eq("userId", order.userId)
+            .eq("assetClass", order.assetClass)
+            .eq("symbol", order.symbol)
+        )
+        .unique();
 
-      // Record the trade
-      const tradeId = await ctx.db.insert("trades", {
+      if (position) {
+        const newQuantity = position.quantity - args.quantity;
+        const soldCostBasis =
+          (args.quantity / position.quantity) * position.costBasis;
+        const realizedPnL = notionalValue - soldCostBasis;
+
+        if (newQuantity <= 0) {
+          await ctx.db.delete(position._id);
+        } else {
+          await ctx.db.patch(position._id, {
+            quantity: newQuantity,
+            costBasis: position.costBasis - soldCostBasis,
+            currentPrice: args.price,
+            unrealizedPnL:
+              newQuantity * args.price -
+              (position.costBasis - soldCostBasis),
+            realizedPnL: position.realizedPnL + realizedPnL,
+            updatedAt: now,
+          });
+        }
+      }
+    }
+
+    await ctx.db.insert("auditLog", {
+      userId: order.userId,
+      action: "trade.executed",
+      resourceType: "trades",
+      resourceId: tradeId,
+      metadata: {
         orderId: args.orderId,
-        userId: order.userId,
-        externalTradeId: args.externalTradeId,
         symbol: order.symbol,
         side: order.side,
         quantity: args.quantity,
         price: args.price,
         notionalValue,
-        fee: args.fee,
-        feeCurrency: "USD",
-        liquidity: args.liquidity,
-        executedAt: now,
-        settlementStatus: "pending",
-      });
+      },
+      timestamp: now,
+    });
 
-      // Update order with version check
-      const newFilledQuantity = order.filledQuantity + args.quantity;
-      const isFullyFilled = newFilledQuantity >= order.quantity;
-
-      // Calculate new average price
-      const totalFilled =
-        order.filledQuantity * (order.averageFilledPrice ?? 0) +
-        args.quantity * args.price;
-      const newAvgPrice = totalFilled / newFilledQuantity;
-
-      // Re-fetch order to verify version hasn't changed during our processing
-      const orderCheck = await ctx.db.get(args.orderId);
-      if (!orderCheck) {
-        // Order was deleted during processing
-        throw new Error("Order was deleted during trade processing");
-      }
-
-      const checkVersion = getOrderVersion(orderCheck as Record<string, unknown>);
-      if (checkVersion !== currentVersion) {
-        // Version changed, another transaction modified the order
-        retryCount++;
-        if (retryCount >= MAX_RETRIES) {
-          throw new Error(
-            `Concurrent modification detected after ${MAX_RETRIES} retries. Order version changed from ${currentVersion} to ${checkVersion}. Please retry.`
-          );
-        }
-        // Continue to retry
-        continue;
-      }
-
-      await ctx.db.patch(args.orderId, {
-        status: isFullyFilled ? "filled" : "partial_fill",
-        filledQuantity: newFilledQuantity,
-        remainingQuantity: order.quantity - newFilledQuantity,
-        averageFilledPrice: newAvgPrice,
-        fees: order.fees + args.fee,
-        filledAt: isFullyFilled ? now : undefined,
-        updatedAt: now,
-        version: currentVersion + 1,
-      } as Record<string, unknown>);
-
-      // Update balances and positions
-      if (order.side === "buy") {
-        // Release hold and debit actual cost
-        const actualCost = notionalValue + args.fee;
-        const estimatedCost = args.quantity * (order.price ?? order.stopPrice ?? args.price);
-
-        const balance = await ctx.db
-          .query("balances")
-          .withIndex("by_user_asset", (q) =>
-            q
-              .eq("userId", order.userId)
-              .eq("assetType", "usd")
-              .eq("assetId", "USD")
-          )
-          .unique();
-
-        if (balance) {
-          const refund = Math.max(0, estimatedCost - actualCost);
-          await ctx.db.patch(balance._id, {
-            held: Math.max(0, balance.held - estimatedCost),
-            available: balance.available + refund,
-            updatedAt: now,
-          });
-        }
-
-        // Update or create position
-        let position = await ctx.db
-          .query("positions")
-          .withIndex("by_user_asset", (q) =>
-            q
-              .eq("userId", order.userId)
-              .eq("assetClass", order.assetClass)
-              .eq("symbol", order.symbol)
-          )
-          .unique();
-
-        if (position) {
-          const newQuantity = position.quantity + args.quantity;
-          const newCostBasis = position.costBasis + notionalValue;
-          const newAvgEntry = newCostBasis / newQuantity;
-
-          await ctx.db.patch(position._id, {
-            quantity: newQuantity,
-            averageEntryPrice: newAvgEntry,
-            costBasis: newCostBasis,
-            currentPrice: args.price,
-            unrealizedPnL:
-              newQuantity * args.price - newCostBasis,
-            updatedAt: now,
-          });
-        } else {
-          await ctx.db.insert("positions", {
-            userId: order.userId,
-            assetClass: order.assetClass,
-            symbol: order.symbol,
-            side: "long",
-            quantity: args.quantity,
-            averageEntryPrice: args.price,
-            currentPrice: args.price,
-            costBasis: notionalValue,
-            unrealizedPnL: 0,
-            realizedPnL: 0,
-            openedAt: now,
-            updatedAt: now,
-          });
-        }
-      } else {
-        // Sell - credit proceeds and reduce position
-        const proceeds = notionalValue - args.fee;
-
-        const balance = await ctx.db
-          .query("balances")
-          .withIndex("by_user_asset", (q) =>
-            q
-              .eq("userId", order.userId)
-              .eq("assetType", "usd")
-              .eq("assetId", "USD")
-          )
-          .unique();
-
-        if (balance) {
-          await ctx.db.patch(balance._id, {
-            available: balance.available + proceeds,
-            updatedAt: now,
-          });
-        }
-
-        // Update position
-        const position = await ctx.db
-          .query("positions")
-          .withIndex("by_user_asset", (q) =>
-            q
-              .eq("userId", order.userId)
-              .eq("assetClass", order.assetClass)
-              .eq("symbol", order.symbol)
-          )
-          .unique();
-
-        if (position) {
-          const newQuantity = position.quantity - args.quantity;
-          const soldCostBasis =
-            (args.quantity / position.quantity) * position.costBasis;
-          const realizedPnL = notionalValue - soldCostBasis;
-
-          if (newQuantity <= 0) {
-            await ctx.db.delete(position._id);
-          } else {
-            await ctx.db.patch(position._id, {
-              quantity: newQuantity,
-              costBasis: position.costBasis - soldCostBasis,
-              currentPrice: args.price,
-              unrealizedPnL:
-                newQuantity * args.price -
-                (position.costBasis - soldCostBasis),
-              realizedPnL: position.realizedPnL + realizedPnL,
-              updatedAt: now,
-            });
-          }
-        }
-      }
-
-      await ctx.db.insert("auditLog", {
-        userId: order.userId,
-        action: "trade.executed",
-        resourceType: "trades",
-        resourceId: tradeId,
-        metadata: {
-          orderId: args.orderId,
-          symbol: order.symbol,
-          side: order.side,
-          quantity: args.quantity,
-          price: args.price,
-          notionalValue,
-        },
-        timestamp: now,
-      });
-
-      // Successfully processed, break out of retry loop
-      return tradeId;
-    }
-
-    // Should never reach here due to MAX_RETRIES check in loop
-    throw new Error("Failed to record trade after maximum retries");
+    return tradeId;
   },
 });

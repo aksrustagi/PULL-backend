@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+import { authenticatedQuery, authenticatedMutation, systemMutation, adminMutation } from "./lib/auth";
 
 /**
  * Balance queries and mutations for PULL
@@ -10,24 +12,24 @@ import { mutation, query } from "./_generated/server";
 // ============================================================================
 
 /**
- * Get all balances for a user
+ * Get all balances for the authenticated user
  */
-export const getByUser = query({
-  args: { userId: v.id("users") },
+export const getByUser = authenticatedQuery({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("balances")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
   },
 });
 
 /**
- * Get balance by user and asset
+ * Get balance by authenticated user and asset
  */
-export const getByUserAndAsset = query({
+export const getByUserAndAsset = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     assetType: v.union(
       v.literal("usd"),
       v.literal("crypto"),
@@ -39,11 +41,12 @@ export const getByUserAndAsset = query({
     assetId: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("balances")
       .withIndex("by_user_asset", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", userId)
           .eq("assetType", args.assetType)
           .eq("assetId", args.assetId)
       )
@@ -52,15 +55,16 @@ export const getByUserAndAsset = query({
 });
 
 /**
- * Get USD buying power
+ * Get USD buying power for the authenticated user
  */
-export const getBuyingPower = query({
-  args: { userId: v.id("users") },
+export const getBuyingPower = authenticatedQuery({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const usdBalance = await ctx.db
       .query("balances")
       .withIndex("by_user_asset", (q) =>
-        q.eq("userId", args.userId).eq("assetType", "usd").eq("assetId", "USD")
+        q.eq("userId", userId).eq("assetType", "usd").eq("assetId", "USD")
       )
       .unique();
 
@@ -74,19 +78,20 @@ export const getBuyingPower = query({
 });
 
 /**
- * Get portfolio summary
+ * Get portfolio summary for the authenticated user
  */
-export const getPortfolioSummary = query({
-  args: { userId: v.id("users") },
+export const getPortfolioSummary = authenticatedQuery({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const balances = await ctx.db
       .query("balances")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
     const positions = await ctx.db
       .query("positions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
     // Calculate totals by asset type
@@ -134,13 +139,13 @@ export const getPortfolioSummary = query({
 });
 
 // ============================================================================
-// MUTATIONS
+// SYSTEM MUTATIONS (trading engine / webhooks)
 // ============================================================================
 
 /**
- * Credit balance (add funds)
+ * Credit balance (add funds) - system only
  */
-export const credit = mutation({
+export const credit = systemMutation({
   args: {
     userId: v.id("users"),
     assetType: v.union(
@@ -213,9 +218,9 @@ export const credit = mutation({
 });
 
 /**
- * Debit balance (remove funds)
+ * Debit balance (remove funds) - system only
  */
-export const debit = mutation({
+export const debit = systemMutation({
   args: {
     userId: v.id("users"),
     assetType: v.union(
@@ -280,9 +285,9 @@ export const debit = mutation({
 });
 
 /**
- * Place hold on balance
+ * Place hold on balance - system only
  */
-export const hold = mutation({
+export const hold = systemMutation({
   args: {
     userId: v.id("users"),
     assetType: v.union(
@@ -348,9 +353,9 @@ export const hold = mutation({
 });
 
 /**
- * Release hold on balance
+ * Release hold on balance - system only
  */
-export const releaseHold = mutation({
+export const releaseHold = systemMutation({
   args: {
     userId: v.id("users"),
     assetType: v.union(
@@ -423,48 +428,9 @@ export const releaseHold = mutation({
 });
 
 /**
- * Record deposit
+ * Complete deposit - system only (called by payment webhook)
  */
-export const recordDeposit = mutation({
-  args: {
-    userId: v.id("users"),
-    method: v.union(
-      v.literal("bank_transfer"),
-      v.literal("wire"),
-      v.literal("crypto"),
-      v.literal("card")
-    ),
-    amount: v.number(),
-    currency: v.string(),
-    fee: v.number(),
-    externalId: v.optional(v.string()),
-    txHash: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const netAmount = args.amount - args.fee;
-
-    const depositId = await ctx.db.insert("deposits", {
-      userId: args.userId,
-      method: args.method,
-      status: "pending",
-      amount: args.amount,
-      currency: args.currency,
-      fee: args.fee,
-      netAmount,
-      externalId: args.externalId,
-      txHash: args.txHash,
-      createdAt: now,
-    });
-
-    return depositId;
-  },
-});
-
-/**
- * Complete deposit
- */
-export const completeDeposit = mutation({
+export const completeDeposit = systemMutation({
   args: {
     depositId: v.id("deposits"),
   },
@@ -476,11 +442,16 @@ export const completeDeposit = mutation({
       throw new Error("Deposit not found");
     }
 
-    if (deposit.status !== "pending" && deposit.status !== "processing") {
-      throw new Error("Deposit cannot be completed");
+    if (deposit.status === "completed") {
+      // Idempotent: if already completed, return success without double-crediting
+      return { success: true, alreadyCompleted: true };
     }
 
-    // Update deposit status
+    if (deposit.status !== "pending" && deposit.status !== "processing") {
+      throw new Error("Deposit cannot be completed from status: " + deposit.status);
+    }
+
+    // Update deposit status atomically (Convex serializable isolation prevents double-complete)
     await ctx.db.patch(args.depositId, {
       status: "completed",
       completedAt: now,
@@ -528,12 +499,54 @@ export const completeDeposit = mutation({
   },
 });
 
+// ============================================================================
+// AUTHENTICATED MUTATIONS (user-facing)
+// ============================================================================
+
 /**
- * Record withdrawal request
+ * Record deposit - authenticated user only
  */
-export const recordWithdrawal = mutation({
+export const recordDeposit = authenticatedMutation({
   args: {
-    userId: v.id("users"),
+    method: v.union(
+      v.literal("bank_transfer"),
+      v.literal("wire"),
+      v.literal("crypto"),
+      v.literal("card")
+    ),
+    amount: v.number(),
+    currency: v.string(),
+    fee: v.number(),
+    externalId: v.optional(v.string()),
+    txHash: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+    const now = Date.now();
+    const netAmount = args.amount - args.fee;
+
+    const depositId = await ctx.db.insert("deposits", {
+      userId,
+      method: args.method,
+      status: "pending",
+      amount: args.amount,
+      currency: args.currency,
+      fee: args.fee,
+      netAmount,
+      externalId: args.externalId,
+      txHash: args.txHash,
+      createdAt: now,
+    });
+
+    return depositId;
+  },
+});
+
+/**
+ * Record withdrawal request - authenticated user only
+ */
+export const recordWithdrawal = authenticatedMutation({
+  args: {
     method: v.union(
       v.literal("bank_transfer"),
       v.literal("wire"),
@@ -545,6 +558,7 @@ export const recordWithdrawal = mutation({
     destination: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
     const netAmount = args.amount - args.fee;
 
@@ -553,7 +567,7 @@ export const recordWithdrawal = mutation({
       .query("balances")
       .withIndex("by_user_asset", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", userId)
           .eq("assetType", "usd")
           .eq("assetId", "USD")
       )
@@ -571,7 +585,7 @@ export const recordWithdrawal = mutation({
     });
 
     const withdrawalId = await ctx.db.insert("withdrawals", {
-      userId: args.userId,
+      userId,
       method: args.method,
       status: "pending",
       amount: args.amount,
@@ -583,7 +597,7 @@ export const recordWithdrawal = mutation({
     });
 
     await ctx.db.insert("auditLog", {
-      userId: args.userId,
+      userId,
       action: "withdrawal.requested",
       resourceType: "withdrawals",
       resourceId: withdrawalId,
@@ -595,10 +609,14 @@ export const recordWithdrawal = mutation({
   },
 });
 
+// ============================================================================
+// ADMIN MUTATIONS
+// ============================================================================
+
 /**
  * Reconcile balance (admin only)
  */
-export const reconcile = mutation({
+export const reconcile = adminMutation({
   args: {
     userId: v.id("users"),
     assetType: v.union(

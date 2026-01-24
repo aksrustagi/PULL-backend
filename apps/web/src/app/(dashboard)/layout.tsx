@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@pull/ui/lib/utils";
@@ -86,6 +87,15 @@ const navigation = [
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const stored = localStorage.getItem("pull-auth");
+    const token = stored ? JSON.parse(stored)?.state?.token : null;
+    if (!token) {
+      router.replace("/login");
+    }
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-background">

@@ -1,5 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { authenticatedQuery, authenticatedMutation, systemMutation } from "./lib/auth";
+import { Id } from "./_generated/dataModel";
 
 /**
  * Points/Rewards queries and mutations for PULL
@@ -12,14 +14,16 @@ import { mutation, query } from "./_generated/server";
 /**
  * Get points balance for user
  */
-export const getBalance = query({
-  args: { userId: v.id("users") },
+export const getBalance = authenticatedQuery({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+
     const balance = await ctx.db
       .query("balances")
       .withIndex("by_user_asset", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", userId)
           .eq("assetType", "points")
           .eq("assetId", "PULL_POINTS")
       )
@@ -28,7 +32,7 @@ export const getBalance = query({
     // Get lifetime earned
     const transactions = await ctx.db
       .query("pointsTransactions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
     const lifetimeEarned = transactions
@@ -57,21 +61,22 @@ export const getBalance = query({
 /**
  * Get points transaction history
  */
-export const getTransactions = query({
+export const getTransactions = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     type: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+
     let query = ctx.db.query("pointsTransactions");
 
     if (args.type) {
       query = query.withIndex("by_user_type", (q) =>
-        q.eq("userId", args.userId).eq("type", args.type!)
+        q.eq("userId", userId).eq("type", args.type!)
       );
     } else {
-      query = query.withIndex("by_user", (q) => q.eq("userId", args.userId));
+      query = query.withIndex("by_user", (q) => q.eq("userId", userId));
     }
 
     return await query.order("desc").take(args.limit ?? 50);
@@ -163,7 +168,7 @@ export const getRewards = query({
 /**
  * Earn points
  */
-export const earnPoints = mutation({
+export const earnPoints = systemMutation({
   args: {
     userId: v.id("users"),
     amount: v.number(),
@@ -240,14 +245,14 @@ export const earnPoints = mutation({
 /**
  * Redeem points for a reward
  */
-export const redeemPoints = mutation({
+export const redeemPoints = authenticatedMutation({
   args: {
-    userId: v.id("users"),
     rewardId: v.id("rewards"),
     quantity: v.optional(v.number()),
     shippingAddress: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
     const quantity = args.quantity ?? 1;
 
@@ -268,7 +273,7 @@ export const redeemPoints = mutation({
       .query("balances")
       .withIndex("by_user_asset", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", userId)
           .eq("assetType", "points")
           .eq("assetId", "PULL_POINTS")
       )
@@ -298,7 +303,7 @@ export const redeemPoints = mutation({
 
     // Create redemption record
     const redemptionId = await ctx.db.insert("redemptions", {
-      userId: args.userId,
+      userId,
       rewardId: args.rewardId,
       rewardName: reward.name,
       pointsSpent: totalCost,
@@ -312,7 +317,7 @@ export const redeemPoints = mutation({
     // Record points transaction
     const newBalance = balance.available - totalCost;
     await ctx.db.insert("pointsTransactions", {
-      userId: args.userId,
+      userId,
       type: "redeem_reward",
       amount: -totalCost,
       balance: newBalance,
@@ -325,7 +330,7 @@ export const redeemPoints = mutation({
     });
 
     await ctx.db.insert("auditLog", {
-      userId: args.userId,
+      userId,
       action: "points.redeemed",
       resourceType: "redemptions",
       resourceId: redemptionId,
@@ -345,7 +350,7 @@ export const redeemPoints = mutation({
 /**
  * Award referral bonus
  */
-export const awardReferralBonus = mutation({
+export const awardReferralBonus = systemMutation({
   args: {
     referrerId: v.id("users"),
     referredUserId: v.id("users"),
@@ -398,11 +403,10 @@ export const awardReferralBonus = mutation({
 /**
  * Process daily streak
  */
-export const processDailyStreak = mutation({
-  args: {
-    userId: v.id("users"),
-  },
+export const processDailyStreak = authenticatedMutation({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
     const today = new Date(now).toDateString();
 
@@ -410,7 +414,7 @@ export const processDailyStreak = mutation({
     const recentTx = await ctx.db
       .query("pointsTransactions")
       .withIndex("by_user_type", (q) =>
-        q.eq("userId", args.userId).eq("type", "earn_streak")
+        q.eq("userId", userId).eq("type", "earn_streak")
       )
       .order("desc")
       .first();
@@ -433,7 +437,7 @@ export const processDailyStreak = mutation({
       .query("balances")
       .withIndex("by_user_asset", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", userId)
           .eq("assetType", "points")
           .eq("assetId", "PULL_POINTS")
       )
@@ -449,7 +453,7 @@ export const processDailyStreak = mutation({
     const newBalance = (balance?.available ?? 0) + bonusAmount;
 
     await ctx.db.insert("pointsTransactions", {
-      userId: args.userId,
+      userId,
       type: "earn_streak",
       amount: bonusAmount,
       balance: newBalance,

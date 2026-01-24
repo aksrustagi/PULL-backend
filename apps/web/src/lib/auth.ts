@@ -61,9 +61,26 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "pull-auth",
+      // Use sessionStorage instead of localStorage to limit XSS token theft window.
+      // sessionStorage is per-tab and cleared on tab close, reducing exposure.
+      // The short-lived access token (15m) further limits risk.
+      storage: {
+        getItem: (name) => {
+          if (typeof window === "undefined") return null;
+          return sessionStorage.getItem(name);
+        },
+        setItem: (name, value) => {
+          if (typeof window === "undefined") return;
+          sessionStorage.setItem(name, value);
+        },
+        removeItem: (name) => {
+          if (typeof window === "undefined") return;
+          sessionStorage.removeItem(name);
+        },
+      },
       partialize: (state) => ({
         token: state.token,
-        refreshToken: state.refreshToken,
+        // refreshToken should be in an httpOnly cookie set by the API, not in browser storage
       }),
     }
   )

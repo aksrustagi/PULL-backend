@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { authenticatedQuery, authenticatedMutation, adminMutation, systemMutation } from "./lib/auth";
 
 /**
  * User queries and mutations for PULL
@@ -11,17 +12,18 @@ import { Id } from "./_generated/dataModel";
 // ============================================================================
 
 /**
- * Get user by ID
+ * Get current user's profile by their authenticated identity
  */
-export const getById = query({
-  args: { id: v.id("users") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+export const getById = authenticatedQuery({
+  args: {},
+  handler: async (ctx) => {
+    const userId = ctx.userId as Id<"users">;
+    return await ctx.db.get(userId);
   },
 });
 
 /**
- * Get user by email
+ * Get user by email (used by API auth route during login)
  */
 export const getByEmail = query({
   args: { email: v.string() },
@@ -34,7 +36,7 @@ export const getByEmail = query({
 });
 
 /**
- * Get user by wallet address
+ * Get user by wallet address (used by API auth route)
  */
 export const getByWalletAddress = query({
   args: { walletAddress: v.string() },
@@ -49,7 +51,7 @@ export const getByWalletAddress = query({
 });
 
 /**
- * Get user by username
+ * Get user by username (public profile lookup)
  */
 export const getByUsername = query({
   args: { username: v.string() },
@@ -64,7 +66,7 @@ export const getByUsername = query({
 });
 
 /**
- * Get user by referral code
+ * Get user by referral code (public, used during signup)
  */
 export const getByReferralCode = query({
   args: { referralCode: v.string() },
@@ -79,26 +81,27 @@ export const getByReferralCode = query({
 });
 
 /**
- * Get user profile with extended data
+ * Get authenticated user's profile with extended data
  */
-export const getProfile = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+export const getProfile = authenticatedQuery({
+  args: {},
+  handler: async (ctx) => {
+    const userId = ctx.userId as Id<"users">;
+    const user = await ctx.db.get(userId);
     if (!user) return null;
 
     // Get referral count
     const referrals = await ctx.db
       .query("users")
       .withIndex("by_status")
-      .filter((q) => q.eq(q.field("referredBy"), args.userId))
+      .filter((q) => q.eq(q.field("referredBy"), userId))
       .collect();
 
     // Get points balance
     const pointsBalance = await ctx.db
       .query("balances")
       .withIndex("by_user_asset", (q) =>
-        q.eq("userId", args.userId).eq("assetType", "points").eq("assetId", "PULL_POINTS")
+        q.eq("userId", userId).eq("assetType", "points").eq("assetId", "PULL_POINTS")
       )
       .unique();
 
@@ -111,9 +114,9 @@ export const getProfile = query({
 });
 
 /**
- * Search users by display name
+ * Search users by display name (authenticated users only)
  */
-export const search = query({
+export const search = authenticatedQuery({
   args: {
     query: v.string(),
     status: v.optional(v.string()),
@@ -139,21 +142,25 @@ export const search = query({
 });
 
 /**
- * List users with pagination
+ * List users with pagination (admin only)
  */
-export const list = query({
+export const list = adminMutation({
   args: {
-    status: v.optional(v.string()),
+    status: v.optional(v.union(
+      v.literal("active"),
+      v.literal("inactive"),
+      v.literal("suspended"),
+      v.literal("closed")
+    )),
     limit: v.optional(v.number()),
-    cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 50;
+    const limit = Math.min(args.limit ?? 50, 100); // Cap at 100
 
     let query = ctx.db.query("users");
     if (args.status) {
       query = query.withIndex("by_status", (q) =>
-        q.eq("status", args.status as "active")
+        q.eq("status", args.status!)
       );
     }
 
@@ -164,7 +171,6 @@ export const list = query({
     return {
       users,
       hasMore,
-      nextCursor: hasMore ? users[users.length - 1]?._id : undefined,
     };
   },
 });
@@ -174,7 +180,7 @@ export const list = query({
 // ============================================================================
 
 /**
- * Create a new user
+ * Create a new user (called during signup flow before user has auth token)
  */
 export const create = mutation({
   args: {
@@ -273,11 +279,10 @@ export const create = mutation({
 });
 
 /**
- * Update user profile
+ * Update authenticated user's profile (users can only update their own profile)
  */
-export const update = mutation({
+export const update = authenticatedMutation({
   args: {
-    id: v.id("users"),
     displayName: v.optional(v.string()),
     username: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
@@ -292,13 +297,15 @@ export const update = mutation({
     addressLine2: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { id, ...updates } = args;
+    const id = ctx.userId as Id<"users">;
     const now = Date.now();
 
     const user = await ctx.db.get(id);
     if (!user) {
       throw new Error("User not found");
     }
+
+    const updates = { ...args };
 
     // Check username uniqueness if being updated
     if (updates.username) {
@@ -334,9 +341,9 @@ export const update = mutation({
 });
 
 /**
- * Update KYC status
+ * Update KYC status (system/webhook use only)
  */
-export const updateKYCStatus = mutation({
+export const updateKYCStatus = systemMutation({
   args: {
     id: v.id("users"),
     kycStatus: v.union(
@@ -396,9 +403,9 @@ export const updateKYCStatus = mutation({
 });
 
 /**
- * Verify email
+ * Verify email (system use only - called by verification process)
  */
-export const verifyEmail = mutation({
+export const verifyEmail = systemMutation({
   args: { id: v.id("users") },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -427,14 +434,14 @@ export const verifyEmail = mutation({
 });
 
 /**
- * Connect wallet address
+ * Connect wallet address (authenticated users connect their own wallet)
  */
-export const connectWallet = mutation({
+export const connectWallet = authenticatedMutation({
   args: {
-    id: v.id("users"),
     walletAddress: v.string(),
   },
   handler: async (ctx, args) => {
+    const id = ctx.userId as Id<"users">;
     const now = Date.now();
 
     // Check if wallet is already connected to another user
@@ -445,32 +452,32 @@ export const connectWallet = mutation({
       )
       .unique();
 
-    if (existing && existing._id !== args.id) {
+    if (existing && existing._id !== id) {
       throw new Error("Wallet already connected to another account");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch(id, {
       walletAddress: args.walletAddress.toLowerCase(),
       updatedAt: now,
     });
 
     await ctx.db.insert("auditLog", {
-      userId: args.id,
+      userId: id,
       action: "user.wallet_connected",
       resourceType: "users",
-      resourceId: args.id,
+      resourceId: id,
       metadata: { walletAddress: args.walletAddress.toLowerCase() },
       timestamp: now,
     });
 
-    return args.id;
+    return id;
   },
 });
 
 /**
- * Update last login timestamp
+ * Update last login timestamp (system use only - called by API auth route)
  */
-export const updateLastLogin = mutation({
+export const updateLastLogin = systemMutation({
   args: { id: v.id("users") },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -483,9 +490,9 @@ export const updateLastLogin = mutation({
 });
 
 /**
- * Suspend user
+ * Suspend user (admin only)
  */
-export const suspend = mutation({
+export const suspend = adminMutation({
   args: {
     id: v.id("users"),
     reason: v.optional(v.string()),
@@ -518,8 +525,11 @@ export const suspend = mutation({
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
+  // Use crypto.getRandomValues for unpredictable referral codes
+  const randomBytes = new Uint8Array(8);
+  crypto.getRandomValues(randomBytes);
   for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomBytes[i] % chars.length);
   }
   return code;
 }

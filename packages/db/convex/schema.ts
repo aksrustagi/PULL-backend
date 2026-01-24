@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 /**
  * PULL Super App - Convex Database Schema
- * 42 tables covering all platform features including Social Trading Graph
+ * 26 tables covering all platform features
  */
 export default defineSchema({
   // ============================================================================
@@ -110,73 +110,42 @@ export default defineSchema({
     .index("by_provider", ["provider", "providerAccountId"]),
 
   /**
-   * KYC Records - Comprehensive KYC verification records
+   * KYC Records - Identity verification history
    */
   kycRecords: defineTable({
     userId: v.id("users"),
-
-    // Tier tracking
-    currentTier: v.union(
-      v.literal("none"),
-      v.literal("basic"),
-      v.literal("enhanced"),
-      v.literal("accredited")
+    type: v.union(
+      v.literal("identity"),
+      v.literal("address"),
+      v.literal("background"),
+      v.literal("wallet_screening")
     ),
-    targetTier: v.union(
-      v.literal("basic"),
-      v.literal("enhanced"),
-      v.literal("accredited")
-    ),
+    provider: v.string(),
+    externalId: v.string(),
     status: v.union(
       v.literal("pending"),
       v.literal("in_progress"),
-      v.literal("approved"),
-      v.literal("rejected"),
+      v.literal("completed"),
+      v.literal("failed"),
       v.literal("expired")
     ),
-
-    // Sumsub
-    sumsubApplicantId: v.optional(v.string()),
-    sumsubReviewStatus: v.optional(v.string()),
-    sumsubReviewResult: v.optional(v.string()),
-    sumsubCompletedAt: v.optional(v.number()),
-
-    // Checkr
-    checkrCandidateId: v.optional(v.string()),
-    checkrReportId: v.optional(v.string()),
-    checkrStatus: v.optional(v.string()),
-    checkrResult: v.optional(v.string()),
-    checkrCompletedAt: v.optional(v.number()),
-
-    // Parallel Markets
-    parallelRequestId: v.optional(v.string()),
-    accreditationStatus: v.optional(v.string()),
-    accreditationMethod: v.optional(v.string()),
-    accreditationExpiresAt: v.optional(v.number()),
-
-    // Plaid
-    plaidItemId: v.optional(v.string()),
-    plaidAccessToken: v.optional(v.string()),
-    plaidAccountId: v.optional(v.string()),
-    bankLinked: v.boolean(),
-
-    // Sanctions
-    sanctionsScreeningId: v.optional(v.string()),
-    sanctionsResult: v.optional(v.string()),
-    sanctionsRiskScore: v.optional(v.number()),
-
-    // Metadata
-    rejectionReason: v.optional(v.string()),
-    workflowId: v.optional(v.string()),
-    startedAt: v.number(),
-    completedAt: v.optional(v.number()),
+    result: v.optional(
+      v.union(v.literal("pass"), v.literal("fail"), v.literal("review"))
+    ),
+    riskScore: v.optional(v.number()),
+    data: v.optional(v.object({
+      verificationResult: v.optional(v.string()),
+      documentType: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      rawResponse: v.optional(v.string()),
+    })),
     expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
-    .index("by_status", ["status"])
-    .index("by_sumsub", ["sumsubApplicantId"])
-    .index("by_checkr", ["checkrReportId"])
-    .index("by_parallel", ["parallelRequestId"]),
+    .index("by_type", ["userId", "type"])
+    .index("by_external", ["provider", "externalId"]),
 
   // ============================================================================
   // FINANCIAL TABLES
@@ -249,8 +218,12 @@ export default defineSchema({
     ),
     fees: v.number(),
     feeCurrency: v.string(),
-    version: v.optional(v.number()), // For optimistic concurrency control
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      source: v.optional(v.string()),
+      exchange: v.optional(v.string()),
+      cancellationReason: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
     expiresAt: v.optional(v.number()),
     submittedAt: v.optional(v.number()),
     filledAt: v.optional(v.number()),
@@ -338,7 +311,11 @@ export default defineSchema({
     netAmount: v.number(),
     externalId: v.optional(v.string()),
     txHash: v.optional(v.string()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      provider: v.optional(v.string()),
+      processorId: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })
@@ -369,7 +346,11 @@ export default defineSchema({
     destination: v.string(),
     externalId: v.optional(v.string()),
     txHash: v.optional(v.string()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      provider: v.optional(v.string()),
+      processorId: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })
@@ -492,7 +473,13 @@ export default defineSchema({
     year: v.optional(v.number()),
 
     verificationDocuments: v.array(v.string()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      condition: v.optional(v.string()),
+      edition: v.optional(v.string()),
+      language: v.optional(v.string()),
+      marketPrice: v.optional(v.number()),
+      notes: v.optional(v.string()),
+    })),
     verifiedAt: v.optional(v.number()),
     listedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -769,8 +756,20 @@ export default defineSchema({
       v.literal("failed")
     ),
     fulfillmentType: v.string(),
-    fulfillmentDetails: v.optional(v.any()),
-    shippingAddress: v.optional(v.any()),
+    fulfillmentDetails: v.optional(v.object({
+      code: v.optional(v.string()),
+      url: v.optional(v.string()),
+      instructions: v.optional(v.string()),
+    })),
+    shippingAddress: v.optional(v.object({
+      name: v.string(),
+      line1: v.string(),
+      line2: v.optional(v.string()),
+      city: v.string(),
+      state: v.string(),
+      postalCode: v.string(),
+      country: v.string(),
+    })),
     trackingNumber: v.optional(v.string()),
     notes: v.optional(v.string()),
     redeemedAt: v.number(),
@@ -802,7 +801,12 @@ export default defineSchema({
     blockNumber: v.optional(v.number()),
     gasUsed: v.optional(v.number()),
     fee: v.optional(v.number()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      network: v.optional(v.string()),
+      contractAddress: v.optional(v.string()),
+      method: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
     createdAt: v.number(),
     confirmedAt: v.optional(v.number()),
   })
@@ -846,6 +850,8 @@ export default defineSchema({
     action: v.string(),
     resourceType: v.string(),
     resourceId: v.string(),
+    // Audit log changes/metadata are polymorphic by design (different actions store different shapes).
+    // Auth wrappers (systemMutation/authenticatedMutation) prevent unauthorized writes.
     changes: v.optional(v.any()),
     metadata: v.optional(v.any()),
     ipAddress: v.optional(v.string()),
@@ -864,7 +870,7 @@ export default defineSchema({
     source: v.string(),
     eventType: v.string(),
     externalId: v.optional(v.string()),
-    payload: v.any(),
+    payload: v.string(), // JSON-serialized webhook payload for type safety
     status: v.union(
       v.literal("received"),
       v.literal("processing"),
@@ -887,7 +893,8 @@ export default defineSchema({
     agentType: v.string(),
     sessionId: v.optional(v.string()),
     key: v.string(),
-    value: v.any(),
+    value: v.string(), // JSON-serialized value for type safety
+    embedding: v.optional(v.array(v.float64())),
     expiresAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -900,766 +907,4 @@ export default defineSchema({
       dimensions: 1536,
       filterFields: ["userId", "agentType"],
     }),
-
-  // ============================================================================
-  // SOCIAL TRADING GRAPH TABLES
-  // ============================================================================
-
-  /**
-   * Follows - Follower/following relationships between traders
-   */
-  follows: defineTable({
-    followerId: v.id("users"),
-    followeeId: v.id("users"),
-    notificationsEnabled: v.boolean(),
-    positionVisibility: v.union(
-      v.literal("all"),
-      v.literal("entry_only"),
-      v.literal("none")
-    ),
-    followedAt: v.number(),
-    unfollowedAt: v.optional(v.number()),
-    isActive: v.boolean(),
-  })
-    .index("by_follower", ["followerId", "isActive"])
-    .index("by_followee", ["followeeId", "isActive"])
-    .index("by_pair", ["followerId", "followeeId"]),
-
-  /**
-   * Trader Profiles - Extended profiles for traders with public track records
-   */
-  traderProfiles: defineTable({
-    userId: v.id("users"),
-    isPublic: v.boolean(),
-    allowCopyTrading: v.boolean(),
-    allowAutoCopy: v.boolean(),
-    copyTradingFee: v.number(),
-    performanceFee: v.number(),
-    bio: v.optional(v.string()),
-    tradingStyle: v.optional(v.string()),
-    tradingPhilosophy: v.optional(v.string()),
-    riskProfile: v.optional(v.union(
-      v.literal("conservative"),
-      v.literal("moderate"),
-      v.literal("aggressive"),
-      v.literal("very_aggressive")
-    )),
-    preferredAssets: v.array(v.string()),
-    twitterHandle: v.optional(v.string()),
-    discordHandle: v.optional(v.string()),
-    telegramHandle: v.optional(v.string()),
-    websiteUrl: v.optional(v.string()),
-    isVerified: v.boolean(),
-    verifiedAt: v.optional(v.number()),
-    verificationBadges: v.array(v.string()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_public", ["isPublic", "allowCopyTrading"])
-    .index("by_verified", ["isVerified"]),
-
-  /**
-   * Trader Stats - Performance statistics calculated from actual trades
-   */
-  traderStats: defineTable({
-    userId: v.id("users"),
-    period: v.union(
-      v.literal("daily"),
-      v.literal("weekly"),
-      v.literal("monthly"),
-      v.literal("quarterly"),
-      v.literal("yearly"),
-      v.literal("all_time")
-    ),
-    periodStart: v.number(),
-    periodEnd: v.number(),
-    totalTrades: v.number(),
-    winningTrades: v.number(),
-    losingTrades: v.number(),
-    winRate: v.number(),
-    totalPnL: v.number(),
-    totalPnLPercent: v.number(),
-    avgPnLPerTrade: v.number(),
-    avgWinAmount: v.number(),
-    avgLossAmount: v.number(),
-    largestWin: v.number(),
-    largestLoss: v.number(),
-    sharpeRatio: v.number(),
-    sortinoRatio: v.number(),
-    maxDrawdown: v.number(),
-    maxDrawdownPercent: v.number(),
-    volatility: v.number(),
-    calmarRatio: v.number(),
-    totalVolume: v.number(),
-    avgPositionSize: v.number(),
-    avgHoldingPeriod: v.number(),
-    currentWinStreak: v.number(),
-    currentLossStreak: v.number(),
-    longestWinStreak: v.number(),
-    longestLossStreak: v.number(),
-    assetBreakdown: v.optional(v.any()),
-    calculatedAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_user", ["userId", "period"])
-    .index("by_period", ["period", "periodStart"])
-    .index("by_user_period_date", ["userId", "period", "periodStart"]),
-
-  /**
-   * Reputation Scores - Composite reputation based on verified track record
-   */
-  reputationScores: defineTable({
-    userId: v.id("users"),
-    overallScore: v.number(),
-    performanceScore: v.number(),
-    consistencyScore: v.number(),
-    riskManagementScore: v.number(),
-    transparencyScore: v.number(),
-    socialScore: v.number(),
-    longevityScore: v.number(),
-    tier: v.union(
-      v.literal("bronze"),
-      v.literal("silver"),
-      v.literal("gold"),
-      v.literal("platinum"),
-      v.literal("diamond"),
-      v.literal("legend")
-    ),
-    badges: v.array(v.object({
-      type: v.string(),
-      name: v.string(),
-      earnedAt: v.number(),
-    })),
-    verifiedReturns: v.boolean(),
-    auditedBy: v.optional(v.string()),
-    lastAuditAt: v.optional(v.number()),
-    fraudRiskScore: v.number(),
-    suspiciousActivityCount: v.number(),
-    lastReviewAt: v.optional(v.number()),
-    calculatedAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_tier", ["tier", "overallScore"])
-    .index("by_score", ["overallScore"]),
-
-  /**
-   * Copy Trading Subscriptions - Auto-copy configurations
-   */
-  copyTradingSubscriptions: defineTable({
-    copierId: v.id("users"),
-    traderId: v.id("users"),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("active"),
-      v.literal("paused"),
-      v.literal("stopped"),
-      v.literal("cancelled")
-    ),
-    copyMode: v.union(
-      v.literal("fixed_amount"),
-      v.literal("percentage_portfolio"),
-      v.literal("proportional"),
-      v.literal("fixed_ratio")
-    ),
-    fixedAmount: v.optional(v.number()),
-    portfolioPercentage: v.optional(v.number()),
-    copyRatio: v.optional(v.number()),
-    maxPositionSize: v.number(),
-    maxDailyLoss: v.number(),
-    maxTotalExposure: v.number(),
-    stopLossPercent: v.optional(v.number()),
-    takeProfitPercent: v.optional(v.number()),
-    copyAssetClasses: v.array(v.string()),
-    excludedSymbols: v.array(v.string()),
-    copyDelaySeconds: v.number(),
-    totalCopiedTrades: v.number(),
-    totalPnL: v.number(),
-    totalFeesPaid: v.number(),
-    subscribedAt: v.number(),
-    pausedAt: v.optional(v.number()),
-    cancelledAt: v.optional(v.number()),
-    updatedAt: v.number(),
-  })
-    .index("by_copier", ["copierId", "status"])
-    .index("by_trader", ["traderId", "status"])
-    .index("by_pair", ["copierId", "traderId"]),
-
-  /**
-   * Copy Trades - Individual copy trade execution records
-   */
-  copyTrades: defineTable({
-    subscriptionId: v.id("copyTradingSubscriptions"),
-    copierId: v.id("users"),
-    traderId: v.id("users"),
-    originalOrderId: v.id("orders"),
-    originalTradeId: v.optional(v.id("trades")),
-    copyOrderId: v.optional(v.id("orders")),
-    copyTradeId: v.optional(v.id("trades")),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("executing"),
-      v.literal("filled"),
-      v.literal("partial_fill"),
-      v.literal("failed"),
-      v.literal("skipped"),
-      v.literal("cancelled")
-    ),
-    skipReason: v.optional(v.string()),
-    failureReason: v.optional(v.string()),
-    symbol: v.string(),
-    side: v.union(v.literal("buy"), v.literal("sell")),
-    originalQuantity: v.number(),
-    originalPrice: v.number(),
-    copyQuantity: v.number(),
-    copyPrice: v.optional(v.number()),
-    slippage: v.optional(v.number()),
-    copyFee: v.number(),
-    performanceFee: v.number(),
-    pnl: v.optional(v.number()),
-    pnlPercent: v.optional(v.number()),
-    originalExecutedAt: v.number(),
-    copyExecutedAt: v.optional(v.number()),
-    closedAt: v.optional(v.number()),
-    createdAt: v.number(),
-  })
-    .index("by_subscription", ["subscriptionId", "status"])
-    .index("by_copier", ["copierId", "createdAt"])
-    .index("by_trader", ["traderId", "createdAt"])
-    .index("by_original_order", ["originalOrderId"]),
-
-  /**
-   * Position Comments - Comments and analysis on positions
-   */
-  positionComments: defineTable({
-    positionId: v.optional(v.id("positions")),
-    orderId: v.optional(v.id("orders")),
-    tradeId: v.optional(v.id("trades")),
-    authorId: v.id("users"),
-    traderId: v.id("users"),
-    content: v.string(),
-    contentType: v.union(
-      v.literal("text"),
-      v.literal("analysis"),
-      v.literal("thesis"),
-      v.literal("update"),
-      v.literal("exit_rationale")
-    ),
-    attachments: v.array(v.object({
-      type: v.union(v.literal("image"), v.literal("chart"), v.literal("link")),
-      url: v.string(),
-      title: v.optional(v.string()),
-    })),
-    likesCount: v.number(),
-    repliesCount: v.number(),
-    parentCommentId: v.optional(v.id("positionComments")),
-    isEdited: v.boolean(),
-    isDeleted: v.boolean(),
-    isPinned: v.boolean(),
-    createdAt: v.number(),
-    editedAt: v.optional(v.number()),
-    deletedAt: v.optional(v.number()),
-  })
-    .index("by_position", ["positionId", "isDeleted"])
-    .index("by_order", ["orderId", "isDeleted"])
-    .index("by_trade", ["tradeId", "isDeleted"])
-    .index("by_author", ["authorId", "createdAt"])
-    .index("by_trader", ["traderId", "createdAt"])
-    .index("by_parent", ["parentCommentId"]),
-
-  /**
-   * Comment Likes - Likes on position comments
-   */
-  commentLikes: defineTable({
-    commentId: v.id("positionComments"),
-    userId: v.id("users"),
-    createdAt: v.number(),
-  })
-    .index("by_comment", ["commentId"])
-    .index("by_user", ["userId"])
-    .index("by_pair", ["commentId", "userId"]),
-
-  /**
-   * Trading Rooms - Group trading spaces with shared positions
-   */
-  tradingRooms: defineTable({
-    name: v.string(),
-    description: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
-    coverImageUrl: v.optional(v.string()),
-    type: v.union(
-      v.literal("public"),
-      v.literal("private"),
-      v.literal("premium"),
-      v.literal("exclusive")
-    ),
-    accessLevel: v.union(
-      v.literal("open"),
-      v.literal("request_to_join"),
-      v.literal("invite_only"),
-      v.literal("subscription")
-    ),
-    subscriptionPrice: v.optional(v.number()),
-    subscriptionPeriod: v.optional(v.union(
-      v.literal("monthly"),
-      v.literal("quarterly"),
-      v.literal("yearly")
-    )),
-    ownerId: v.id("users"),
-    moderatorIds: v.array(v.id("users")),
-    tradingFocus: v.array(v.string()),
-    assetClasses: v.array(v.string()),
-    settings: v.object({
-      allowPositionSharing: v.boolean(),
-      allowCopyTrades: v.boolean(),
-      positionDelay: v.number(),
-      requireVerifiedTraders: v.boolean(),
-      minReputationScore: v.number(),
-    }),
-    memberCount: v.number(),
-    activeMembers: v.number(),
-    totalPositionsShared: v.number(),
-    totalMessages: v.number(),
-    status: v.union(
-      v.literal("active"),
-      v.literal("archived"),
-      v.literal("suspended")
-    ),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    lastActivityAt: v.number(),
-  })
-    .index("by_owner", ["ownerId"])
-    .index("by_type", ["type", "status"])
-    .index("by_status", ["status", "memberCount"])
-    .searchIndex("search_rooms", {
-      searchField: "name",
-      filterFields: ["type", "status"],
-    }),
-
-  /**
-   * Trading Room Members - Room membership records
-   */
-  tradingRoomMembers: defineTable({
-    roomId: v.id("tradingRooms"),
-    userId: v.id("users"),
-    role: v.union(
-      v.literal("owner"),
-      v.literal("moderator"),
-      v.literal("contributor"),
-      v.literal("member"),
-      v.literal("viewer")
-    ),
-    status: v.union(
-      v.literal("active"),
-      v.literal("pending"),
-      v.literal("banned"),
-      v.literal("left")
-    ),
-    canPost: v.boolean(),
-    canSharePositions: v.boolean(),
-    canInvite: v.boolean(),
-    notificationsEnabled: v.boolean(),
-    notificationLevel: v.union(
-      v.literal("all"),
-      v.literal("mentions"),
-      v.literal("positions_only"),
-      v.literal("none")
-    ),
-    lastReadAt: v.optional(v.number()),
-    lastPostAt: v.optional(v.number()),
-    positionsSharedCount: v.number(),
-    messagesCount: v.number(),
-    subscriptionId: v.optional(v.string()),
-    subscriptionExpiresAt: v.optional(v.number()),
-    joinedAt: v.number(),
-    leftAt: v.optional(v.number()),
-    bannedAt: v.optional(v.number()),
-    updatedAt: v.number(),
-  })
-    .index("by_room", ["roomId", "status"])
-    .index("by_user", ["userId", "status"])
-    .index("by_room_user", ["roomId", "userId"]),
-
-  /**
-   * Trading Room Messages - Messages in trading rooms
-   */
-  tradingRoomMessages: defineTable({
-    roomId: v.id("tradingRooms"),
-    senderId: v.id("users"),
-    type: v.union(
-      v.literal("text"),
-      v.literal("position_share"),
-      v.literal("trade_share"),
-      v.literal("analysis"),
-      v.literal("alert"),
-      v.literal("system")
-    ),
-    content: v.string(),
-    formattedContent: v.optional(v.string()),
-    sharedData: v.optional(v.object({
-      positionId: v.optional(v.id("positions")),
-      orderId: v.optional(v.id("orders")),
-      tradeId: v.optional(v.id("trades")),
-      symbol: v.string(),
-      side: v.union(v.literal("buy"), v.literal("sell"), v.literal("long"), v.literal("short")),
-      quantity: v.optional(v.number()),
-      price: v.optional(v.number()),
-      pnl: v.optional(v.number()),
-      pnlPercent: v.optional(v.number()),
-    })),
-    attachments: v.array(v.object({
-      type: v.string(),
-      url: v.string(),
-      name: v.optional(v.string()),
-      size: v.optional(v.number()),
-    })),
-    likesCount: v.number(),
-    repliesCount: v.number(),
-    copyCount: v.number(),
-    replyToId: v.optional(v.id("tradingRoomMessages")),
-    isEdited: v.boolean(),
-    isDeleted: v.boolean(),
-    isPinned: v.boolean(),
-    createdAt: v.number(),
-    editedAt: v.optional(v.number()),
-    deletedAt: v.optional(v.number()),
-  })
-    .index("by_room", ["roomId", "createdAt"])
-    .index("by_sender", ["senderId", "createdAt"])
-    .index("by_reply", ["replyToId"])
-    .index("by_room_type", ["roomId", "type", "createdAt"])
-    .searchIndex("search_room_messages", {
-      searchField: "content",
-      filterFields: ["roomId", "type"],
-    }),
-
-  /**
-   * Leaderboard Snapshots - Periodic leaderboard snapshots
-   */
-  leaderboardSnapshots: defineTable({
-    leaderboardType: v.union(
-      v.literal("pnl"),
-      v.literal("pnl_percent"),
-      v.literal("sharpe_ratio"),
-      v.literal("win_rate"),
-      v.literal("total_trades"),
-      v.literal("followers"),
-      v.literal("copiers"),
-      v.literal("reputation")
-    ),
-    period: v.union(
-      v.literal("daily"),
-      v.literal("weekly"),
-      v.literal("monthly"),
-      v.literal("all_time")
-    ),
-    assetClass: v.optional(v.string()),
-    periodStart: v.number(),
-    periodEnd: v.number(),
-    entries: v.array(v.object({
-      rank: v.number(),
-      previousRank: v.optional(v.number()),
-      userId: v.id("users"),
-      username: v.optional(v.string()),
-      displayName: v.optional(v.string()),
-      avatarUrl: v.optional(v.string()),
-      value: v.number(),
-      change: v.optional(v.number()),
-      changePercent: v.optional(v.number()),
-      tier: v.optional(v.string()),
-      isVerified: v.boolean(),
-    })),
-    totalParticipants: v.number(),
-    minQualifyingValue: v.optional(v.number()),
-    calculatedAt: v.number(),
-    createdAt: v.number(),
-  })
-    .index("by_type_period", ["leaderboardType", "period", "periodStart"])
-    .index("by_period_date", ["period", "periodStart"]),
-
-  /**
-   * User Leaderboard History - Individual user's leaderboard positions over time
-   */
-  userLeaderboardHistory: defineTable({
-    userId: v.id("users"),
-    leaderboardType: v.string(),
-    period: v.string(),
-    rank: v.number(),
-    value: v.number(),
-    percentile: v.number(),
-    snapshotId: v.id("leaderboardSnapshots"),
-    periodStart: v.number(),
-    recordedAt: v.number(),
-  })
-    .index("by_user", ["userId", "leaderboardType", "period"])
-    .index("by_user_type_date", ["userId", "leaderboardType", "periodStart"]),
-
-  /**
-   * Fraud Alerts - Suspected fraudulent activity
-   */
-  fraudAlerts: defineTable({
-    userId: v.id("users"),
-    alertType: v.union(
-      v.literal("wash_trading"),
-      v.literal("manipulation"),
-      v.literal("front_running"),
-      v.literal("fake_performance"),
-      v.literal("collusion"),
-      v.literal("unusual_activity"),
-      v.literal("bot_behavior")
-    ),
-    severity: v.union(
-      v.literal("low"),
-      v.literal("medium"),
-      v.literal("high"),
-      v.literal("critical")
-    ),
-    detectionMethod: v.string(),
-    confidence: v.number(),
-    evidence: v.array(v.object({
-      type: v.string(),
-      description: v.string(),
-      data: v.any(),
-      timestamp: v.number(),
-    })),
-    relatedOrderIds: v.array(v.id("orders")),
-    relatedTradeIds: v.array(v.id("trades")),
-    relatedUserIds: v.array(v.id("users")),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("investigating"),
-      v.literal("confirmed"),
-      v.literal("dismissed"),
-      v.literal("resolved")
-    ),
-    reviewedBy: v.optional(v.string()),
-    reviewNotes: v.optional(v.string()),
-    resolution: v.optional(v.string()),
-    actionTaken: v.optional(v.string()),
-    detectedAt: v.number(),
-    reviewedAt: v.optional(v.number()),
-    resolvedAt: v.optional(v.number()),
-  })
-    .index("by_user", ["userId", "status"])
-    .index("by_status", ["status", "severity"])
-    .index("by_type", ["alertType", "status"]),
-
-  /**
-   * Trading Patterns - Analyzed trading patterns for ML/fraud detection
-   */
-  tradingPatterns: defineTable({
-    userId: v.id("users"),
-    periodStart: v.number(),
-    periodEnd: v.number(),
-    features: v.object({
-      avgTimeBetweenTrades: v.number(),
-      stdTimeBetweenTrades: v.number(),
-      peakTradingHours: v.array(v.number()),
-      avgOrderSize: v.number(),
-      stdOrderSize: v.number(),
-      medianOrderSize: v.number(),
-      avgPriceImprovement: v.number(),
-      avgSlippage: v.number(),
-      limitOrderFillRate: v.number(),
-      cancelToFillRatio: v.number(),
-      selfTradeRatio: v.number(),
-      roundTripRatio: v.number(),
-      consecutiveSameSideRatio: v.number(),
-      winAfterLossRatio: v.number(),
-      lossAfterWinRatio: v.number(),
-      streakCorrelation: v.number(),
-    }),
-    alphaScore: v.number(),
-    luckScore: v.number(),
-    skillScore: v.number(),
-    manipulationScore: v.number(),
-    calculatedAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_period", ["userId", "periodStart"]),
-
-  /**
-   * Social Activity - Activity feed items
-   */
-  socialActivity: defineTable({
-    actorId: v.id("users"),
-    type: v.union(
-      v.literal("follow"),
-      v.literal("position_opened"),
-      v.literal("position_closed"),
-      v.literal("position_shared"),
-      v.literal("comment"),
-      v.literal("like"),
-      v.literal("copy_trade"),
-      v.literal("achievement"),
-      v.literal("leaderboard_rank"),
-      v.literal("room_created"),
-      v.literal("room_joined")
-    ),
-    targetType: v.optional(v.string()),
-    targetId: v.optional(v.string()),
-    data: v.any(),
-    visibility: v.union(
-      v.literal("public"),
-      v.literal("followers"),
-      v.literal("private")
-    ),
-    relatedUserIds: v.array(v.id("users")),
-    createdAt: v.number(),
-    expiresAt: v.optional(v.number()),
-  })
-    .index("by_actor", ["actorId", "createdAt"])
-    .index("by_type", ["type", "createdAt"])
-    .index("by_visibility", ["visibility", "createdAt"]),
-
-  /**
-   * User Feed Cache - Precomputed feed items per user
-   */
-  userFeedCache: defineTable({
-    userId: v.id("users"),
-    activityId: v.id("socialActivity"),
-    actorId: v.id("users"),
-    feedType: v.union(
-      v.literal("following"),
-      v.literal("discover"),
-      v.literal("notifications")
-    ),
-    type: v.string(),
-    data: v.any(),
-    isRead: v.boolean(),
-    activityAt: v.number(),
-    cachedAt: v.number(),
-  })
-    .index("by_user_feed", ["userId", "feedType", "activityAt"])
-    .index("by_user_unread", ["userId", "feedType", "isRead"]),
-
-  // ============================================================================
-  // AI SIGNAL DETECTION TABLES
-  // ============================================================================
-
-  /**
-   * Signals - AI-detected trading signals from multiple sources
-   */
-  signals: defineTable({
-    signalId: v.string(), // Unique external ID
-    type: v.union(
-      v.literal("email"),
-      v.literal("social"),
-      v.literal("market"),
-      v.literal("news"),
-      v.literal("correlation")
-    ),
-    source: v.string(), // e.g., "email:user@example.com", "market:BTC-USD"
-    title: v.string(),
-    description: v.string(),
-    confidence: v.number(), // 0-100
-    sentiment: v.union(
-      v.literal("bullish"),
-      v.literal("bearish"),
-      v.literal("neutral")
-    ),
-    urgency: v.union(
-      v.literal("low"),
-      v.literal("medium"),
-      v.literal("high")
-    ),
-    relatedMarkets: v.array(v.string()), // Market tickers
-    relatedAssets: v.array(v.string()), // Asset symbols
-    metadata: v.optional(v.any()), // Type-specific metadata
-    expiresAt: v.optional(v.number()), // When signal becomes stale
-    createdAt: v.number(),
-  })
-    .index("by_signalId", ["signalId"])
-    .index("by_type", ["type"])
-    .index("by_urgency", ["urgency"])
-    .searchIndex("search_signals", {
-      searchField: "title",
-      filterFields: ["type", "urgency", "sentiment"],
-    }),
-
-  /**
-   * UserSignals - Junction table linking signals to users with relevance
-   */
-  userSignals: defineTable({
-    userId: v.id("users"),
-    signalId: v.id("signals"),
-    relevanceScore: v.number(), // 0-100, how relevant this signal is to user
-    seen: v.boolean(),
-    dismissed: v.boolean(),
-    actedOn: v.boolean(), // Did user take action based on this signal?
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_signal", ["signalId"])
-    .index("by_user_unseen", ["userId", "seen"]),
-
-  /**
-   * MarketCorrelations - Detected correlations between markets
-   */
-  marketCorrelations: defineTable({
-    marketA: v.string(), // Always alphabetically first
-    marketB: v.string(), // Always alphabetically second
-    correlation: v.number(), // -1 to 1, Pearson correlation coefficient
-    sampleSize: v.number(), // Number of data points used
-    pValue: v.number(), // Statistical significance
-    updatedAt: v.number(),
-  })
-    .index("by_marketA", ["marketA"])
-    .index("by_marketB", ["marketB"])
-    .index("by_pair", ["marketA", "marketB"])
-    .index("by_correlation", ["correlation"]),
-
-  /**
-   * UserInsights - Personalized AI-generated insights for users
-   */
-  userInsights: defineTable({
-    userId: v.id("users"),
-    insightType: v.string(), // "portfolio", "opportunity", "risk", "trend", "social"
-    title: v.string(),
-    content: v.string(),
-    priority: v.number(), // 1-5, higher is more important
-    relatedSignals: v.array(v.id("signals")),
-    dismissed: v.boolean(),
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_active", ["userId", "dismissed"]),
-
-  /**
-   * SignalProcessingLog - Track what sources have been processed
-   */
-  signalProcessingLog: defineTable({
-    sourceType: v.string(), // "email", "chat_room", "market_data"
-    sourceId: v.string(), // External ID of the source
-    userId: v.optional(v.id("users")), // Relevant user if applicable
-    signalsGenerated: v.number(), // How many signals were created
-    processedAt: v.number(),
-  })
-    .index("by_source", ["sourceType", "sourceId"])
-    .index("by_user", ["userId", "processedAt"]),
-
-  /**
-   * UserSignalPreferences - User preferences for signal detection
-   */
-  userSignalPreferences: defineTable({
-    userId: v.id("users"),
-    emailAnalysisEnabled: v.boolean(), // Opt-in for email scanning
-    socialAnalysisEnabled: v.boolean(),
-    marketAlertsEnabled: v.boolean(),
-    dailyInsightsEnabled: v.boolean(),
-    pushNotificationsEnabled: v.boolean(),
-    minConfidenceThreshold: v.number(), // Min confidence to show signal (0-100)
-    preferredUrgencyLevel: v.union(
-      v.literal("all"),
-      v.literal("medium_high"),
-      v.literal("high_only")
-    ),
-    interests: v.array(v.string()), // Topics/markets of interest
-    excludedMarkets: v.array(v.string()), // Markets to never show signals for
-    timezone: v.string(), // For daily insights timing
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index("by_user", ["userId"]),
 });

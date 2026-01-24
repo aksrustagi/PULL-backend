@@ -8,9 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./services/*": "./src/services/*.ts",
-    "./utils/*": "./src/utils/*.ts",
-    "./inngest": "./src/inngest/index.ts",
-    "./inngest/*": "./src/inngest/*.ts"
+    "./utils/*": "./src/utils/*.ts"
   },
   "scripts": {
     "lint": "eslint src/",
@@ -18,7 +16,6 @@
   },
   "dependencies": {
     "@pull/types": "workspace:*",
-    "inngest": "^3.22.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
