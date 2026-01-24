@@ -1,0 +1,185 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pull-temporal-worker
+  namespace: pull
+  labels:
+    app: pull-temporal-worker
+    app.kubernetes.io/name: pull-temporal-worker
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: pull-temporal-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: pull-temporal-worker
+        app.kubernetes.io/name: pull-temporal-worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3002"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: pull-worker
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: worker
+          image: gcr.io/PROJECT_ID/pull-temporal-worker:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3002
+              name: health
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: TEMPORAL_ADDRESS
+              value: "temporal:7233"
+            - name: TEMPORAL_NAMESPACE
+              value: "pull-production"
+            - name: TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_TIMEOUT
+              value: "30000"
+            - name: CONVEX_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: convex-url
+            - name: KALSHI_API_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: kalshi-api-key-id
+            - name: KALSHI_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: kalshi-private-key
+            - name: PLAID_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: plaid-client-id
+            - name: PLAID_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: plaid-secret
+            - name: PLAID_ENV
+              value: "production"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 30"]
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - pull-temporal-worker
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 2
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: pull-temporal-worker
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pull-temporal-worker-hpa
+  namespace: pull
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pull-temporal-worker
+  minReplicas: 5
+  maxReplicas: 50
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 120
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 30
+        - type: Pods
+          value: 5
+          periodSeconds: 30
+      selectPolicy: Max
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pull-temporal-worker-pdb
+  namespace: pull
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: pull-temporal-worker
