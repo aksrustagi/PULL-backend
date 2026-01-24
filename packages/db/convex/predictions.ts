@@ -129,6 +129,27 @@ export const getMarketByTicker = query({
 });
 
 /**
+ * Get categories with event counts
+ */
+export const getCategories = query({
+  args: {},
+  handler: async (ctx) => {
+    const events = await ctx.db.query("predictionEvents").collect();
+    const categoryCounts: Record<string, number> = {};
+
+    for (const event of events) {
+      categoryCounts[event.category] = (categoryCounts[event.category] ?? 0) + 1;
+    }
+
+    return Object.entries(categoryCounts).map(([id, count]) => ({
+      id,
+      name: id.charAt(0).toUpperCase() + id.slice(1),
+      count,
+    }));
+  },
+});
+
+/**
  * Get user's prediction positions
  */
 export const getUserPositions = query({
@@ -389,7 +410,140 @@ export const settleEvent = mutation({
       });
     }
 
-    // TODO: Process position settlements
+    // Process position settlements for all positions related to this event's markets
+    const marketTickers = markets.map((m) => m.ticker);
+    let settledPositions = 0;
+    let totalPayout = 0;
+
+    for (const market of markets) {
+      // Find all positions for this market
+      const positions = await ctx.db
+        .query("positions")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("assetClass"), "prediction"),
+            q.eq(q.field("symbol"), market.ticker)
+          )
+        )
+        .collect();
+
+      for (const position of positions) {
+        // Calculate payout based on whether position wins
+        // Long position wins if market is the winner
+        // Short position wins if market is NOT the winner
+        const positionWins =
+          (position.side === "long" && market.isWinner) ||
+          (position.side === "short" && !market.isWinner);
+
+        const payout = positionWins ? position.quantity * 100 : 0;
+        const costBasis = position.costBasis;
+        const realizedPnL = payout - costBasis;
+
+        // Credit user's USD balance with payout
+        if (payout > 0) {
+          const existingBalance = await ctx.db
+            .query("balances")
+            .withIndex("by_user_asset", (q) =>
+              q.eq("userId", position.userId).eq("assetType", "usd").eq("assetId", "USD")
+            )
+            .unique();
+
+          if (existingBalance) {
+            await ctx.db.patch(existingBalance._id, {
+              available: existingBalance.available + payout,
+              updatedAt: now,
+            });
+          } else {
+            await ctx.db.insert("balances", {
+              userId: position.userId,
+              assetType: "usd",
+              assetId: "USD",
+              symbol: "USD",
+              available: payout,
+              held: 0,
+              pending: 0,
+              updatedAt: now,
+            });
+          }
+        }
+
+        // Update position with settlement info (set quantity to 0 to mark as settled)
+        await ctx.db.patch(position._id, {
+          quantity: 0,
+          currentPrice: market.isWinner ? 100 : 0,
+          realizedPnL: position.realizedPnL + realizedPnL,
+          unrealizedPnL: 0,
+          updatedAt: now,
+        });
+
+        // Record the settlement in trades table
+        // First create a synthetic order for the settlement
+        const orderId = await ctx.db.insert("orders", {
+          userId: position.userId,
+          clientOrderId: `settlement-${position._id}-${now}`,
+          assetClass: "prediction",
+          symbol: position.symbol,
+          side: "sell",
+          type: "market",
+          status: "filled",
+          quantity: position.quantity,
+          filledQuantity: position.quantity,
+          remainingQuantity: 0,
+          price: market.isWinner ? 100 : 0,
+          averageFilledPrice: market.isWinner ? 100 : 0,
+          timeInForce: "gtc",
+          fees: 0,
+          feeCurrency: "USD",
+          metadata: {
+            settlementType: "event_resolution",
+            eventId: args.eventId,
+            winningOutcomeId: args.winningOutcomeId,
+            positionWon: positionWins,
+          },
+          filledAt: now,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        await ctx.db.insert("trades", {
+          orderId,
+          userId: position.userId,
+          externalTradeId: `settlement-${position._id}`,
+          symbol: position.symbol,
+          side: "sell",
+          quantity: position.quantity,
+          price: market.isWinner ? 100 : 0,
+          notionalValue: payout,
+          fee: 0,
+          feeCurrency: "USD",
+          liquidity: "taker",
+          executedAt: now,
+          settledAt: now,
+          settlementStatus: "settled",
+        });
+
+        // Log individual position settlement
+        await ctx.db.insert("auditLog", {
+          userId: position.userId,
+          action: "prediction.position_settled",
+          resourceType: "positions",
+          resourceId: position._id,
+          metadata: {
+            symbol: position.symbol,
+            side: position.side,
+            quantity: position.quantity,
+            payout,
+            realizedPnL,
+            eventId: args.eventId,
+            winningOutcomeId: args.winningOutcomeId,
+          },
+          timestamp: now,
+        });
+
+        settledPositions++;
+        totalPayout += payout;
+      }
+    }
 
     await ctx.db.insert("auditLog", {
       action: "prediction.event_settled",
@@ -399,10 +553,177 @@ export const settleEvent = mutation({
         ticker: event.ticker,
         winningOutcomeId: args.winningOutcomeId,
         settlementValue: args.settlementValue,
+        settledPositions,
+        totalPayout,
       },
       timestamp: now,
     });
 
     return args.eventId;
+  },
+});
+
+/**
+ * Settle a single position
+ */
+export const settlePosition = mutation({
+  args: {
+    positionId: v.id("positions"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Get the position
+    const position = await ctx.db.get(args.positionId);
+    if (!position) {
+      throw new Error("Position not found");
+    }
+
+    if (position.assetClass !== "prediction") {
+      throw new Error("Only prediction positions can be settled");
+    }
+
+    if (position.quantity === 0) {
+      throw new Error("Position already settled");
+    }
+
+    // Get the market for this position
+    const market = await ctx.db
+      .query("predictionMarkets")
+      .withIndex("by_ticker", (q) => q.eq("ticker", position.symbol))
+      .unique();
+
+    if (!market) {
+      throw new Error("Market not found");
+    }
+
+    // Get the event to check if it's settled
+    const event = await ctx.db.get(market.eventId);
+    if (!event) {
+      throw new Error("Event not found");
+    }
+
+    if (event.status !== "settled") {
+      throw new Error("Event has not been settled yet");
+    }
+
+    // Calculate payout based on whether position wins
+    // Long position wins if market is the winner
+    // Short position wins if market is NOT the winner
+    const positionWins =
+      (position.side === "long" && market.isWinner) ||
+      (position.side === "short" && !market.isWinner);
+
+    const payout = positionWins ? position.quantity * 100 : 0;
+    const costBasis = position.costBasis;
+    const realizedPnL = payout - costBasis;
+
+    // Credit user's USD balance with payout
+    if (payout > 0) {
+      const existingBalance = await ctx.db
+        .query("balances")
+        .withIndex("by_user_asset", (q) =>
+          q.eq("userId", position.userId).eq("assetType", "usd").eq("assetId", "USD")
+        )
+        .unique();
+
+      if (existingBalance) {
+        await ctx.db.patch(existingBalance._id, {
+          available: existingBalance.available + payout,
+          updatedAt: now,
+        });
+      } else {
+        await ctx.db.insert("balances", {
+          userId: position.userId,
+          assetType: "usd",
+          assetId: "USD",
+          symbol: "USD",
+          available: payout,
+          held: 0,
+          pending: 0,
+          updatedAt: now,
+        });
+      }
+    }
+
+    // Update position with settlement info (set quantity to 0 to mark as settled)
+    await ctx.db.patch(args.positionId, {
+      quantity: 0,
+      currentPrice: market.isWinner ? 100 : 0,
+      realizedPnL: position.realizedPnL + realizedPnL,
+      unrealizedPnL: 0,
+      updatedAt: now,
+    });
+
+    // Record the settlement in trades table
+    const orderId = await ctx.db.insert("orders", {
+      userId: position.userId,
+      clientOrderId: `settlement-${args.positionId}-${now}`,
+      assetClass: "prediction",
+      symbol: position.symbol,
+      side: "sell",
+      type: "market",
+      status: "filled",
+      quantity: position.quantity,
+      filledQuantity: position.quantity,
+      remainingQuantity: 0,
+      price: market.isWinner ? 100 : 0,
+      averageFilledPrice: market.isWinner ? 100 : 0,
+      timeInForce: "gtc",
+      fees: 0,
+      feeCurrency: "USD",
+      metadata: {
+        settlementType: "event_resolution",
+        eventId: market.eventId,
+        winningOutcomeId: event.winningOutcomeId,
+        positionWon: positionWins,
+      },
+      filledAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("trades", {
+      orderId,
+      userId: position.userId,
+      externalTradeId: `settlement-${args.positionId}`,
+      symbol: position.symbol,
+      side: "sell",
+      quantity: position.quantity,
+      price: market.isWinner ? 100 : 0,
+      notionalValue: payout,
+      fee: 0,
+      feeCurrency: "USD",
+      liquidity: "taker",
+      executedAt: now,
+      settledAt: now,
+      settlementStatus: "settled",
+    });
+
+    // Log to audit
+    await ctx.db.insert("auditLog", {
+      userId: position.userId,
+      action: "prediction.position_settled",
+      resourceType: "positions",
+      resourceId: args.positionId,
+      metadata: {
+        symbol: position.symbol,
+        side: position.side,
+        quantity: position.quantity,
+        payout,
+        realizedPnL,
+        eventId: market.eventId,
+        winningOutcomeId: event.winningOutcomeId,
+        positionWon: positionWins,
+      },
+      timestamp: now,
+    });
+
+    return {
+      positionId: args.positionId,
+      payout,
+      realizedPnL,
+      positionWon: positionWins,
+    };
   },
 });
