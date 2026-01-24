@@ -10,6 +10,7 @@ import * as rewardsActivities from "./activities/rewards";
 import * as emailActivities from "./activities/email";
 import * as messagingActivities from "./activities/messaging";
 import * as rwaActivities from "./activities/rwa";
+import * as portfolioActivities from "./activities/portfolio";
 
 // Configure runtime telemetry
 Runtime.install({
@@ -31,6 +32,7 @@ export const TASK_QUEUES = {
   REWARDS: "pull-rewards",
   EMAIL: "pull-email",
   MESSAGING: "pull-messaging",
+  PORTFOLIO: "pull-portfolio",
 } as const;
 
 interface WorkerConfig {
@@ -88,6 +90,7 @@ async function run() {
     ...emailActivities,
     ...messagingActivities,
     ...rwaActivities,
+    ...portfolioActivities,
   };
 
   // Create workers based on environment configuration
@@ -172,6 +175,17 @@ async function run() {
     });
     workers.push(messagingWorker);
     console.log(`📋 Messaging worker registered on queue: ${TASK_QUEUES.MESSAGING}`);
+  }
+
+  if (workerType === "all" || workerType === "portfolio") {
+    const portfolioWorker = await createWorker(connection, {
+      taskQueue: TASK_QUEUES.PORTFOLIO,
+      workflowsPath,
+      activities: { ...portfolioActivities },
+      maxConcurrentActivityTaskExecutions: 100,
+    });
+    workers.push(portfolioWorker);
+    console.log(`📋 Portfolio worker registered on queue: ${TASK_QUEUES.PORTFOLIO}`);
   }
 
   if (workers.length === 0) {
