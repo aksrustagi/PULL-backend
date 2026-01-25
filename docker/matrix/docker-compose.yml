@@ -1,0 +1,169 @@
+version: "3.8"
+
+#
+# Matrix Stack - Fantasy Markets Platform
+#
+# Services:
+# - synapse: Matrix homeserver
+# - postgres-matrix: Dedicated Matrix database
+# - redis-matrix: Matrix caching
+# - element: Element Web client
+# - mautrix-discord: Discord bridge
+# - mautrix-slack: Slack bridge
+# - mautrix-telegram: Telegram bridge
+#
+
+services:
+  # ==========================================================================
+  # SYNAPSE - Matrix Homeserver
+  # ==========================================================================
+  synapse:
+    image: matrixdotorg/synapse:v1.98.0
+    container_name: matrix-synapse
+    restart: unless-stopped
+    environment:
+      - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
+      - SYNAPSE_SERVER_NAME=${MATRIX_SERVER_NAME:-matrix.fantasy.local}
+      - SYNAPSE_REPORT_STATS=no
+      - UID=1000
+      - GID=1000
+    volumes:
+      - ./synapse:/data
+      - synapse-data:/data/media_store
+    ports:
+      - "8008:8008"
+      - "8448:8448"
+    depends_on:
+      postgres-matrix:
+        condition: service_healthy
+      redis-matrix:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fSs", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - matrix-net
+      - app-net
+
+  # ==========================================================================
+  # POSTGRES - Matrix Database
+  # ==========================================================================
+  postgres-matrix:
+    image: postgres:16-alpine
+    container_name: matrix-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${MATRIX_DB_USER:-synapse}
+      - POSTGRES_PASSWORD=${MATRIX_DB_PASSWORD:-synapse_password}
+      - POSTGRES_DB=${MATRIX_DB_NAME:-synapse}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
+    volumes:
+      - postgres-matrix-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MATRIX_DB_USER:-synapse}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - matrix-net
+
+  # ==========================================================================
+  # REDIS - Matrix Caching
+  # ==========================================================================
+  redis-matrix:
+    image: redis:7-alpine
+    container_name: matrix-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-matrix-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - matrix-net
+
+  # ==========================================================================
+  # ELEMENT WEB - Matrix Client
+  # ==========================================================================
+  element:
+    image: vectorim/element-web:v1.11.52
+    container_name: matrix-element
+    restart: unless-stopped
+    volumes:
+      - ./element/config.json:/app/config.json:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - synapse
+    networks:
+      - matrix-net
+      - app-net
+
+  # ==========================================================================
+  # MAUTRIX-DISCORD - Discord Bridge
+  # ==========================================================================
+  mautrix-discord:
+    image: dock.mau.dev/mautrix/discord:v0.6.5
+    container_name: matrix-bridge-discord
+    restart: unless-stopped
+    volumes:
+      - ./bridges/discord:/data
+    depends_on:
+      synapse:
+        condition: service_healthy
+    networks:
+      - matrix-net
+
+  # ==========================================================================
+  # MAUTRIX-SLACK - Slack Bridge
+  # ==========================================================================
+  mautrix-slack:
+    image: dock.mau.dev/mautrix/slack:v0.1.0
+    container_name: matrix-bridge-slack
+    restart: unless-stopped
+    volumes:
+      - ./bridges/slack:/data
+    depends_on:
+      synapse:
+        condition: service_healthy
+    networks:
+      - matrix-net
+
+  # ==========================================================================
+  # MAUTRIX-TELEGRAM - Telegram Bridge
+  # ==========================================================================
+  mautrix-telegram:
+    image: dock.mau.dev/mautrix/telegram:v0.15.1
+    container_name: matrix-bridge-telegram
+    restart: unless-stopped
+    volumes:
+      - ./bridges/telegram:/data
+    depends_on:
+      synapse:
+        condition: service_healthy
+    networks:
+      - matrix-net
+
+# ==========================================================================
+# NETWORKS
+# ==========================================================================
+networks:
+  matrix-net:
+    driver: bridge
+  app-net:
+    external: true
+    name: pull-network
+
+# ==========================================================================
+# VOLUMES
+# ==========================================================================
+volumes:
+  synapse-data:
+  postgres-matrix-data:
+  redis-matrix-data:

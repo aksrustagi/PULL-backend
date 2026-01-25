@@ -1,0 +1,125 @@
+{
+  "appName": "PULL Fantasy",
+  "subtitle": "Fantasy Football & Prediction Markets",
+  "bundleId": "com.pull.fantasy",
+  "version": "1.0.0",
+  "buildNumber": "1",
+  "platforms": ["ios", "android"],
+
+  "ios": {
+    "category": "Sports",
+    "secondaryCategory": "Entertainment",
+    "contentRating": "12+",
+    "privacyUrl": "https://fantasy.pull.app/privacy",
+    "termsUrl": "https://fantasy.pull.app/terms",
+    "supportUrl": "https://fantasy.pull.app/support",
+    "keywords": [
+      "fantasy football",
+      "prediction markets",
+      "NFL",
+      "draft",
+      "trade",
+      "waiver wire",
+      "league",
+      "PPR",
+      "auction draft",
+      "dynasty",
+      "keeper league",
+      "fantasy sports",
+      "sports betting",
+      "player props",
+      "lineup optimizer"
+    ],
+    "description": "PULL Fantasy combines the best of fantasy football with prediction markets. Create or join leagues, draft players through snake or auction formats, and trade your way to a championship—all while betting on matchups, player props, and league outcomes with real-time odds.\n\nFEATURES:\n\n• Full Fantasy Football Platform\n  - Snake, auction, and keeper draft formats\n  - PPR, Half PPR, and Standard scoring\n  - Real-time scoring updates\n  - Waiver wire with FAAB bidding\n  - Trade proposals with AI-powered analysis\n  - Commissioner tools and league management\n\n• Prediction Markets\n  - Bet on weekly matchups and player props\n  - LMSR-powered odds that update in real-time\n  - Portfolio tracking and P&L analytics\n  - Market creation for commissioners\n\n• AI-Powered Insights\n  - Draft recommendations and tier rankings\n  - Start/sit decisions backed by projections\n  - Trade value analysis\n  - Waiver wire priority suggestions\n  - Lineup optimization\n\n• Social Features\n  - League chat with trash talk\n  - Public league finder\n  - Weekly and season recaps\n  - Power rankings and awards\n  - Referral bonuses\n\n• Real-Time Updates\n  - Live scoring during games\n  - Injury alerts and news feed\n  - Push notifications for trades, waivers, and your pick\n  - WebSocket-powered instant updates",
+    "promotionalText": "The ultimate fantasy football experience with prediction markets. Draft, trade, bet, and win.",
+    "whatsNew": "Initial release! Create leagues, draft players, trade with friends, and bet on outcomes.",
+    "screenshots": {
+      "iPhone6.5": [
+        "screenshots/ios/6.5/01-home-dashboard.png",
+        "screenshots/ios/6.5/02-draft-room.png",
+        "screenshots/ios/6.5/03-matchup-scoring.png",
+        "screenshots/ios/6.5/04-prediction-markets.png",
+        "screenshots/ios/6.5/05-player-comparison.png",
+        "screenshots/ios/6.5/06-league-chat.png"
+      ],
+      "iPhone5.5": [
+        "screenshots/ios/5.5/01-home-dashboard.png",
+        "screenshots/ios/5.5/02-draft-room.png",
+        "screenshots/ios/5.5/03-matchup-scoring.png",
+        "screenshots/ios/5.5/04-prediction-markets.png",
+        "screenshots/ios/5.5/05-player-comparison.png",
+        "screenshots/ios/5.5/06-league-chat.png"
+      ],
+      "iPad12.9": [
+        "screenshots/ios/ipad/01-home-dashboard.png",
+        "screenshots/ios/ipad/02-draft-room.png",
+        "screenshots/ios/ipad/03-matchup-scoring.png",
+        "screenshots/ios/ipad/04-prediction-markets.png"
+      ]
+    }
+  },
+
+  "android": {
+    "category": "Sports",
+    "contentRating": "Everyone 10+",
+    "privacyUrl": "https://fantasy.pull.app/privacy",
+    "shortDescription": "Fantasy football with prediction markets. Draft, trade, bet, and win your league.",
+    "fullDescription": "PULL Fantasy combines the best of fantasy football with prediction markets. Create or join leagues, draft players through snake or auction formats, and trade your way to a championship—all while betting on matchups, player props, and league outcomes with real-time odds.\n\nKEY FEATURES:\n\n★ FULL FANTASY FOOTBALL\nSnake drafts, auction drafts, keeper leagues, dynasty formats. PPR, Half PPR, and Standard scoring. Real-time scoring, waiver wire with FAAB, and comprehensive trade tools.\n\n★ PREDICTION MARKETS\nBet on weekly matchups, player props, and league outcomes. LMSR-powered odds update in real-time. Track your portfolio and P&L.\n\n★ AI ASSISTANT\nGet draft recommendations, start/sit decisions, trade analysis, and lineup optimization powered by advanced AI models.\n\n★ SOCIAL & CHAT\nLeague chat, public league finder, weekly recaps, power rankings, and achievements. Connect with friends and talk trash all season.\n\n★ REAL-TIME EVERYTHING\nLive scoring, injury alerts, push notifications, and WebSocket-powered instant updates keep you in the action.",
+    "screenshots": [
+      "screenshots/android/01-home-dashboard.png",
+      "screenshots/android/02-draft-room.png",
+      "screenshots/android/03-matchup-scoring.png",
+      "screenshots/android/04-prediction-markets.png",
+      "screenshots/android/05-player-comparison.png",
+      "screenshots/android/06-league-chat.png",
+      "screenshots/android/07-keeper-selection.png",
+      "screenshots/android/08-auction-draft.png"
+    ],
+    "featureGraphic": "screenshots/android/feature-graphic.png"
+  },
+
+  "appStoreReviewNotes": "Test credentials:\nEmail: reviewer@pull.app\nPassword: AppReview2025!\n\nThe prediction markets feature uses virtual currency only (no real money gambling). Users receive free virtual currency when creating an account.\n\nTo test the draft feature, a demo league with auto-drafting bots is available on the home screen under 'Quick Draft'.\n\nPush notifications require permission and can be tested by having another test user propose a trade.",
+
+  "privacyQuestionnaire": {
+    "dataCollected": [
+      {
+        "type": "Contact Info",
+        "purpose": "App Functionality",
+        "linked": true,
+        "details": "Email address for account creation and notifications"
+      },
+      {
+        "type": "Identifiers",
+        "purpose": "App Functionality",
+        "linked": true,
+        "details": "User ID for account management"
+      },
+      {
+        "type": "Usage Data",
+        "purpose": "Analytics",
+        "linked": false,
+        "details": "App usage patterns for improving the experience"
+      },
+      {
+        "type": "Diagnostics",
+        "purpose": "App Functionality",
+        "linked": false,
+        "details": "Crash logs and performance data"
+      }
+    ],
+    "thirdPartyTracking": false,
+    "dataRetention": "Account data retained until deletion request. Analytics data retained for 12 months."
+  },
+
+  "localization": {
+    "defaultLanguage": "en-US",
+    "supportedLanguages": ["en-US"]
+  },
+
+  "ageRating": {
+    "gambling": "simulatedGambling",
+    "matureContent": false,
+    "violence": false,
+    "profanity": false
+  }
+}

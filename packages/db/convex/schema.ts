@@ -1695,6 +1695,772 @@ export default defineSchema({
     }),
 
   // ============================================================================
+  // FANTASY FOOTBALL TABLES
+  // ============================================================================
+
+  /**
+   * Fantasy Leagues - League configuration and settings
+   */
+  fantasyLeagues: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    commissionerId: v.id("users"),
+    inviteCode: v.string(),
+    logoUrl: v.optional(v.string()),
+
+    // League settings
+    scoringType: v.union(
+      v.literal("ppr"),
+      v.literal("half_ppr"),
+      v.literal("standard")
+    ),
+    draftType: v.union(
+      v.literal("snake"),
+      v.literal("auction"),
+      v.literal("dynasty"),
+      v.literal("keeper")
+    ),
+    maxTeams: v.number(),
+    currentTeams: v.number(),
+    rosterPositions: v.object({
+      qb: v.number(),
+      rb: v.number(),
+      wr: v.number(),
+      te: v.number(),
+      flex: v.number(),
+      k: v.number(),
+      def: v.number(),
+      bench: v.number(),
+      ir: v.number(),
+    }),
+
+    // Scoring rules (customizable)
+    scoringRules: v.object({
+      passingYardsPerPoint: v.number(),
+      passingTd: v.number(),
+      interception: v.number(),
+      rushingYardsPerPoint: v.number(),
+      rushingTd: v.number(),
+      receivingYardsPerPoint: v.number(),
+      receivingTd: v.number(),
+      reception: v.number(),
+      fumble: v.number(),
+      fgMade: v.number(),
+      fgMissed: v.number(),
+      extraPoint: v.number(),
+      sack: v.number(),
+      defenseInterception: v.number(),
+      fumbleRecovery: v.number(),
+      defenseTd: v.number(),
+      safety: v.number(),
+      pointsAllowed0: v.number(),
+      pointsAllowed1_6: v.number(),
+      pointsAllowed7_13: v.number(),
+      pointsAllowed14_20: v.number(),
+      pointsAllowed21_27: v.number(),
+      pointsAllowed28_34: v.number(),
+      pointsAllowed35Plus: v.number(),
+    }),
+
+    // Waiver settings
+    waiverType: v.union(
+      v.literal("faab"),
+      v.literal("rolling"),
+      v.literal("reverse_standings")
+    ),
+    waiverBudget: v.number(),
+    waiverProcessDay: v.number(),
+
+    // Trade settings
+    tradeDeadlineWeek: v.optional(v.number()),
+    tradeReviewPeriodHours: v.number(),
+    vetoVotesRequired: v.number(),
+
+    // Season info
+    season: v.string(),
+    currentWeek: v.number(),
+    regularSeasonWeeks: v.number(),
+    playoffTeams: v.number(),
+    playoffWeeks: v.number(),
+
+    // Status
+    status: v.union(
+      v.literal("drafting"),
+      v.literal("pre_draft"),
+      v.literal("active"),
+      v.literal("playoffs"),
+      v.literal("complete"),
+      v.literal("archived")
+    ),
+
+    // Matrix integration
+    matrixRoomId: v.optional(v.string()),
+
+    // Timestamps
+    draftScheduledAt: v.optional(v.number()),
+    draftCompletedAt: v.optional(v.number()),
+    seasonStartAt: v.optional(v.number()),
+    seasonEndAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_commissioner", ["commissionerId"])
+    .index("by_invite_code", ["inviteCode"])
+    .index("by_status", ["status"])
+    .index("by_season", ["season", "status"])
+    .searchIndex("search_leagues", {
+      searchField: "name",
+      filterFields: ["status", "season"],
+    }),
+
+  /**
+   * Fantasy Teams - Teams within leagues
+   */
+  fantasyTeams: defineTable({
+    leagueId: v.id("fantasyLeagues"),
+    ownerId: v.id("users"),
+    name: v.string(),
+    logoUrl: v.optional(v.string()),
+
+    // Draft info
+    draftPosition: v.optional(v.number()),
+    auctionBudgetRemaining: v.optional(v.number()),
+
+    // Waiver info
+    waiverPriority: v.number(),
+    faabBudget: v.number(),
+    faabSpent: v.number(),
+
+    // Record
+    wins: v.number(),
+    losses: v.number(),
+    ties: v.number(),
+    pointsFor: v.number(),
+    pointsAgainst: v.number(),
+
+    // Standings
+    rank: v.optional(v.number()),
+    playoffSeed: v.optional(v.number()),
+    isEliminated: v.boolean(),
+    isPlayoffBound: v.boolean(),
+
+    // Weekly info
+    projectedPoints: v.number(),
+    currentWeekPoints: v.number(),
+    streak: v.string(),
+
+    // Timestamps
+    joinedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_league_owner", ["leagueId", "ownerId"])
+    .index("by_league_rank", ["leagueId", "rank"]),
+
+  /**
+   * Fantasy Players - NFL player database
+   */
+  fantasyPlayers: defineTable({
+    externalId: v.string(),
+    source: v.union(v.literal("espn"), v.literal("sportsradar"), v.literal("manual")),
+
+    // Basic info
+    name: v.string(),
+    firstName: v.string(),
+    lastName: v.string(),
+    position: v.union(
+      v.literal("QB"),
+      v.literal("RB"),
+      v.literal("WR"),
+      v.literal("TE"),
+      v.literal("K"),
+      v.literal("DEF")
+    ),
+    nflTeam: v.string(),
+    nflTeamId: v.optional(v.string()),
+    jerseyNumber: v.optional(v.number()),
+    headshotUrl: v.optional(v.string()),
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("injured_reserve"),
+      v.literal("out"),
+      v.literal("doubtful"),
+      v.literal("questionable"),
+      v.literal("probable"),
+      v.literal("suspended"),
+      v.literal("practice_squad"),
+      v.literal("free_agent")
+    ),
+    injuryStatus: v.optional(v.string()),
+    injuryBodyPart: v.optional(v.string()),
+    injuryNotes: v.optional(v.string()),
+
+    // Season info
+    byeWeek: v.number(),
+    experience: v.optional(v.number()),
+    age: v.optional(v.number()),
+    college: v.optional(v.string()),
+    height: v.optional(v.string()),
+    weight: v.optional(v.number()),
+
+    // Ownership
+    percentOwned: v.number(),
+    percentStarted: v.number(),
+    adp: v.optional(v.number()),
+
+    // Projections (current week)
+    projectedPoints: v.number(),
+    projectedPointsPpr: v.number(),
+    projectedPointsHalfPpr: v.number(),
+
+    // Season stats
+    seasonPoints: v.number(),
+    seasonPointsPpr: v.number(),
+    seasonPointsHalfPpr: v.number(),
+    gamesPlayed: v.number(),
+    averagePoints: v.number(),
+
+    // Sync
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_external", ["source", "externalId"])
+    .index("by_position", ["position", "status"])
+    .index("by_team", ["nflTeam"])
+    .index("by_ownership", ["percentOwned"])
+    .searchIndex("search_players", {
+      searchField: "name",
+      filterFields: ["position", "nflTeam", "status"],
+    }),
+
+  /**
+   * Fantasy Player Stats - Weekly player statistics
+   */
+  fantasyPlayerStats: defineTable({
+    playerId: v.id("fantasyPlayers"),
+    season: v.string(),
+    week: v.number(),
+    gameId: v.optional(v.string()),
+
+    // Game info
+    opponent: v.string(),
+    isHome: v.boolean(),
+    gameStatus: v.union(
+      v.literal("scheduled"),
+      v.literal("in_progress"),
+      v.literal("final"),
+      v.literal("postponed"),
+      v.literal("bye")
+    ),
+
+    // Passing stats
+    passingAttempts: v.number(),
+    passingCompletions: v.number(),
+    passingYards: v.number(),
+    passingTouchdowns: v.number(),
+    interceptions: v.number(),
+    sacks: v.number(),
+    sackYardsLost: v.number(),
+
+    // Rushing stats
+    rushingAttempts: v.number(),
+    rushingYards: v.number(),
+    rushingTouchdowns: v.number(),
+
+    // Receiving stats
+    targets: v.number(),
+    receptions: v.number(),
+    receivingYards: v.number(),
+    receivingTouchdowns: v.number(),
+
+    // Misc offense
+    fumbles: v.number(),
+    fumblesLost: v.number(),
+    twoPointConversions: v.number(),
+
+    // Kicking stats
+    fgAttempts: v.number(),
+    fgMade: v.number(),
+    fg0_39: v.number(),
+    fg40_49: v.number(),
+    fg50Plus: v.number(),
+    xpAttempts: v.number(),
+    xpMade: v.number(),
+
+    // Defense stats (for DEF position)
+    defSacks: v.number(),
+    defInterceptions: v.number(),
+    defFumbleRecoveries: v.number(),
+    defTouchdowns: v.number(),
+    defSafeties: v.number(),
+    defBlockedKicks: v.number(),
+    defPointsAllowed: v.number(),
+    defYardsAllowed: v.number(),
+
+    // Calculated points
+    pointsStandard: v.number(),
+    pointsHalfPpr: v.number(),
+    pointsPpr: v.number(),
+
+    // Sync
+    lastSyncAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_player_week", ["playerId", "season", "week"])
+    .index("by_season_week", ["season", "week"]),
+
+  /**
+   * Fantasy Rosters - Player-to-team assignments
+   */
+  fantasyRosters: defineTable({
+    teamId: v.id("fantasyTeams"),
+    playerId: v.id("fantasyPlayers"),
+    leagueId: v.id("fantasyLeagues"),
+
+    // Slot assignment
+    slot: v.union(
+      v.literal("QB"),
+      v.literal("RB1"),
+      v.literal("RB2"),
+      v.literal("WR1"),
+      v.literal("WR2"),
+      v.literal("TE"),
+      v.literal("FLEX"),
+      v.literal("K"),
+      v.literal("DEF"),
+      v.literal("BN1"),
+      v.literal("BN2"),
+      v.literal("BN3"),
+      v.literal("BN4"),
+      v.literal("BN5"),
+      v.literal("BN6"),
+      v.literal("IR")
+    ),
+    isStarter: v.boolean(),
+    isLocked: v.boolean(),
+
+    // Acquisition info
+    acquisitionType: v.union(
+      v.literal("draft"),
+      v.literal("waiver"),
+      v.literal("free_agent"),
+      v.literal("trade")
+    ),
+    acquisitionCost: v.optional(v.number()),
+    acquisitionDate: v.number(),
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("pending_drop"),
+      v.literal("pending_trade")
+    ),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_player", ["playerId"])
+    .index("by_league", ["leagueId"])
+    .index("by_team_slot", ["teamId", "slot"])
+    .index("by_league_player", ["leagueId", "playerId"]),
+
+  /**
+   * Fantasy Matchups - Weekly head-to-head matchups
+   */
+  fantasyMatchups: defineTable({
+    leagueId: v.id("fantasyLeagues"),
+    season: v.string(),
+    week: v.number(),
+
+    // Teams
+    teamAId: v.id("fantasyTeams"),
+    teamBId: v.id("fantasyTeams"),
+
+    // Scores
+    teamAScore: v.number(),
+    teamBScore: v.number(),
+    teamAProjected: v.number(),
+    teamBProjected: v.number(),
+
+    // Status
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("in_progress"),
+      v.literal("final")
+    ),
+
+    // Playoff info
+    isPlayoff: v.boolean(),
+    playoffRound: v.optional(v.number()),
+    playoffSeed: v.optional(v.string()),
+
+    // Winner
+    winnerId: v.optional(v.id("fantasyTeams")),
+    isTie: v.boolean(),
+    margin: v.number(),
+
+    // Timestamps
+    scheduledAt: v.number(),
+    startedAt: v.optional(v.number()),
+    finalizedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_league_week", ["leagueId", "week"])
+    .index("by_team_a", ["teamAId"])
+    .index("by_team_b", ["teamBId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Fantasy Markets - Prediction markets for fantasy
+   */
+  fantasyMarkets: defineTable({
+    leagueId: v.optional(v.id("fantasyLeagues")),
+    type: v.union(
+      v.literal("matchup"),
+      v.literal("league_winner"),
+      v.literal("player_prop"),
+      v.literal("weekly_high_score"),
+      v.literal("division_winner"),
+      v.literal("over_under"),
+      v.literal("custom")
+    ),
+
+    // Market details
+    title: v.string(),
+    description: v.string(),
+    imageUrl: v.optional(v.string()),
+
+    // Reference to related entity
+    referenceType: v.optional(
+      v.union(
+        v.literal("matchup"),
+        v.literal("player"),
+        v.literal("team"),
+        v.literal("league")
+      )
+    ),
+    referenceId: v.optional(v.string()),
+
+    // Timing
+    week: v.optional(v.number()),
+    season: v.string(),
+
+    // Outcomes
+    outcomes: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        description: v.optional(v.string()),
+        odds: v.number(),
+        impliedProbability: v.number(),
+        totalVolume: v.number(),
+      })
+    ),
+
+    // LMSR market maker parameters
+    liquidityParameter: v.number(),
+    totalLiquidity: v.number(),
+    totalVolume: v.number(),
+
+    // Status
+    status: v.union(
+      v.literal("pending"),
+      v.literal("open"),
+      v.literal("locked"),
+      v.literal("settled"),
+      v.literal("cancelled"),
+      v.literal("voided")
+    ),
+
+    // Settlement
+    winningOutcomeId: v.optional(v.string()),
+    settlementValue: v.optional(v.number()),
+    settlementNotes: v.optional(v.string()),
+
+    // Timing
+    opensAt: v.number(),
+    closesAt: v.number(),
+    settlesAt: v.optional(v.number()),
+
+    // Creator
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_type", ["type", "status"])
+    .index("by_status", ["status"])
+    .index("by_week", ["season", "week"])
+    .searchIndex("search_markets", {
+      searchField: "title",
+      filterFields: ["type", "status"],
+    }),
+
+  /**
+   * Fantasy Bets - User bets on fantasy markets
+   */
+  fantasyBets: defineTable({
+    userId: v.id("users"),
+    marketId: v.id("fantasyMarkets"),
+    leagueId: v.optional(v.id("fantasyLeagues")),
+
+    // Bet details
+    outcomeId: v.string(),
+    outcomeLabel: v.string(),
+    amount: v.number(),
+    oddsAtPlacement: v.number(),
+    impliedProbabilityAtPlacement: v.number(),
+    potentialPayout: v.number(),
+
+    // Status
+    status: v.union(
+      v.literal("pending"),
+      v.literal("active"),
+      v.literal("won"),
+      v.literal("lost"),
+      v.literal("cashed_out"),
+      v.literal("voided"),
+      v.literal("refunded")
+    ),
+
+    // Settlement
+    settledAmount: v.optional(v.number()),
+    profitLoss: v.optional(v.number()),
+    settledAt: v.optional(v.number()),
+
+    // Cash out
+    cashedOutAmount: v.optional(v.number()),
+    cashedOutAt: v.optional(v.number()),
+
+    // Timestamps
+    placedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_market", ["marketId"])
+    .index("by_league", ["leagueId"])
+    .index("by_user_status", ["userId", "status"])
+    .index("by_user_market", ["userId", "marketId"]),
+
+  /**
+   * Fantasy Transactions - Waivers, trades, adds/drops
+   */
+  fantasyTransactions: defineTable({
+    leagueId: v.id("fantasyLeagues"),
+    type: v.union(
+      v.literal("add"),
+      v.literal("drop"),
+      v.literal("waiver_claim"),
+      v.literal("trade"),
+      v.literal("commissioner_action")
+    ),
+
+    // Initiator
+    initiatorId: v.id("users"),
+    initiatorTeamId: v.id("fantasyTeams"),
+
+    // Status
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("completed"),
+      v.literal("cancelled"),
+      v.literal("vetoed")
+    ),
+
+    // Transaction details (varies by type)
+    details: v.object({
+      // For add/drop
+      addPlayerId: v.optional(v.string()),
+      addPlayerName: v.optional(v.string()),
+      dropPlayerId: v.optional(v.string()),
+      dropPlayerName: v.optional(v.string()),
+
+      // For waiver
+      waiverPriority: v.optional(v.number()),
+      faabBid: v.optional(v.number()),
+      waiverType: v.optional(v.string()),
+
+      // For trade
+      tradePartnerTeamId: v.optional(v.string()),
+      tradePartnerUserId: v.optional(v.string()),
+      playersOffered: v.optional(v.array(v.string())),
+      playersRequested: v.optional(v.array(v.string())),
+      draftPicksOffered: v.optional(v.array(v.string())),
+      draftPicksRequested: v.optional(v.array(v.string())),
+      faabOffered: v.optional(v.number()),
+      faabRequested: v.optional(v.number()),
+
+      // For commissioner action
+      actionType: v.optional(v.string()),
+      reason: v.optional(v.string()),
+    }),
+
+    // Votes (for trades)
+    vetoVotes: v.number(),
+    approveVotes: v.number(),
+    voterIds: v.array(v.string()),
+
+    // Processing
+    processAfter: v.optional(v.number()),
+    processedAt: v.optional(v.number()),
+    processedBy: v.optional(v.string()),
+    rejectionReason: v.optional(v.string()),
+
+    // Timestamps
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_initiator", ["initiatorId"])
+    .index("by_team", ["initiatorTeamId"])
+    .index("by_status", ["status"])
+    .index("by_league_status", ["leagueId", "status"])
+    .index("by_type", ["type", "status"]),
+
+  /**
+   * Fantasy Drafts - Draft configuration and state
+   */
+  fantasyDrafts: defineTable({
+    leagueId: v.id("fantasyLeagues"),
+    type: v.union(
+      v.literal("snake"),
+      v.literal("auction"),
+      v.literal("linear")
+    ),
+
+    // Status
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("in_progress"),
+      v.literal("paused"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    ),
+
+    // Configuration
+    secondsPerPick: v.number(),
+    auctionBudget: v.optional(v.number()),
+
+    // Draft order (team IDs in order)
+    draftOrder: v.array(v.string()),
+    currentRound: v.number(),
+    currentPick: v.number(),
+    currentTeamId: v.optional(v.string()),
+
+    // Timing
+    pickDeadline: v.optional(v.number()),
+    totalPicks: v.number(),
+    completedPicks: v.number(),
+
+    // Timestamps
+    scheduledAt: v.number(),
+    startedAt: v.optional(v.number()),
+    pausedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Fantasy Draft Picks - Individual draft selections
+   */
+  fantasyDraftPicks: defineTable({
+    draftId: v.id("fantasyDrafts"),
+    leagueId: v.id("fantasyLeagues"),
+    teamId: v.id("fantasyTeams"),
+    playerId: v.id("fantasyPlayers"),
+
+    // Pick info
+    round: v.number(),
+    pick: v.number(),
+    overallPick: v.number(),
+
+    // Auction specific
+    auctionAmount: v.optional(v.number()),
+    nominatedBy: v.optional(v.string()),
+
+    // Auto-pick
+    isAutoPick: v.boolean(),
+    autoPickReason: v.optional(v.string()),
+
+    // Player snapshot at draft time
+    playerName: v.string(),
+    playerPosition: v.string(),
+    playerTeam: v.string(),
+    adpAtDraft: v.optional(v.number()),
+
+    // Timestamps
+    pickedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_draft", ["draftId"])
+    .index("by_league", ["leagueId"])
+    .index("by_team", ["teamId"])
+    .index("by_player", ["playerId"])
+    .index("by_draft_pick", ["draftId", "overallPick"]),
+
+  /**
+   * Fantasy League Members - League membership and settings
+   */
+  fantasyLeagueMembers: defineTable({
+    leagueId: v.id("fantasyLeagues"),
+    userId: v.id("users"),
+    teamId: v.optional(v.id("fantasyTeams")),
+
+    // Role
+    role: v.union(
+      v.literal("commissioner"),
+      v.literal("co_commissioner"),
+      v.literal("member")
+    ),
+
+    // Status
+    status: v.union(
+      v.literal("invited"),
+      v.literal("pending"),
+      v.literal("active"),
+      v.literal("left"),
+      v.literal("removed")
+    ),
+
+    // Notification preferences
+    notificationPreferences: v.object({
+      tradeOffers: v.boolean(),
+      waiverResults: v.boolean(),
+      scoreUpdates: v.boolean(),
+      chatMessages: v.boolean(),
+      leagueNews: v.boolean(),
+    }),
+
+    // Timestamps
+    invitedAt: v.optional(v.number()),
+    joinedAt: v.optional(v.number()),
+    leftAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_user", ["userId"])
+    .index("by_league_user", ["leagueId", "userId"])
+    .index("by_status", ["status"]),
+
+  // ============================================================================
   // AI SIGNAL DETECTION TABLES
   // ============================================================================
 
@@ -1877,4 +2643,1180 @@ export default defineSchema({
     .index("by_ticker", ["ticker", "timestamp"])
     .index("by_trade_id", ["tradeId"])
     .index("by_timestamp", ["timestamp"]),
+
+  // ============================================================================
+  // AI INSIGHTS & CREDITS TABLES
+  // ============================================================================
+
+  /**
+   * AI Insights - Generated premium insights
+   */
+  aiInsights: defineTable({
+    insightId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("ncaa_basketball"),
+      v.literal("golf"),
+      v.literal("nba"),
+      v.literal("mlb")
+    ),
+    category: v.string(),
+    title: v.string(),
+    summary: v.string(),
+    analysis: v.string(),
+    confidence: v.number(),
+    sources: v.array(
+      v.object({
+        title: v.string(),
+        url: v.string(),
+        snippet: v.string(),
+        reliability: v.number(),
+      })
+    ),
+    predictions: v.optional(
+      v.array(
+        v.object({
+          outcome: v.string(),
+          probability: v.number(),
+          confidence: v.number(),
+          reasoning: v.string(),
+        })
+      )
+    ),
+    actionItems: v.optional(
+      v.array(
+        v.object({
+          action: v.string(),
+          priority: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+          timeframe: v.string(),
+          reasoning: v.string(),
+        })
+      )
+    ),
+    relatedMarkets: v.array(v.string()),
+    isPremium: v.boolean(),
+    creditCost: v.number(),
+    viewCount: v.number(),
+    purchaseCount: v.number(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_insightId", ["insightId"])
+    .index("by_sport", ["sport", "createdAt"])
+    .index("by_category", ["category", "createdAt"])
+    .index("by_expires", ["expiresAt"])
+    .searchIndex("search_insights", {
+      searchField: "title",
+      filterFields: ["sport", "category", "isPremium"],
+    }),
+
+  /**
+   * User Insight Credits - Credit balance and history
+   */
+  insightCredits: defineTable({
+    userId: v.id("users"),
+    balance: v.number(),
+    monthlyAllocation: v.number(),
+    usedThisMonth: v.number(),
+    tier: v.union(
+      v.literal("free"),
+      v.literal("standard"),
+      v.literal("premium"),
+      v.literal("elite")
+    ),
+    subscriptionPlan: v.union(
+      v.literal("free"),
+      v.literal("starter"),
+      v.literal("pro"),
+      v.literal("elite"),
+      v.literal("enterprise")
+    ),
+    subscriptionExpiresAt: v.optional(v.number()),
+    lastResetAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_tier", ["tier"]),
+
+  /**
+   * Insight Purchases - User purchase history
+   */
+  insightPurchases: defineTable({
+    userId: v.id("users"),
+    insightId: v.id("aiInsights"),
+    bundleId: v.optional(v.string()),
+    creditsSpent: v.number(),
+    cashPaid: v.optional(v.number()),
+    expiresAt: v.number(),
+    purchasedAt: v.number(),
+  })
+    .index("by_user", ["userId", "purchasedAt"])
+    .index("by_insight", ["insightId"])
+    .index("by_bundle", ["bundleId"]),
+
+  /**
+   * Credit Transactions - Credit purchase/usage history
+   */
+  creditTransactions: defineTable({
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("purchase"),
+      v.literal("subscription_grant"),
+      v.literal("insight_unlock"),
+      v.literal("bundle_purchase"),
+      v.literal("refund"),
+      v.literal("bonus"),
+      v.literal("expiry")
+    ),
+    amount: v.number(),
+    balanceAfter: v.number(),
+    referenceType: v.optional(v.string()),
+    referenceId: v.optional(v.string()),
+    description: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_type", ["type", "createdAt"]),
+
+  // ============================================================================
+  // MARCH MADNESS / NCAA BASKETBALL TABLES
+  // ============================================================================
+
+  /**
+   * NCAA Teams - College basketball teams
+   */
+  ncaaTeams: defineTable({
+    externalId: v.string(),
+    name: v.string(),
+    shortName: v.string(),
+    mascot: v.string(),
+    conference: v.string(),
+    logoUrl: v.optional(v.string()),
+    primaryColor: v.optional(v.string()),
+    secondaryColor: v.optional(v.string()),
+
+    // Rankings
+    apRank: v.optional(v.number()),
+    coachesRank: v.optional(v.number()),
+    netRank: v.optional(v.number()),
+    kenpomRank: v.optional(v.number()),
+    rpiRank: v.optional(v.number()),
+
+    // Season stats
+    wins: v.number(),
+    losses: v.number(),
+    conferenceWins: v.number(),
+    conferenceLosses: v.number(),
+    pointsPerGame: v.number(),
+    pointsAllowedPerGame: v.number(),
+    strengthOfSchedule: v.number(),
+
+    // Advanced metrics
+    offensiveEfficiency: v.optional(v.number()),
+    defensiveEfficiency: v.optional(v.number()),
+    tempo: v.optional(v.number()),
+
+    // Tournament info
+    seed: v.optional(v.number()),
+    region: v.optional(v.string()),
+    isEliminated: v.boolean(),
+
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_conference", ["conference"])
+    .index("by_seed", ["seed"])
+    .index("by_region", ["region"])
+    .searchIndex("search_ncaa_teams", {
+      searchField: "name",
+      filterFields: ["conference", "region"],
+    }),
+
+  /**
+   * NCAA Players - College basketball players
+   */
+  ncaaPlayers: defineTable({
+    externalId: v.string(),
+    teamId: v.id("ncaaTeams"),
+    name: v.string(),
+    position: v.string(),
+    jerseyNumber: v.optional(v.number()),
+    year: v.union(
+      v.literal("freshman"),
+      v.literal("sophomore"),
+      v.literal("junior"),
+      v.literal("senior"),
+      v.literal("graduate")
+    ),
+    height: v.optional(v.string()),
+    weight: v.optional(v.number()),
+    headshotUrl: v.optional(v.string()),
+
+    // Season stats
+    gamesPlayed: v.number(),
+    pointsPerGame: v.number(),
+    reboundsPerGame: v.number(),
+    assistsPerGame: v.number(),
+    stealsPerGame: v.number(),
+    blocksPerGame: v.number(),
+    fieldGoalPct: v.number(),
+    threePointPct: v.number(),
+    freeThrowPct: v.number(),
+    minutesPerGame: v.number(),
+
+    // NBA prospect info
+    nbaProspectRank: v.optional(v.number()),
+    mockDraftPosition: v.optional(v.number()),
+
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_team", ["teamId"])
+    .searchIndex("search_ncaa_players", {
+      searchField: "name",
+      filterFields: ["teamId"],
+    }),
+
+  /**
+   * NCAA Tournament Brackets - User bracket submissions
+   */
+  ncaaBrackets: defineTable({
+    userId: v.id("users"),
+    season: v.string(),
+    name: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("submitted"),
+      v.literal("locked"),
+      v.literal("scored")
+    ),
+
+    // Bracket picks (64 teams -> Final Four -> Champion)
+    picks: v.object({
+      round1: v.array(v.string()), // 32 winners
+      round2: v.array(v.string()), // 16 winners (Sweet 16)
+      sweet16: v.array(v.string()), // 8 winners (Elite 8)
+      elite8: v.array(v.string()), // 4 winners (Final Four)
+      finalFour: v.array(v.string()), // 2 winners (Championship)
+      champion: v.string(),
+    }),
+
+    // Tiebreaker
+    championshipScore: v.optional(v.number()),
+
+    // Scoring
+    totalPoints: v.number(),
+    maxPossiblePoints: v.number(),
+    percentile: v.optional(v.number()),
+    rank: v.optional(v.number()),
+
+    // Pool participation
+    poolIds: v.array(v.string()),
+
+    submittedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId", "season"])
+    .index("by_season", ["season", "totalPoints"])
+    .index("by_status", ["status"]),
+
+  /**
+   * NCAA Games - Tournament and regular season games
+   */
+  ncaaGames: defineTable({
+    externalId: v.string(),
+    season: v.string(),
+    round: v.optional(v.string()), // "First Round", "Sweet 16", etc.
+    region: v.optional(v.string()),
+
+    homeTeamId: v.id("ncaaTeams"),
+    awayTeamId: v.id("ncaaTeams"),
+    homeScore: v.optional(v.number()),
+    awayScore: v.optional(v.number()),
+    winnerId: v.optional(v.id("ncaaTeams")),
+
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("in_progress"),
+      v.literal("halftime"),
+      v.literal("final"),
+      v.literal("postponed"),
+      v.literal("cancelled")
+    ),
+
+    // Odds
+    spread: v.optional(v.number()),
+    spreadFavorite: v.optional(v.string()),
+    total: v.optional(v.number()),
+    homeMoneyline: v.optional(v.number()),
+    awayMoneyline: v.optional(v.number()),
+
+    // Timing
+    scheduledAt: v.number(),
+    startedAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+
+    venue: v.optional(v.string()),
+    city: v.optional(v.string()),
+    tvNetwork: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_season", ["season", "scheduledAt"])
+    .index("by_round", ["round", "scheduledAt"])
+    .index("by_home_team", ["homeTeamId"])
+    .index("by_away_team", ["awayTeamId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * NCAA Markets - March Madness prediction markets
+   */
+  ncaaMarkets: defineTable({
+    type: v.union(
+      v.literal("game_winner"),
+      v.literal("game_spread"),
+      v.literal("game_total"),
+      v.literal("tournament_winner"),
+      v.literal("final_four"),
+      v.literal("elite_eight"),
+      v.literal("sweet_sixteen"),
+      v.literal("first_round_upset"),
+      v.literal("player_prop"),
+      v.literal("region_winner")
+    ),
+    gameId: v.optional(v.id("ncaaGames")),
+    teamId: v.optional(v.id("ncaaTeams")),
+    playerId: v.optional(v.id("ncaaPlayers")),
+    season: v.string(),
+
+    title: v.string(),
+    description: v.string(),
+
+    outcomes: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        odds: v.number(),
+        impliedProbability: v.number(),
+        totalVolume: v.number(),
+      })
+    ),
+
+    liquidityParameter: v.number(),
+    totalLiquidity: v.number(),
+    totalVolume: v.number(),
+
+    status: v.union(
+      v.literal("pending"),
+      v.literal("open"),
+      v.literal("locked"),
+      v.literal("settled"),
+      v.literal("cancelled")
+    ),
+
+    winningOutcomeId: v.optional(v.string()),
+    opensAt: v.number(),
+    closesAt: v.number(),
+    settledAt: v.optional(v.number()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_type", ["type", "status"])
+    .index("by_game", ["gameId"])
+    .index("by_team", ["teamId"])
+    .index("by_season", ["season", "status"])
+    .index("by_status", ["status"]),
+
+  // ============================================================================
+  // GOLF / MASTERS TABLES
+  // ============================================================================
+
+  /**
+   * Golf Tournaments - PGA Tour tournaments
+   */
+  golfTournaments: defineTable({
+    externalId: v.string(),
+    name: v.string(),
+    tour: v.union(
+      v.literal("pga"),
+      v.literal("lpga"),
+      v.literal("european"),
+      v.literal("champions")
+    ),
+    type: v.union(
+      v.literal("major"),
+      v.literal("playoff"),
+      v.literal("invitational"),
+      v.literal("regular")
+    ),
+    season: v.string(),
+
+    // Course info
+    courseName: v.string(),
+    courseCity: v.string(),
+    courseState: v.optional(v.string()),
+    courseCountry: v.string(),
+    par: v.number(),
+    yardage: v.number(),
+
+    // Purse
+    purse: v.number(),
+    winnersPurse: v.number(),
+
+    // Timing
+    status: v.union(
+      v.literal("upcoming"),
+      v.literal("round1"),
+      v.literal("round2"),
+      v.literal("round3"),
+      v.literal("round4"),
+      v.literal("playoff"),
+      v.literal("complete"),
+      v.literal("cancelled")
+    ),
+    startDate: v.number(),
+    endDate: v.number(),
+    cutLine: v.optional(v.number()),
+
+    // Weather
+    weather: v.optional(
+      v.object({
+        condition: v.string(),
+        temperature: v.number(),
+        windSpeed: v.number(),
+        windDirection: v.string(),
+        precipitation: v.number(),
+      })
+    ),
+
+    winnerId: v.optional(v.string()),
+    winningScore: v.optional(v.number()),
+
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_season", ["season", "startDate"])
+    .index("by_type", ["type", "startDate"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Golf Players - PGA Tour players
+   */
+  golfPlayers: defineTable({
+    externalId: v.string(),
+    name: v.string(),
+    firstName: v.string(),
+    lastName: v.string(),
+    country: v.string(),
+    headshotUrl: v.optional(v.string()),
+
+    // Rankings
+    worldRank: v.optional(v.number()),
+    fedexRank: v.optional(v.number()),
+
+    // Season stats
+    events: v.number(),
+    wins: v.number(),
+    top10s: v.number(),
+    cuts: v.number(),
+    earnings: v.number(),
+
+    // Strokes gained
+    sgTotal: v.optional(v.number()),
+    sgOffTheTee: v.optional(v.number()),
+    sgApproach: v.optional(v.number()),
+    sgAroundGreen: v.optional(v.number()),
+    sgPutting: v.optional(v.number()),
+
+    // Scoring
+    scoringAverage: v.optional(v.number()),
+    drivingDistance: v.optional(v.number()),
+    drivingAccuracy: v.optional(v.number()),
+    greensInRegulation: v.optional(v.number()),
+    puttsPerRound: v.optional(v.number()),
+
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_worldRank", ["worldRank"])
+    .searchIndex("search_golf_players", {
+      searchField: "name",
+      filterFields: ["country"],
+    }),
+
+  /**
+   * Golf Leaderboard - Tournament leaderboard entries
+   */
+  golfLeaderboard: defineTable({
+    tournamentId: v.id("golfTournaments"),
+    playerId: v.id("golfPlayers"),
+
+    position: v.number(),
+    positionTied: v.boolean(),
+    totalScore: v.number(),
+    totalToPar: v.number(),
+
+    // Round scores
+    round1: v.optional(v.number()),
+    round2: v.optional(v.number()),
+    round3: v.optional(v.number()),
+    round4: v.optional(v.number()),
+
+    // Current round info
+    currentRound: v.optional(v.number()),
+    currentHole: v.optional(v.number()),
+    thruHoles: v.optional(v.number()),
+    todayScore: v.optional(v.number()),
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("cut"),
+      v.literal("withdrawn"),
+      v.literal("disqualified"),
+      v.literal("finished")
+    ),
+
+    lastSyncAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tournament", ["tournamentId", "position"])
+    .index("by_player", ["playerId"])
+    .index("by_tournament_player", ["tournamentId", "playerId"]),
+
+  /**
+   * Golf Markets - Golf betting/prediction markets
+   */
+  golfMarkets: defineTable({
+    tournamentId: v.id("golfTournaments"),
+    type: v.union(
+      v.literal("tournament_winner"),
+      v.literal("top_5"),
+      v.literal("top_10"),
+      v.literal("top_20"),
+      v.literal("make_cut"),
+      v.literal("miss_cut"),
+      v.literal("matchup"),
+      v.literal("round_leader"),
+      v.literal("first_round_leader"),
+      v.literal("nationality_winner"),
+      v.literal("hole_in_one")
+    ),
+    playerId: v.optional(v.id("golfPlayers")),
+
+    title: v.string(),
+    description: v.string(),
+
+    outcomes: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        playerId: v.optional(v.string()),
+        odds: v.number(),
+        impliedProbability: v.number(),
+        totalVolume: v.number(),
+      })
+    ),
+
+    liquidityParameter: v.number(),
+    totalLiquidity: v.number(),
+    totalVolume: v.number(),
+
+    status: v.union(
+      v.literal("pending"),
+      v.literal("open"),
+      v.literal("locked"),
+      v.literal("settled"),
+      v.literal("cancelled")
+    ),
+
+    winningOutcomeId: v.optional(v.string()),
+    opensAt: v.number(),
+    closesAt: v.number(),
+    settledAt: v.optional(v.number()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tournament", ["tournamentId", "type"])
+    .index("by_type", ["type", "status"])
+    .index("by_player", ["playerId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Fantasy Golf Teams - User fantasy golf lineups
+   */
+  fantasyGolfTeams: defineTable({
+    userId: v.id("users"),
+    tournamentId: v.id("golfTournaments"),
+    contestId: v.optional(v.string()),
+
+    name: v.string(),
+    roster: v.array(v.id("golfPlayers")),
+    salaryCap: v.number(),
+    salaryUsed: v.number(),
+
+    // Scoring
+    totalPoints: v.number(),
+    projectedPoints: v.number(),
+    rank: v.optional(v.number()),
+
+    status: v.union(
+      v.literal("draft"),
+      v.literal("submitted"),
+      v.literal("locked"),
+      v.literal("complete")
+    ),
+
+    submittedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_tournament", ["tournamentId"])
+    .index("by_user_tournament", ["userId", "tournamentId"]),
+
+  // ============================================================================
+  // NBA PLAYOFFS TABLES
+  // ============================================================================
+
+  /**
+   * NBA Teams - NBA franchise data
+   */
+  nbaTeams: defineTable({
+    externalId: v.string(),
+    name: v.string(),
+    city: v.string(),
+    abbreviation: v.string(),
+    conference: v.union(v.literal("east"), v.literal("west")),
+    division: v.string(),
+    logoUrl: v.optional(v.string()),
+    primaryColor: v.optional(v.string()),
+    secondaryColor: v.optional(v.string()),
+
+    // Season record
+    wins: v.number(),
+    losses: v.number(),
+    winPct: v.number(),
+    conferenceRank: v.number(),
+    divisionRank: v.number(),
+    gamesBack: v.number(),
+
+    // Stats
+    pointsPerGame: v.number(),
+    pointsAllowedPerGame: v.number(),
+    reboundsPerGame: v.number(),
+    assistsPerGame: v.number(),
+    netRating: v.number(),
+    offensiveRating: v.number(),
+    defensiveRating: v.number(),
+    pace: v.number(),
+
+    // Playoff info
+    playoffSeed: v.optional(v.number()),
+    isPlayoffTeam: v.boolean(),
+    isEliminated: v.boolean(),
+
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_conference", ["conference", "conferenceRank"])
+    .index("by_playoff_seed", ["playoffSeed"]),
+
+  /**
+   * NBA Players - NBA player data
+   */
+  nbaPlayers: defineTable({
+    externalId: v.string(),
+    teamId: v.id("nbaTeams"),
+    name: v.string(),
+    firstName: v.string(),
+    lastName: v.string(),
+    position: v.string(),
+    jerseyNumber: v.optional(v.number()),
+    height: v.optional(v.string()),
+    weight: v.optional(v.number()),
+    headshotUrl: v.optional(v.string()),
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("injured"),
+      v.literal("out"),
+      v.literal("day_to_day"),
+      v.literal("suspended")
+    ),
+    injuryDetails: v.optional(v.string()),
+
+    // Season stats
+    gamesPlayed: v.number(),
+    minutesPerGame: v.number(),
+    pointsPerGame: v.number(),
+    reboundsPerGame: v.number(),
+    assistsPerGame: v.number(),
+    stealsPerGame: v.number(),
+    blocksPerGame: v.number(),
+    fieldGoalPct: v.number(),
+    threePointPct: v.number(),
+    freeThrowPct: v.number(),
+    turnoversPerGame: v.number(),
+    plusMinus: v.number(),
+
+    // Advanced stats
+    per: v.optional(v.number()),
+    usageRate: v.optional(v.number()),
+    trueShootingPct: v.optional(v.number()),
+
+    // Fantasy
+    fantasyPointsPerGame: v.number(),
+    averageDraftPosition: v.optional(v.number()),
+
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_team", ["teamId"])
+    .searchIndex("search_nba_players", {
+      searchField: "name",
+      filterFields: ["teamId", "position"],
+    }),
+
+  /**
+   * NBA Playoff Series - Playoff series tracking
+   */
+  nbaPlayoffSeries: defineTable({
+    season: v.string(),
+    round: v.union(
+      v.literal("play_in"),
+      v.literal("first_round"),
+      v.literal("second_round"),
+      v.literal("conference_finals"),
+      v.literal("finals")
+    ),
+    conference: v.optional(v.union(v.literal("east"), v.literal("west"))),
+
+    higherSeedId: v.id("nbaTeams"),
+    lowerSeedId: v.id("nbaTeams"),
+    higherSeedWins: v.number(),
+    lowerSeedWins: v.number(),
+    seriesWinnerId: v.optional(v.id("nbaTeams")),
+
+    status: v.union(
+      v.literal("upcoming"),
+      v.literal("in_progress"),
+      v.literal("complete")
+    ),
+
+    gameIds: v.array(v.string()),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_season", ["season", "round"])
+    .index("by_round", ["round", "status"])
+    .index("by_higher_seed", ["higherSeedId"])
+    .index("by_lower_seed", ["lowerSeedId"]),
+
+  /**
+   * NBA Games - NBA game data
+   */
+  nbaGames: defineTable({
+    externalId: v.string(),
+    season: v.string(),
+    seriesId: v.optional(v.id("nbaPlayoffSeries")),
+    gameNumber: v.optional(v.number()), // Game 1, 2, etc. for playoffs
+
+    homeTeamId: v.id("nbaTeams"),
+    awayTeamId: v.id("nbaTeams"),
+    homeScore: v.optional(v.number()),
+    awayScore: v.optional(v.number()),
+    winnerId: v.optional(v.id("nbaTeams")),
+
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("in_progress"),
+      v.literal("halftime"),
+      v.literal("final"),
+      v.literal("postponed"),
+      v.literal("cancelled")
+    ),
+    quarter: v.optional(v.number()),
+    timeRemaining: v.optional(v.string()),
+
+    // Odds
+    spread: v.optional(v.number()),
+    spreadFavorite: v.optional(v.string()),
+    total: v.optional(v.number()),
+    homeMoneyline: v.optional(v.number()),
+    awayMoneyline: v.optional(v.number()),
+
+    scheduledAt: v.number(),
+    startedAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+
+    venue: v.optional(v.string()),
+    tvNetwork: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_season", ["season", "scheduledAt"])
+    .index("by_series", ["seriesId", "gameNumber"])
+    .index("by_home_team", ["homeTeamId"])
+    .index("by_away_team", ["awayTeamId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * NBA Markets - NBA prediction markets
+   */
+  nbaMarkets: defineTable({
+    type: v.union(
+      v.literal("game_winner"),
+      v.literal("game_spread"),
+      v.literal("game_total"),
+      v.literal("series_winner"),
+      v.literal("series_length"),
+      v.literal("conference_winner"),
+      v.literal("finals_winner"),
+      v.literal("finals_mvp"),
+      v.literal("player_prop"),
+      v.literal("player_points"),
+      v.literal("player_rebounds"),
+      v.literal("player_assists")
+    ),
+    gameId: v.optional(v.id("nbaGames")),
+    seriesId: v.optional(v.id("nbaPlayoffSeries")),
+    playerId: v.optional(v.id("nbaPlayers")),
+    season: v.string(),
+
+    title: v.string(),
+    description: v.string(),
+
+    outcomes: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        odds: v.number(),
+        impliedProbability: v.number(),
+        totalVolume: v.number(),
+      })
+    ),
+
+    liquidityParameter: v.number(),
+    totalLiquidity: v.number(),
+    totalVolume: v.number(),
+
+    status: v.union(
+      v.literal("pending"),
+      v.literal("open"),
+      v.literal("locked"),
+      v.literal("settled"),
+      v.literal("cancelled")
+    ),
+
+    winningOutcomeId: v.optional(v.string()),
+    opensAt: v.number(),
+    closesAt: v.number(),
+    settledAt: v.optional(v.number()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_type", ["type", "status"])
+    .index("by_game", ["gameId"])
+    .index("by_series", ["seriesId"])
+    .index("by_player", ["playerId"])
+    .index("by_season", ["season", "status"])
+    .index("by_status", ["status"]),
+
+  // ============================================================================
+  // MLB PLAYOFFS TABLES
+  // ============================================================================
+
+  /**
+   * MLB Teams - MLB franchise data
+   */
+  mlbTeams: defineTable({
+    externalId: v.string(),
+    name: v.string(),
+    city: v.string(),
+    abbreviation: v.string(),
+    league: v.union(v.literal("al"), v.literal("nl")),
+    division: v.union(v.literal("east"), v.literal("central"), v.literal("west")),
+    logoUrl: v.optional(v.string()),
+    primaryColor: v.optional(v.string()),
+    secondaryColor: v.optional(v.string()),
+
+    // Season record
+    wins: v.number(),
+    losses: v.number(),
+    winPct: v.number(),
+    divisionRank: v.number(),
+    gamesBack: v.number(),
+    runsScored: v.number(),
+    runsAllowed: v.number(),
+    runDifferential: v.number(),
+
+    // Team stats
+    battingAverage: v.number(),
+    onBasePct: v.number(),
+    sluggingPct: v.number(),
+    era: v.number(),
+    whip: v.number(),
+
+    // Playoff info
+    playoffSeed: v.optional(v.number()),
+    isPlayoffTeam: v.boolean(),
+    isEliminated: v.boolean(),
+
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_league", ["league", "divisionRank"])
+    .index("by_division", ["division", "divisionRank"])
+    .index("by_playoff_seed", ["playoffSeed"]),
+
+  /**
+   * MLB Players - MLB player data
+   */
+  mlbPlayers: defineTable({
+    externalId: v.string(),
+    teamId: v.id("mlbTeams"),
+    name: v.string(),
+    firstName: v.string(),
+    lastName: v.string(),
+    position: v.string(),
+    isPitcher: v.boolean(),
+    jerseyNumber: v.optional(v.number()),
+    bats: v.union(v.literal("L"), v.literal("R"), v.literal("S")),
+    throws: v.union(v.literal("L"), v.literal("R")),
+    headshotUrl: v.optional(v.string()),
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("injured_list"),
+      v.literal("day_to_day"),
+      v.literal("suspended"),
+      v.literal("minors")
+    ),
+    injuryDetails: v.optional(v.string()),
+
+    // Batting stats (for position players)
+    battingGames: v.optional(v.number()),
+    atBats: v.optional(v.number()),
+    hits: v.optional(v.number()),
+    homeRuns: v.optional(v.number()),
+    rbi: v.optional(v.number()),
+    runs: v.optional(v.number()),
+    stolenBases: v.optional(v.number()),
+    battingAverage: v.optional(v.number()),
+    onBasePct: v.optional(v.number()),
+    sluggingPct: v.optional(v.number()),
+    ops: v.optional(v.number()),
+
+    // Pitching stats (for pitchers)
+    pitchingGames: v.optional(v.number()),
+    gamesStarted: v.optional(v.number()),
+    wins: v.optional(v.number()),
+    losses: v.optional(v.number()),
+    saves: v.optional(v.number()),
+    inningsPitched: v.optional(v.number()),
+    strikeouts: v.optional(v.number()),
+    walks: v.optional(v.number()),
+    era: v.optional(v.number()),
+    whip: v.optional(v.number()),
+
+    // Fantasy
+    fantasyPointsPerGame: v.number(),
+
+    lastSyncAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_team", ["teamId"])
+    .index("by_position", ["position"])
+    .searchIndex("search_mlb_players", {
+      searchField: "name",
+      filterFields: ["teamId", "position", "isPitcher"],
+    }),
+
+  /**
+   * MLB Playoff Series - Playoff series tracking
+   */
+  mlbPlayoffSeries: defineTable({
+    season: v.string(),
+    round: v.union(
+      v.literal("wild_card"),
+      v.literal("division_series"),
+      v.literal("championship_series"),
+      v.literal("world_series")
+    ),
+    league: v.optional(v.union(v.literal("al"), v.literal("nl"))),
+
+    higherSeedId: v.id("mlbTeams"),
+    lowerSeedId: v.id("mlbTeams"),
+    higherSeedWins: v.number(),
+    lowerSeedWins: v.number(),
+    seriesWinnerId: v.optional(v.id("mlbTeams")),
+    seriesToWin: v.number(), // 2 for wild card, 3 for division, 4 for LCS/WS
+
+    status: v.union(
+      v.literal("upcoming"),
+      v.literal("in_progress"),
+      v.literal("complete")
+    ),
+
+    gameIds: v.array(v.string()),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_season", ["season", "round"])
+    .index("by_round", ["round", "status"])
+    .index("by_higher_seed", ["higherSeedId"])
+    .index("by_lower_seed", ["lowerSeedId"]),
+
+  /**
+   * MLB Games - MLB game data
+   */
+  mlbGames: defineTable({
+    externalId: v.string(),
+    season: v.string(),
+    seriesId: v.optional(v.id("mlbPlayoffSeries")),
+    gameNumber: v.optional(v.number()),
+
+    homeTeamId: v.id("mlbTeams"),
+    awayTeamId: v.id("mlbTeams"),
+    homeScore: v.optional(v.number()),
+    awayScore: v.optional(v.number()),
+    winnerId: v.optional(v.id("mlbTeams")),
+
+    // Starting pitchers
+    homePitcherId: v.optional(v.id("mlbPlayers")),
+    awayPitcherId: v.optional(v.id("mlbPlayers")),
+
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("in_progress"),
+      v.literal("final"),
+      v.literal("postponed"),
+      v.literal("suspended"),
+      v.literal("cancelled")
+    ),
+    inning: v.optional(v.number()),
+    inningHalf: v.optional(v.union(v.literal("top"), v.literal("bottom"))),
+
+    // Odds
+    runLine: v.optional(v.number()),
+    runLineFavorite: v.optional(v.string()),
+    total: v.optional(v.number()),
+    homeMoneyline: v.optional(v.number()),
+    awayMoneyline: v.optional(v.number()),
+
+    scheduledAt: v.number(),
+    startedAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+
+    venue: v.optional(v.string()),
+    weather: v.optional(v.string()),
+    tvNetwork: v.optional(v.string()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_externalId", ["externalId"])
+    .index("by_season", ["season", "scheduledAt"])
+    .index("by_series", ["seriesId", "gameNumber"])
+    .index("by_home_team", ["homeTeamId"])
+    .index("by_away_team", ["awayTeamId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * MLB Markets - MLB prediction markets
+   */
+  mlbMarkets: defineTable({
+    type: v.union(
+      v.literal("game_winner"),
+      v.literal("run_line"),
+      v.literal("game_total"),
+      v.literal("first_5_innings"),
+      v.literal("series_winner"),
+      v.literal("series_length"),
+      v.literal("pennant_winner"),
+      v.literal("world_series_winner"),
+      v.literal("world_series_mvp"),
+      v.literal("player_prop"),
+      v.literal("pitcher_strikeouts"),
+      v.literal("player_hits"),
+      v.literal("player_home_runs")
+    ),
+    gameId: v.optional(v.id("mlbGames")),
+    seriesId: v.optional(v.id("mlbPlayoffSeries")),
+    playerId: v.optional(v.id("mlbPlayers")),
+    season: v.string(),
+
+    title: v.string(),
+    description: v.string(),
+
+    outcomes: v.array(
+      v.object({
+        id: v.string(),
+        label: v.string(),
+        odds: v.number(),
+        impliedProbability: v.number(),
+        totalVolume: v.number(),
+      })
+    ),
+
+    liquidityParameter: v.number(),
+    totalLiquidity: v.number(),
+    totalVolume: v.number(),
+
+    status: v.union(
+      v.literal("pending"),
+      v.literal("open"),
+      v.literal("locked"),
+      v.literal("settled"),
+      v.literal("cancelled")
+    ),
+
+    winningOutcomeId: v.optional(v.string()),
+    opensAt: v.number(),
+    closesAt: v.number(),
+    settledAt: v.optional(v.number()),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_type", ["type", "status"])
+    .index("by_game", ["gameId"])
+    .index("by_series", ["seriesId"])
+    .index("by_player", ["playerId"])
+    .index("by_season", ["season", "status"])
+    .index("by_status", ["status"]),
 });
