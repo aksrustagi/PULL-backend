@@ -719,3 +719,270 @@ export const reconcile = adminMutation({
     return { success: true, adjustment };
   },
 });
+
+/**
+ * Transfer balance between users - authenticated user transfers from their account
+ */
+export const transfer = authenticatedMutation({
+  args: {
+    toUserId: v.id("users"),
+    assetType: v.union(
+      v.literal("usd"),
+      v.literal("crypto"),
+      v.literal("prediction"),
+      v.literal("rwa"),
+      v.literal("points"),
+      v.literal("token")
+    ),
+    assetId: v.string(),
+    symbol: v.string(),
+    amount: v.number(),
+    memo: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const fromUserId = ctx.userId as Id<"users">;
+    const now = Date.now();
+
+    // Validate inputs
+    if (args.amount <= 0) {
+      throw new Error("Transfer amount must be positive");
+    }
+
+    if (fromUserId === args.toUserId) {
+      throw new Error("Cannot transfer to yourself");
+    }
+
+    // Verify recipient exists
+    const recipient = await ctx.db.get(args.toUserId);
+    if (!recipient) {
+      throw new Error("Recipient not found");
+    }
+
+    if (recipient.status !== "active") {
+      throw new Error("Recipient account is not active");
+    }
+
+    // Get sender's balance
+    const senderBalance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q
+          .eq("userId", fromUserId)
+          .eq("assetType", args.assetType)
+          .eq("assetId", args.assetId)
+      )
+      .unique();
+
+    if (!senderBalance) {
+      throw new Error("Sender balance not found");
+    }
+
+    if (senderBalance.available < args.amount) {
+      throw new Error(
+        `Insufficient balance. Available: ${senderBalance.available}, Requested: ${args.amount}`
+      );
+    }
+
+    // Debit sender
+    await ctx.db.patch(senderBalance._id, {
+      available: senderBalance.available - args.amount,
+      updatedAt: now,
+    });
+
+    // Get or create recipient's balance
+    let recipientBalance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q
+          .eq("userId", args.toUserId)
+          .eq("assetType", args.assetType)
+          .eq("assetId", args.assetId)
+      )
+      .unique();
+
+    if (recipientBalance) {
+      await ctx.db.patch(recipientBalance._id, {
+        available: recipientBalance.available + args.amount,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("balances", {
+        userId: args.toUserId,
+        assetType: args.assetType,
+        assetId: args.assetId,
+        symbol: args.symbol,
+        available: args.amount,
+        held: 0,
+        pending: 0,
+        updatedAt: now,
+      });
+    }
+
+    // Log audit for sender
+    await ctx.db.insert("auditLog", {
+      userId: fromUserId,
+      action: "balance.transfer_sent",
+      resourceType: "balances",
+      resourceId: args.assetId,
+      metadata: {
+        assetType: args.assetType,
+        amount: args.amount,
+        toUserId: args.toUserId,
+        memo: args.memo,
+      },
+      timestamp: now,
+    });
+
+    // Log audit for recipient
+    await ctx.db.insert("auditLog", {
+      userId: args.toUserId,
+      action: "balance.transfer_received",
+      resourceType: "balances",
+      resourceId: args.assetId,
+      metadata: {
+        assetType: args.assetType,
+        amount: args.amount,
+        fromUserId,
+        memo: args.memo,
+      },
+      timestamp: now,
+    });
+
+    return {
+      success: true,
+      amount: args.amount,
+      fromBalance: senderBalance.available - args.amount,
+    };
+  },
+});
+
+/**
+ * Get balance for a specific asset - authenticated user
+ */
+export const getBalance = authenticatedQuery({
+  args: {
+    assetType: v.union(
+      v.literal("usd"),
+      v.literal("crypto"),
+      v.literal("prediction"),
+      v.literal("rwa"),
+      v.literal("points"),
+      v.literal("token")
+    ),
+    assetId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+
+    const balance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q
+          .eq("userId", userId)
+          .eq("assetType", args.assetType)
+          .eq("assetId", args.assetId)
+      )
+      .unique();
+
+    if (!balance) {
+      return {
+        userId,
+        assetType: args.assetType,
+        assetId: args.assetId,
+        available: 0,
+        held: 0,
+        pending: 0,
+        total: 0,
+      };
+    }
+
+    return {
+      ...balance,
+      total: balance.available + balance.held + balance.pending,
+    };
+  },
+});
+
+/**
+ * Release hold on balance - authenticated user (for cancelling their own orders)
+ */
+export const release = authenticatedMutation({
+  args: {
+    assetType: v.union(
+      v.literal("usd"),
+      v.literal("crypto"),
+      v.literal("prediction"),
+      v.literal("rwa"),
+      v.literal("points"),
+      v.literal("token")
+    ),
+    assetId: v.string(),
+    amount: v.number(),
+    returnToAvailable: v.boolean(),
+    referenceType: v.optional(v.string()),
+    referenceId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.amount <= 0) {
+      throw new Error("Release amount must be positive");
+    }
+
+    const userId = ctx.userId as Id<"users">;
+    const now = Date.now();
+
+    const balance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q
+          .eq("userId", userId)
+          .eq("assetType", args.assetType)
+          .eq("assetId", args.assetId)
+      )
+      .unique();
+
+    if (!balance) {
+      throw new Error("Balance not found");
+    }
+
+    if (balance.held < args.amount) {
+      throw new Error(
+        `Insufficient held balance. Held: ${balance.held}, Requested: ${args.amount}`
+      );
+    }
+
+    const updates: Record<string, number> = {
+      held: balance.held - args.amount,
+      updatedAt: now,
+    };
+
+    if (args.returnToAvailable) {
+      updates.available = balance.available + args.amount;
+    }
+
+    await ctx.db.patch(balance._id, updates);
+
+    await ctx.db.insert("auditLog", {
+      userId,
+      action: "balance.release",
+      resourceType: "balances",
+      resourceId: args.assetId,
+      metadata: {
+        assetType: args.assetType,
+        amount: args.amount,
+        returnToAvailable: args.returnToAvailable,
+        referenceType: args.referenceType,
+        referenceId: args.referenceId,
+      },
+      timestamp: now,
+    });
+
+    return {
+      success: true,
+      amount: args.amount,
+      newAvailable: args.returnToAvailable
+        ? balance.available + args.amount
+        : balance.available,
+      newHeld: balance.held - args.amount,
+    };
+  },
+});

@@ -1,0 +1,3470 @@
+openapi: 3.0.3
+info:
+  title: PULL API
+  description: |
+    The PULL API provides access to a comprehensive multi-asset trading platform supporting
+    prediction markets, real-world assets (RWA), cryptocurrency, and fantasy sports trading.
+
+    ## Features
+    - **Multi-Asset Trading**: Trade predictions, RWA, and crypto assets
+    - **Social Trading**: Follow traders, copy trades, join trading rooms
+    - **Fantasy Sports**: Manage fantasy football leagues, teams, and players
+    - **AI Insights**: Premium sports insights powered by AI
+    - **Gamification**: Rewards, achievements, quests, and leaderboards
+    - **Portfolio Agent**: Autonomous trading strategies (DCA, rebalancing, stop-loss)
+
+    ## Authentication
+    All protected endpoints require a Bearer token in the Authorization header.
+    Tokens are obtained via the `/api/auth/login` or `/api/auth/register` endpoints.
+
+    ## Rate Limiting
+    Rate limits vary by authentication status and endpoint type:
+    - Anonymous: 30 requests/minute
+    - Authenticated: 100 requests/minute
+    - Premium: 300 requests/minute
+
+    Rate limit headers are included in all responses.
+  version: 1.0.0
+  contact:
+    name: PULL API Support
+    email: api-support@pull.app
+    url: https://docs.pull.app
+  license:
+    name: Proprietary
+    url: https://pull.app/terms
+
+servers:
+  - url: https://api.pull.app
+    description: Production server
+  - url: https://api-staging.pull.app
+    description: Staging server
+  - url: http://localhost:3001
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: User registration, login, and token management
+  - name: Health
+    description: API health and readiness checks
+  - name: Trading
+    description: Order management and portfolio operations
+  - name: Predictions
+    description: Prediction market events and positions
+  - name: RWA
+    description: Real World Asset trading
+  - name: Rewards
+    description: Points, rewards, and redemption
+  - name: Gamification
+    description: Quests, achievements, streaks, and leaderboards
+  - name: Social
+    description: Social trading features - follow, copy trading, rooms
+  - name: Signals
+    description: AI-generated trading signals and insights
+  - name: KYC
+    description: Identity verification and compliance
+  - name: Fantasy
+    description: Fantasy sports leagues and teams
+  - name: AI Insights
+    description: Premium AI-powered sports analysis
+  - name: Portfolio Agent
+    description: Autonomous trading strategies
+  - name: Admin
+    description: Administrative operations (requires admin role)
+  - name: Webhooks
+    description: External service webhook handlers
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==========================================================================
+  # HEALTH
+  # ==========================================================================
+  /health:
+    get:
+      summary: Basic health check
+      description: Returns the health status of the API
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: healthy
+                timestamp: "2025-01-25T12:00:00.000Z"
+
+  /health/ready:
+    get:
+      summary: Readiness probe
+      description: Kubernetes readiness probe endpoint
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: API is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /health/live:
+    get:
+      summary: Liveness probe
+      description: Kubernetes liveness probe endpoint
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: API is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alive:
+                    type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  # ==========================================================================
+  # AUTHENTICATION
+  # ==========================================================================
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      description: Create a new user account with email and password
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: user@example.com
+              password: SecureP@ss123
+              displayName: John Doe
+              referralCode: REF123
+      responses:
+        '200':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      summary: User login
+      description: Authenticate with email and password
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: user@example.com
+              password: SecureP@ss123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/refresh:
+    post:
+      summary: Refresh access token
+      description: Exchange a valid refresh token for a new access token
+      tags: [Authentication]
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/logout:
+    post:
+      summary: User logout
+      description: Invalidate the current session
+      tags: [Authentication]
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/auth/forgot-password:
+    post:
+      summary: Request password reset
+      description: Send a password reset link to the user's email
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Reset email sent (always returns success to prevent enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # ==========================================================================
+  # TRADING
+  # ==========================================================================
+  /api/v1/trading/orders:
+    post:
+      summary: Create a new order
+      description: Submit a new trading order
+      tags: [Trading]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              symbol: BTC-USD
+              side: buy
+              type: limit
+              quantity: 0.5
+              price: 45000
+              timeInForce: gtc
+      responses:
+        '200':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      summary: Get orders
+      description: Retrieve user's orders with optional filters
+      tags: [Trading]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, filled, cancelled, rejected]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: Orders retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+
+  /api/v1/trading/orders/{orderId}:
+    get:
+      summary: Get order by ID
+      description: Retrieve details of a specific order
+      tags: [Trading]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Cancel order
+      description: Cancel a pending order
+      tags: [Trading]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/trading/portfolio:
+    get:
+      summary: Get portfolio positions
+      description: Retrieve user's current portfolio positions and summary
+      tags: [Trading]
+      responses:
+        '200':
+          description: Portfolio data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioResponse'
+
+  /api/v1/trading/buying-power:
+    get:
+      summary: Get buying power
+      description: Retrieve user's available buying power
+      tags: [Trading]
+      responses:
+        '200':
+          description: Buying power data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuyingPowerResponse'
+
+  # ==========================================================================
+  # PREDICTIONS
+  # ==========================================================================
+  /api/v1/predictions/events:
+    get:
+      summary: Get prediction events
+      description: Retrieve prediction market events
+      tags: [Predictions]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, closed, resolved]
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Events retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+
+  /api/v1/predictions/events/{ticker}:
+    get:
+      summary: Get event by ticker
+      description: Retrieve a specific prediction event
+      tags: [Predictions]
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/predictions/events/{ticker}/markets:
+    get:
+      summary: Get markets for event
+      description: Retrieve markets associated with an event
+      tags: [Predictions]
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Markets for event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketListResponse'
+
+  /api/v1/predictions/markets/{ticker}:
+    get:
+      summary: Get market by ticker
+      description: Retrieve a specific market
+      tags: [Predictions]
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Market details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/predictions/search:
+    get:
+      summary: Search events
+      description: Search prediction events by query
+      tags: [Predictions]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+
+  /api/v1/predictions/positions:
+    get:
+      summary: Get user positions
+      description: Retrieve user's prediction market positions
+      tags: [Predictions]
+      responses:
+        '200':
+          description: User positions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/predictions/categories:
+    get:
+      summary: Get categories
+      description: Retrieve available prediction categories
+      tags: [Predictions]
+      security: []
+      responses:
+        '200':
+          description: Categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListResponse'
+
+  # ==========================================================================
+  # RWA (Real World Assets)
+  # ==========================================================================
+  /api/v1/rwa/assets:
+    get:
+      summary: Get RWA assets
+      description: Retrieve real world assets available for trading
+      tags: [RWA]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            default: listed
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Assets retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RWAAssetListResponse'
+
+  /api/v1/rwa/assets/{assetId}:
+    get:
+      summary: Get asset by ID
+      description: Retrieve a specific RWA asset
+      tags: [RWA]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RWAAssetResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/rwa/listings:
+    get:
+      summary: Get active listings
+      description: Retrieve active RWA listings
+      tags: [RWA]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Listings retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RWAListingListResponse'
+
+  /api/v1/rwa/ownership:
+    get:
+      summary: Get user ownership
+      description: Retrieve user's RWA ownership positions
+      tags: [RWA]
+      responses:
+        '200':
+          description: Ownership data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RWAOwnershipResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/rwa/purchase:
+    post:
+      summary: Purchase shares
+      description: Purchase shares of an RWA listing
+      tags: [RWA]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RWAPurchaseRequest'
+      responses:
+        '200':
+          description: Purchase successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RWAPurchaseResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==========================================================================
+  # REWARDS
+  # ==========================================================================
+  /api/v1/rewards/balance:
+    get:
+      summary: Get points balance
+      description: Retrieve user's current points balance
+      tags: [Rewards]
+      responses:
+        '200':
+          description: Balance retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/rewards/history:
+    get:
+      summary: Get points history
+      description: Retrieve user's points transaction history
+      tags: [Rewards]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: History retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsHistoryResponse'
+
+  /api/v1/rewards/catalog:
+    get:
+      summary: Get rewards catalog
+      description: Retrieve available rewards for redemption
+      tags: [Rewards]
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: featured
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Catalog retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardsCatalogResponse'
+
+  /api/v1/rewards/redeem:
+    post:
+      summary: Redeem reward
+      description: Redeem points for a reward
+      tags: [Rewards]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemRequest'
+      responses:
+        '200':
+          description: Redemption successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedeemResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/rewards/leaderboard:
+    get:
+      summary: Get leaderboard
+      description: Retrieve points leaderboard
+      tags: [Rewards]
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, alltime]
+            default: weekly
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Leaderboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeaderboardResponse'
+
+  /api/v1/rewards/daily-streak:
+    post:
+      summary: Claim daily streak
+      description: Claim daily login streak bonus
+      tags: [Rewards]
+      responses:
+        '200':
+          description: Streak claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyStreakResponse'
+        '400':
+          description: Already claimed today
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ==========================================================================
+  # GAMIFICATION
+  # ==========================================================================
+  /api/v1/gamification/summary:
+    get:
+      summary: Get rewards summary
+      description: Get comprehensive rewards summary including tier, streaks, and recent earnings
+      tags: [Gamification]
+      responses:
+        '200':
+          description: Summary data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamificationSummaryResponse'
+
+  /api/v1/gamification/quests:
+    get:
+      summary: Get active quests
+      description: Retrieve active quests with progress
+      tags: [Gamification]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, achievement, seasonal]
+      responses:
+        '200':
+          description: Quests data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestsResponse'
+
+  /api/v1/gamification/quests/{questId}/claim:
+    post:
+      summary: Claim quest reward
+      description: Claim reward for a completed quest
+      tags: [Gamification]
+      parameters:
+        - name: questId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Quest claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestClaimResponse'
+
+  /api/v1/gamification/achievements:
+    get:
+      summary: Get achievements
+      description: Get all achievements with user progress
+      tags: [Gamification]
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Achievements data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AchievementsResponse'
+
+  /api/v1/gamification/streaks:
+    get:
+      summary: Get streaks
+      description: Get detailed streak information
+      tags: [Gamification]
+      responses:
+        '200':
+          description: Streaks data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreaksResponse'
+
+  /api/v1/gamification/tier:
+    get:
+      summary: Get tier info
+      description: Get user's tier information and benefits
+      tags: [Gamification]
+      responses:
+        '200':
+          description: Tier data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TierResponse'
+
+  /api/v1/gamification/shop:
+    get:
+      summary: Get rewards shop
+      description: Get available redemption options
+      tags: [Gamification]
+      responses:
+        '200':
+          description: Shop data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopResponse'
+
+  # ==========================================================================
+  # SOCIAL
+  # ==========================================================================
+  /api/v1/social/follow:
+    post:
+      summary: Follow a trader
+      description: Start following a trader
+      tags: [Social]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FollowRequest'
+      responses:
+        '200':
+          description: Follow successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowResponse'
+
+  /api/v1/social/follow/{traderId}:
+    delete:
+      summary: Unfollow a trader
+      description: Stop following a trader
+      tags: [Social]
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unfollow successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+    patch:
+      summary: Update follow settings
+      description: Update notification and visibility settings for a follow
+      tags: [Social]
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFollowRequest'
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/v1/social/followers:
+    get:
+      summary: Get followers
+      description: Get list of followers
+      tags: [Social]
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Followers list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowersResponse'
+
+  /api/v1/social/following:
+    get:
+      summary: Get following
+      description: Get list of traders being followed
+      tags: [Social]
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Following list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowingResponse'
+
+  /api/v1/social/traders/{traderId}:
+    get:
+      summary: Get trader profile
+      description: Get a trader's public profile
+      tags: [Social]
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trader profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderProfileResponse'
+
+  /api/v1/social/traders/{traderId}/stats:
+    get:
+      summary: Get trader stats
+      description: Get trading statistics for a trader
+      tags: [Social]
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, quarterly, yearly, all_time]
+            default: all_time
+      responses:
+        '200':
+          description: Trader statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderStatsResponse'
+
+  /api/v1/social/copy/subscribe:
+    post:
+      summary: Create copy subscription
+      description: Start copying a trader's trades
+      tags: [Social]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopySubscriptionRequest'
+      responses:
+        '200':
+          description: Subscription created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopySubscriptionResponse'
+
+  /api/v1/social/copy/subscriptions:
+    get:
+      summary: Get copy subscriptions
+      description: Get user's copy trading subscriptions
+      tags: [Social]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, active, paused, stopped, cancelled]
+      responses:
+        '200':
+          description: Subscriptions list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopySubscriptionsResponse'
+
+  /api/v1/social/leaderboards/{type}/{period}:
+    get:
+      summary: Get leaderboard
+      description: Get trading leaderboard by type and period
+      tags: [Social]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [pnl, pnl_percent, sharpe_ratio, win_rate, total_trades, followers, copiers, reputation]
+        - name: period
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, all_time]
+        - name: assetClass
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Leaderboard data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialLeaderboardResponse'
+
+  /api/v1/social/feed:
+    get:
+      summary: Get activity feed
+      description: Get social activity feed
+      tags: [Social]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [following, discover, notifications]
+            default: following
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityFeedResponse'
+
+  # ==========================================================================
+  # SIGNALS
+  # ==========================================================================
+  /api/v1/signals:
+    get:
+      summary: Get signals
+      description: Get AI-generated trading signals
+      tags: [Signals]
+      parameters:
+        - name: types
+          in: query
+          schema:
+            type: string
+          description: Comma-separated signal types
+        - name: minConfidence
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: unseen
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Signals retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalsResponse'
+
+  /api/v1/signals/{id}:
+    get:
+      summary: Get signal by ID
+      description: Get details of a specific signal
+      tags: [Signals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Signal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDetailResponse'
+
+  /api/v1/signals/{id}/seen:
+    post:
+      summary: Mark signal as seen
+      description: Mark a signal as seen by the user
+      tags: [Signals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Signal marked as seen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/v1/signals/insights:
+    get:
+      summary: Get personalized insights
+      description: Get personalized trading insights
+      tags: [Signals]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Insights retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightsResponse'
+
+  /api/v1/signals/preferences:
+    get:
+      summary: Get signal preferences
+      description: Get user's signal notification preferences
+      tags: [Signals]
+      responses:
+        '200':
+          description: Preferences retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalPreferencesResponse'
+
+    put:
+      summary: Update signal preferences
+      description: Update user's signal notification preferences
+      tags: [Signals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalPreferencesRequest'
+      responses:
+        '200':
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # ==========================================================================
+  # KYC
+  # ==========================================================================
+  /api/v1/kyc/start:
+    post:
+      summary: Start KYC verification
+      description: Start the KYC verification workflow
+      tags: [KYC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KYCStartRequest'
+      responses:
+        '200':
+          description: KYC started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KYCStartResponse'
+
+  /api/v1/kyc/status:
+    get:
+      summary: Get KYC status
+      description: Get current KYC verification status
+      tags: [KYC]
+      responses:
+        '200':
+          description: KYC status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KYCStatusResponse'
+
+  /api/v1/kyc/plaid/link-token:
+    post:
+      summary: Get Plaid link token
+      description: Generate Plaid Link token for bank account linking
+      tags: [KYC]
+      responses:
+        '200':
+          description: Link token generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaidLinkTokenResponse'
+
+  /api/v1/kyc/documents:
+    get:
+      summary: Get KYC documents
+      description: List uploaded KYC documents
+      tags: [KYC]
+      responses:
+        '200':
+          description: Documents list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KYCDocumentsResponse'
+
+  /api/v1/kyc/upgrade:
+    post:
+      summary: Upgrade KYC tier
+      description: Start KYC tier upgrade workflow
+      tags: [KYC]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KYCUpgradeRequest'
+      responses:
+        '200':
+          description: Upgrade started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KYCUpgradeResponse'
+
+  # ==========================================================================
+  # FANTASY SPORTS
+  # ==========================================================================
+  /api/v1/fantasy/leagues:
+    post:
+      summary: Create a league
+      description: Create a new fantasy football league
+      tags: [Fantasy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLeagueRequest'
+      responses:
+        '201':
+          description: League created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeagueResponse'
+
+    get:
+      summary: Get user's leagues
+      description: Get leagues the user is a member of
+      tags: [Fantasy]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: season
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Leagues list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeagueListResponse'
+
+  /api/v1/fantasy/leagues/{leagueId}:
+    get:
+      summary: Get league by ID
+      description: Get details of a specific league
+      tags: [Fantasy]
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: League details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeagueResponse'
+
+    put:
+      summary: Update league settings
+      description: Update league settings (commissioner only)
+      tags: [Fantasy]
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLeagueRequest'
+      responses:
+        '200':
+          description: League updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeagueResponse'
+
+  /api/v1/fantasy/leagues/join:
+    post:
+      summary: Join a league
+      description: Join a league with an invite code
+      tags: [Fantasy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinLeagueRequest'
+      responses:
+        '200':
+          description: Joined league
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinLeagueResponse'
+
+  /api/v1/fantasy/leagues/{leagueId}/standings:
+    get:
+      summary: Get league standings
+      description: Get current standings for a league
+      tags: [Fantasy]
+      parameters:
+        - name: leagueId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Standings data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandingsResponse'
+
+  /api/v1/fantasy/health:
+    get:
+      summary: Fantasy service health
+      description: Check fantasy service health
+      tags: [Fantasy]
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ==========================================================================
+  # AI INSIGHTS
+  # ==========================================================================
+  /api/v1/ai-insights/bundles:
+    get:
+      summary: Get insight bundles
+      description: Get available AI insight bundles
+      tags: [AI Insights]
+      parameters:
+        - name: sport
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bundles list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightBundlesResponse'
+
+  /api/v1/ai-insights/generate:
+    post:
+      summary: Generate insight
+      description: Generate a single AI insight
+      tags: [AI Insights]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateInsightRequest'
+      responses:
+        '200':
+          description: Insight generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneratedInsightResponse'
+
+  /api/v1/ai-insights/feed:
+    get:
+      summary: Get insight feed
+      description: Get insight feed for a sport/category
+      tags: [AI Insights]
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Insight feed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightFeedResponse'
+
+  /api/v1/ai-insights/credits:
+    get:
+      summary: Get credit balance
+      description: Get user's AI insights credit balance
+      tags: [AI Insights]
+      responses:
+        '200':
+          description: Credit balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditsResponse'
+
+  /api/v1/ai-insights/purchase:
+    post:
+      summary: Purchase insight
+      description: Purchase (unlock) a single insight
+      tags: [AI Insights]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseInsightRequest'
+      responses:
+        '200':
+          description: Purchase successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseInsightResponse'
+        '402':
+          description: Insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/ai-insights/subscription-plans:
+    get:
+      summary: Get subscription plans
+      description: Get available AI insights subscription plans
+      tags: [AI Insights]
+      security: []
+      responses:
+        '200':
+          description: Subscription plans
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionPlansResponse'
+
+  # ==========================================================================
+  # PORTFOLIO AGENT
+  # ==========================================================================
+  /api/v1/portfolio-agent/config:
+    get:
+      summary: Get agent configuration
+      description: Get current portfolio agent configuration
+      tags: [Portfolio Agent]
+      responses:
+        '200':
+          description: Configuration data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentConfigResponse'
+
+    put:
+      summary: Update agent configuration
+      description: Create or update portfolio agent configuration
+      tags: [Portfolio Agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentConfigRequest'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/v1/portfolio-agent/activate:
+    post:
+      summary: Activate/deactivate agent
+      description: Quick activate or deactivate the agent
+      tags: [Portfolio Agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [active]
+              properties:
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: Agent toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/v1/portfolio-agent/strategies:
+    get:
+      summary: Get strategies
+      description: List all strategies for the user
+      tags: [Portfolio Agent]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Strategies list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategiesResponse'
+
+  /api/v1/portfolio-agent/strategies/dca:
+    post:
+      summary: Create DCA strategy
+      description: Create a dollar-cost averaging strategy
+      tags: [Portfolio Agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DCAStrategyRequest'
+      responses:
+        '200':
+          description: Strategy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
+
+  /api/v1/portfolio-agent/strategies/rebalance:
+    post:
+      summary: Create rebalancing strategy
+      description: Create a portfolio rebalancing strategy
+      tags: [Portfolio Agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RebalanceStrategyRequest'
+      responses:
+        '200':
+          description: Strategy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
+
+  /api/v1/portfolio-agent/strategies/stop-loss:
+    post:
+      summary: Create stop-loss strategy
+      description: Create a stop-loss strategy
+      tags: [Portfolio Agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StopLossStrategyRequest'
+      responses:
+        '200':
+          description: Strategy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyResponse'
+
+  /api/v1/portfolio-agent/actions:
+    get:
+      summary: Get agent actions
+      description: Get agent actions (pending, executed, etc.)
+      tags: [Portfolio Agent]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending_approval, approved, rejected, executed, failed, expired]
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Actions list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionsResponse'
+
+  /api/v1/portfolio-agent/actions/{actionId}/resolve:
+    post:
+      summary: Resolve action
+      description: Approve or reject a pending action
+      tags: [Portfolio Agent]
+      parameters:
+        - name: actionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveActionRequest'
+      responses:
+        '200':
+          description: Action resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/v1/portfolio-agent/briefs/today:
+    get:
+      summary: Get today's brief
+      description: Get today's morning brief
+      tags: [Portfolio Agent]
+      responses:
+        '200':
+          description: Brief data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BriefResponse'
+
+  /api/v1/portfolio-agent/status:
+    get:
+      summary: Get agent status
+      description: Get overall agent status
+      tags: [Portfolio Agent]
+      responses:
+        '200':
+          description: Status data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentStatusResponse'
+
+  # ==========================================================================
+  # ADMIN
+  # ==========================================================================
+  /api/admin/stats:
+    get:
+      summary: Get dashboard stats
+      description: Get admin dashboard statistics
+      tags: [Admin]
+      responses:
+        '200':
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatsResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users:
+    get:
+      summary: List users
+      description: List users with pagination and filters
+      tags: [Admin]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, suspended, closed]
+        - name: kycStatus
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUsersResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{userId}:
+    get:
+      summary: Get user details
+      description: Get detailed user information
+      tags: [Admin]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserDetailResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update user
+      description: Update user status, KYC, etc.
+      tags: [Admin]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{userId}/suspend:
+    post:
+      summary: Suspend user
+      description: Suspend a user account
+      tags: [Admin]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuspendUserRequest'
+      responses:
+        '200':
+          description: User suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/orders:
+    get:
+      summary: List orders
+      description: List all orders with filters
+      tags: [Admin]
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Orders list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOrdersResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/audit-logs:
+    get:
+      summary: Get audit logs
+      description: List audit logs with filters
+      tags: [Admin]
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogsResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/health/services:
+    get:
+      summary: Check service health
+      description: Check status of all external services
+      tags: [Admin]
+      responses:
+        '200':
+          description: Services health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicesHealthResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token
+
+  parameters:
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Order ID
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: UNAUTHORIZED
+              message: User not authenticated
+            timestamp: "2025-01-25T12:00:00.000Z"
+
+    Forbidden:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: FORBIDDEN
+              message: Admin access required
+            timestamp: "2025-01-25T12:00:00.000Z"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: NOT_FOUND
+              message: The requested resource was not found
+            timestamp: "2025-01-25T12:00:00.000Z"
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: VALIDATION_ERROR
+              message: Invalid request parameters
+            timestamp: "2025-01-25T12:00:00.000Z"
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when window resets
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until retry is allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: TOO_MANY_REQUESTS
+              message: Rate limit exceeded. Please try again later.
+            meta:
+              limit: 100
+              remaining: 0
+              reset: 1706180400000
+              retryAfter: 45
+            timestamp: "2025-01-25T12:00:00.000Z"
+
+  schemas:
+    # Common Schemas
+    SuccessResponse:
+      type: object
+      required: [success, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [success, error, timestamp]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        requestId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+        hasNextPage:
+          type: boolean
+        hasPreviousPage:
+          type: boolean
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+
+    # Authentication Schemas
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Must contain uppercase, lowercase, and a number
+        displayName:
+          type: string
+          maxLength: 100
+        referralCode:
+          type: string
+          maxLength: 20
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            token:
+              type: string
+            refreshToken:
+              type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    TokenResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+            refreshToken:
+              type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        displayName:
+          type: string
+        emailVerified:
+          type: boolean
+        kycStatus:
+          type: string
+        kycTier:
+          type: string
+
+    # Trading Schemas
+    CreateOrderRequest:
+      type: object
+      required: [symbol, side, type, quantity]
+      properties:
+        symbol:
+          type: string
+          pattern: ^[A-Za-z0-9_.-]+$
+        side:
+          type: string
+          enum: [buy, sell]
+        type:
+          type: string
+          enum: [market, limit, stop, stop_limit]
+        quantity:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 1000000
+        price:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+        stopPrice:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+        timeInForce:
+          type: string
+          enum: [day, gtc, ioc, fok]
+          default: gtc
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        symbol:
+          type: string
+        side:
+          type: string
+        type:
+          type: string
+        quantity:
+          type: number
+        price:
+          type: number
+        stopPrice:
+          type: number
+        status:
+          type: string
+          enum: [pending, submitted, accepted, partial_fill, filled, cancelled, rejected, expired]
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Order'
+
+    OrderListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Order'
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    PortfolioResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                positions:
+                  type: array
+                  items:
+                    type: object
+                summary:
+                  type: object
+                  properties:
+                    totalValue:
+                      type: number
+                    totalCost:
+                      type: number
+                    totalUnrealizedPnL:
+                      type: number
+                    totalRealizedPnL:
+                      type: number
+                    positionCount:
+                      type: integer
+
+    BuyingPowerResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                available:
+                  type: number
+                held:
+                  type: number
+                pending:
+                  type: number
+                total:
+                  type: number
+
+    # Predictions Schemas
+    EventListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    EventResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    MarketListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
+    MarketResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    PositionListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
+    CategoryListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  count:
+                    type: integer
+
+    # RWA Schemas
+    RWAAssetListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    RWAAssetResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    RWAListingListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
+    RWAOwnershipResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
+    RWAPurchaseRequest:
+      type: object
+      required: [listingId, shares]
+      properties:
+        listingId:
+          type: string
+        shares:
+          type: integer
+          minimum: 1
+
+    RWAPurchaseResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                listingId:
+                  type: string
+                shares:
+                  type: integer
+                totalCost:
+                  type: number
+                status:
+                  type: string
+
+    # Rewards Schemas
+    BalanceResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                available:
+                  type: number
+                pending:
+                  type: number
+                lifetime:
+                  type: number
+
+    PointsHistoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    RewardsCatalogResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
+    RedeemRequest:
+      type: object
+      required: [rewardId]
+      properties:
+        rewardId:
+          type: string
+        quantity:
+          type: integer
+          default: 1
+        shippingAddress:
+          type: object
+          properties:
+            name:
+              type: string
+            addressLine1:
+              type: string
+            city:
+              type: string
+            state:
+              type: string
+            postalCode:
+              type: string
+            country:
+              type: string
+
+    RedeemResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                redemptionId:
+                  type: string
+                status:
+                  type: string
+
+    LeaderboardResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
+    DailyStreakResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                bonusAmount:
+                  type: number
+                streakDays:
+                  type: integer
+
+    # Gamification Schemas
+    GamificationSummaryResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                pointsBalance:
+                  type: number
+                currentTier:
+                  type: string
+                tierProgress:
+                  type: number
+                activeStreaks:
+                  type: array
+                  items:
+                    type: object
+
+    QuestsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    QuestClaimResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                pointsEarned:
+                  type: number
+                newBalance:
+                  type: number
+
+    AchievementsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    StreaksResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    TierResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    ShopResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    # Social Schemas
+    FollowRequest:
+      type: object
+      required: [traderId]
+      properties:
+        traderId:
+          type: string
+        notificationsEnabled:
+          type: boolean
+          default: true
+        positionVisibility:
+          type: string
+          enum: [all, entry_only, none]
+          default: all
+
+    UpdateFollowRequest:
+      type: object
+      properties:
+        notificationsEnabled:
+          type: boolean
+        positionVisibility:
+          type: string
+          enum: [all, entry_only, none]
+
+    FollowResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    FollowersResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    FollowingResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    TraderProfileResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    TraderStatsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    CopySubscriptionRequest:
+      type: object
+      required: [traderId, copyMode, maxPositionSize, maxDailyLoss, maxTotalExposure, copyAssetClasses]
+      properties:
+        traderId:
+          type: string
+        copyMode:
+          type: string
+          enum: [fixed_amount, percentage_portfolio, proportional, fixed_ratio]
+        fixedAmount:
+          type: number
+        portfolioPercentage:
+          type: number
+        maxPositionSize:
+          type: number
+        maxDailyLoss:
+          type: number
+        maxTotalExposure:
+          type: number
+        copyAssetClasses:
+          type: array
+          items:
+            type: string
+            enum: [crypto, prediction, rwa]
+
+    CopySubscriptionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    CopySubscriptionsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
+    SocialLeaderboardResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    ActivityFeedResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    # Signals Schemas
+    SignalsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                signals:
+                  type: array
+                  items:
+                    type: object
+
+    SignalDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    InsightsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    SignalPreferencesResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    SignalPreferencesRequest:
+      type: object
+      properties:
+        emailAnalysisEnabled:
+          type: boolean
+        marketAlertsEnabled:
+          type: boolean
+        dailyInsightsEnabled:
+          type: boolean
+        minConfidenceThreshold:
+          type: integer
+        interests:
+          type: array
+          items:
+            type: string
+        timezone:
+          type: string
+
+    # KYC Schemas
+    KYCStartRequest:
+      type: object
+      required: [targetTier]
+      properties:
+        targetTier:
+          type: string
+          enum: [basic, enhanced, accredited]
+        userData:
+          type: object
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            dob:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+        requireBankLink:
+          type: boolean
+
+    KYCStartResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                workflowId:
+                  type: string
+                sumsubAccessToken:
+                  type: string
+                status:
+                  type: string
+
+    KYCStatusResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                hasActiveKYC:
+                  type: boolean
+                currentTier:
+                  type: string
+                status:
+                  type: string
+
+    PlaidLinkTokenResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                linkToken:
+                  type: string
+                expiration:
+                  type: string
+
+    KYCDocumentsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                documents:
+                  type: array
+                  items:
+                    type: object
+
+    KYCUpgradeRequest:
+      type: object
+      required: [targetTier]
+      properties:
+        targetTier:
+          type: string
+          enum: [enhanced, accredited]
+        requireBankLink:
+          type: boolean
+
+    KYCUpgradeResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                workflowId:
+                  type: string
+                status:
+                  type: string
+
+    # Fantasy Schemas
+    CreateLeagueRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 500
+        scoringType:
+          type: string
+          enum: [ppr, half_ppr, standard]
+          default: ppr
+        draftType:
+          type: string
+          enum: [snake, auction, dynasty, keeper]
+          default: snake
+        maxTeams:
+          type: integer
+          minimum: 4
+          maximum: 20
+          default: 12
+
+    UpdateLeagueRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        scoringType:
+          type: string
+        draftType:
+          type: string
+        maxTeams:
+          type: integer
+
+    LeagueResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    LeagueListResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    JoinLeagueRequest:
+      type: object
+      required: [inviteCode, teamName]
+      properties:
+        inviteCode:
+          type: string
+        teamName:
+          type: string
+          minLength: 2
+          maxLength: 30
+
+    JoinLeagueResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                leagueId:
+                  type: string
+                teamId:
+                  type: string
+                teamName:
+                  type: string
+
+    StandingsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    # AI Insights Schemas
+    InsightBundlesResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+
+    GenerateInsightRequest:
+      type: object
+      required: [sport, category]
+      properties:
+        sport:
+          type: string
+        category:
+          type: string
+        context:
+          type: object
+
+    GeneratedInsightResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    InsightFeedResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    CreditsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                balance:
+                  type: number
+                tier:
+                  type: string
+                monthlyAllocation:
+                  type: number
+
+    PurchaseInsightRequest:
+      type: object
+      required: [insightId]
+      properties:
+        insightId:
+          type: string
+
+    PurchaseInsightResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                insightId:
+                  type: string
+                creditsSpent:
+                  type: number
+                remainingCredits:
+                  type: number
+
+    SubscriptionPlansResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  price:
+                    type: number
+                  credits:
+                    type: number
+                  features:
+                    type: array
+                    items:
+                      type: string
+
+    # Portfolio Agent Schemas
+    AgentConfigRequest:
+      type: object
+      required: [isActive, riskTolerance, maxDailyTradeAmount, maxPositionSize, autoExecute, requireConfirmationAbove, allowedAssetClasses, allowedStrategies, morningBriefEnabled, morningBriefTime, timezone]
+      properties:
+        isActive:
+          type: boolean
+        riskTolerance:
+          type: string
+          enum: [conservative, moderate, aggressive]
+        maxDailyTradeAmount:
+          type: number
+          maximum: 100000
+        maxPositionSize:
+          type: number
+          minimum: 1
+          maximum: 100
+        autoExecute:
+          type: boolean
+        requireConfirmationAbove:
+          type: number
+        allowedAssetClasses:
+          type: array
+          items:
+            type: string
+            enum: [prediction, rwa, crypto]
+        allowedStrategies:
+          type: array
+          items:
+            type: string
+            enum: [dca, rebalance, stop_loss, take_profit, opportunistic_buy]
+        morningBriefEnabled:
+          type: boolean
+        morningBriefTime:
+          type: string
+          pattern: ^\d{2}:\d{2}$
+        timezone:
+          type: string
+
+    AgentConfigResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    StrategiesResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                strategies:
+                  type: array
+                  items:
+                    type: object
+
+    DCAStrategyRequest:
+      type: object
+      required: [name, dcaAmount, dcaInterval, dcaTargetSymbol]
+      properties:
+        name:
+          type: string
+        dcaAmount:
+          type: number
+        dcaInterval:
+          type: string
+          enum: [hourly, daily, weekly, biweekly, monthly]
+        dcaTargetSymbol:
+          type: string
+        dcaTotalBudget:
+          type: number
+
+    RebalanceStrategyRequest:
+      type: object
+      required: [name, rebalanceFrequency, targetAllocations]
+      properties:
+        name:
+          type: string
+        rebalanceFrequency:
+          type: string
+          enum: [daily, weekly, monthly, threshold_only]
+        targetAllocations:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol:
+                type: string
+              targetPercent:
+                type: number
+
+    StopLossStrategyRequest:
+      type: object
+      required: [name, triggerSymbol, triggerType, triggerValue, actionOnTrigger]
+      properties:
+        name:
+          type: string
+        triggerSymbol:
+          type: string
+        triggerType:
+          type: string
+          enum: [absolute, percent_from_entry, trailing_percent]
+        triggerValue:
+          type: number
+        actionOnTrigger:
+          type: string
+          enum: [sell_all, sell_half, sell_quarter, notify_only]
+
+    StrategyResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                strategyId:
+                  type: string
+                type:
+                  type: string
+                message:
+                  type: string
+
+    ActionsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                actions:
+                  type: array
+                  items:
+                    type: object
+
+    ResolveActionRequest:
+      type: object
+      required: [resolution]
+      properties:
+        resolution:
+          type: string
+          enum: [approved, rejected]
+        reason:
+          type: string
+
+    BriefResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    AgentStatusResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                isActive:
+                  type: boolean
+                activeStrategies:
+                  type: integer
+                pendingActions:
+                  type: integer
+
+    # Admin Schemas
+    AdminStatsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    AdminUsersResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    AdminUserDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+
+    AdminUpdateUserRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [active, inactive, suspended, closed]
+        kycStatus:
+          type: string
+        kycTier:
+          type: string
+        reason:
+          type: string
+
+    SuspendUserRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+        duration:
+          type: integer
+          description: Duration in milliseconds
+
+    AdminOrdersResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    AuditLogsResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+
+    ServicesHealthResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [healthy, degraded, down]
+                services:
+                  type: object
+                checkedAt:
+                  type: string
+                  format: date-time

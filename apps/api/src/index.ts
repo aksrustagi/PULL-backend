@@ -14,10 +14,43 @@ if (missing.length > 0) {
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
 import { trpcServer } from "@hono/trpc-server";
+
+// Observability imports
+import {
+  initLogger,
+  getLogger,
+  createLoggingMiddleware,
+  createLoggerContextMiddleware,
+  initTracerProvider,
+  createTracingMiddleware,
+  createMetricsMiddleware,
+  createMetricsHandler,
+  startUptimeUpdates,
+  getRegistry,
+} from "@pull/core/services";
+
+// Initialize logger first
+const log = initLogger({
+  serviceName: "pull-api",
+  environment: process.env.NODE_ENV || "development",
+  version: process.env.APP_VERSION || "0.0.0",
+  level: (process.env.LOG_LEVEL as any) || (process.env.NODE_ENV === "development" ? "debug" : "info"),
+});
+
+// Initialize tracer
+initTracerProvider({
+  serviceName: "pull-api",
+  serviceVersion: process.env.APP_VERSION || "0.0.0",
+  environment: process.env.NODE_ENV || "development",
+  otlpEndpoint: process.env.OTLP_ENDPOINT,
+  consoleExport: process.env.NODE_ENV === "development",
+});
+
+// Start uptime metrics updates
+const stopUptime = startUptimeUpdates();
 
 import { initSentry, captureException } from "./lib/sentry";
 import { authMiddleware } from "./middleware/auth";
@@ -35,8 +68,11 @@ import { kycRoutes } from "./routes/kyc";
 import { gamificationRoutes } from "./routes/gamification";
 import { webhookRoutes } from "./routes/webhooks";
 import { fantasyRoutes } from "./routes/fantasy";
+import { paymentsRoutes } from "./routes/payments";
+import { sseRoutes } from "./routes/sse";
+import { initWebSocketServer } from "./websocket";
 import { dataFlywheelRoutes } from "./routes/dataFlywheel";
-import { analyticsRoutes, experimentsRoutes } from "./routes/admin";
+import { analyticsRoutes, experimentsRoutes, backupRoutes } from "./routes/admin";
 import { adminRoutes } from "./routes/admin";
 import { portfolioAgentRoutes } from "./routes/portfolio-agent";
 import { docsRoutes } from "./routes/docs";
@@ -45,6 +81,17 @@ import { ncaaRoutes } from "./routes/ncaa";
 import { golfRoutes } from "./routes/golf";
 import { nbaRoutes } from "./routes/nba";
 import { mlbRoutes } from "./routes/mlb";
+import { viralGrowthRoutes } from "./routes/viral-growth";
+import { storiesRoutes } from "./routes/stories";
+import { cashBattlesRoutes } from "./routes/cash-battles";
+import { squadsRoutes } from "./routes/squads";
+import { aiCopilotRoutes } from "./routes/ai-copilot";
+import { streaksRoutes } from "./routes/streaks";
+import { vipRoutes } from "./routes/vip";
+import { insuranceRoutes } from "./routes/insurance";
+import { propsRoutes } from "./routes/props";
+import { watchPartyRoutes } from "./routes/watch-party";
+import { nftsRoutes } from "./routes/nfts";
 
 // 10x Feature Enhancement Routes
 import presenceRoutes from "./routes/presence";
@@ -58,7 +105,6 @@ import analyticsEnhancedRoutes from "./routes/analytics";
 import engagementRoutes from "./routes/engagement";
 import complianceRoutes from "./routes/compliance";
 import widgetsRoutes from "./routes/widgets";
-
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -67,14 +113,34 @@ export type Env = {
   Variables: {
     userId?: string;
     requestId: string;
+    logger: ReturnType<typeof getLogger>;
   };
 };
 
 const app = new Hono<Env>();
 
-// Global middleware
+// Global middleware - observability first
 app.use("*", timing());
-app.use("*", logger());
+
+// Add tracing middleware (creates spans for each request)
+app.use("*", createTracingMiddleware());
+
+// Add metrics middleware (tracks request counts, latency, etc.)
+app.use("*", createMetricsMiddleware({
+  excludePaths: ["/health", "/metrics"],
+  includePathLabel: true,
+}));
+
+// Add structured logging middleware
+app.use("*", createLoggingMiddleware({
+  skipHealthChecks: true,
+  getUserId: (c) => c.get("userId"),
+  getRequestId: (c) => c.get("requestId"),
+}));
+
+// Add logger to context
+app.use("*", createLoggerContextMiddleware());
+
 app.use("*", secureHeaders());
 app.use(
   "*",
@@ -90,8 +156,8 @@ app.use(
       return undefined;
     },
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID"],
-    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Correlation-ID"],
+    exposeHeaders: ["X-Request-ID", "X-Correlation-ID", "X-Trace-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
     credentials: true,
     maxAge: 86400,
   })
@@ -109,6 +175,12 @@ app.use("*", async (c, next) => {
 app.use("*", async (c, next) => {
   const contentLength = c.req.header("Content-Length");
   if (contentLength && parseInt(contentLength, 10) > 1024 * 1024) {
+    const logger = getLogger();
+    logger.warn("Request body too large", {
+      requestId: c.get("requestId"),
+      contentLength: parseInt(contentLength, 10),
+      path: c.req.path,
+    });
     return c.json(
       {
         success: false,
@@ -122,6 +194,9 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+// Metrics endpoint (before auth)
+app.get("/metrics", createMetricsHandler(getRegistry()));
+
 // Public routes (no auth required)
 app.route("/health", healthRoutes);
 app.route("/api/auth", authRoutes);
@@ -130,6 +205,9 @@ app.route("/api/auth", authRoutes);
 app.use("/webhooks/*", rateLimitMiddleware);
 app.route("/webhooks", webhookRoutes);
 app.route("/docs", docsRoutes);
+
+// Server-Sent Events (SSE) for real-time data (public access with optional auth)
+app.route("/sse", sseRoutes);
 
 // Protected routes - auth first, then rate limit (so userId is available)
 app.use("/api/v1/*", authMiddleware);
@@ -146,6 +224,7 @@ app.route("/api/v1/social", socialRoutes);
 app.route("/api/v1/kyc", kycRoutes);
 app.route("/api/v1/portfolio-agent", portfolioAgentRoutes);
 app.route("/api/v1/gamification", gamificationRoutes);
+app.route("/api/v1/payments", paymentsRoutes);
 
 // AI Insights & Sports routes
 app.route("/api/v1/ai-insights", aiInsightsRoutes);
@@ -154,15 +233,32 @@ app.route("/api/v1/golf", golfRoutes);
 app.route("/api/v1/nba", nbaRoutes);
 app.route("/api/v1/mlb", mlbRoutes);
 
+// Viral Growth Engine routes
+app.route("/api/v1/viral", viralGrowthRoutes);
+
+// Killer Features routes
+app.route("/api/v1/stories", storiesRoutes);
+app.route("/api/v1/battles", cashBattlesRoutes);
+app.route("/api/v1/squads", squadsRoutes);
+app.route("/api/v1/copilot", aiCopilotRoutes);
+app.route("/api/v1/streaks", streaksRoutes);
+
+// VIP & Premium Features routes
+app.route("/api/v1/vip", vipRoutes);
+app.route("/api/v1/insurance", insuranceRoutes);
+app.route("/api/v1/props", propsRoutes);
+app.route("/api/v1/watch-party", watchPartyRoutes);
+app.route("/api/v1/nfts", nftsRoutes);
+
 // 10x Feature Enhancement Routes
 app.route("/api/v1/presence", presenceRoutes);
 app.route("/api/v1/trade-advisor", tradeAdvisorRoutes);
 app.route("/api/v1/voice", voiceRoutes);
 app.route("/api/v1/vision", visionRoutes);
 app.route("/api/v1/injuries", injuriesRoutes);
-app.route("/api/v1/social", socialGraphRoutes); // Note: overwrites existing social route
+app.route("/api/v1/social-graph", socialGraphRoutes); // Changed from /social to avoid conflict
 app.route("/api/v1/finance", financeRoutes);
-app.route("/api/v1/analytics", analyticsEnhancedRoutes);
+app.route("/api/v1/analytics-advanced", analyticsEnhancedRoutes); // Changed from /analytics to avoid conflict
 app.route("/api/v1/engagement", engagementRoutes);
 app.route("/api/v1/compliance", complianceRoutes);
 app.route("/api/v1/widgets", widgetsRoutes);
@@ -172,6 +268,7 @@ app.route("/api/v1/widgets", widgetsRoutes);
 app.use("/admin/*", authMiddleware);
 app.route("/admin/analytics", analyticsRoutes);
 app.route("/admin/experiments", experimentsRoutes);
+app.route("/admin/backup", backupRoutes);
 
 app.use("/api/admin/*", authMiddleware);
 app.route("/api/admin", adminRoutes);
@@ -187,6 +284,12 @@ app.use(
 
 // 404 handler
 app.notFound((c) => {
+  const logger = getLogger();
+  logger.debug("Resource not found", {
+    requestId: c.get("requestId"),
+    path: c.req.path,
+    method: c.req.method,
+  });
   return c.json(
     {
       success: false,
@@ -204,7 +307,16 @@ app.notFound((c) => {
 // Error handler - never leak internal details
 app.onError((err, c) => {
   const requestId = c.get("requestId");
-  console.error(`[${requestId}] Error:`, err);
+  const logger = getLogger();
+
+  // Log error with full details
+  logger.error("Unhandled request error", {
+    requestId,
+    path: c.req.path,
+    method: c.req.method,
+    userId: c.get("userId"),
+    error: err,
+  });
 
   // Capture error with Sentry
   captureException(err, {
@@ -231,10 +343,48 @@ app.onError((err, c) => {
 
 // Start server
 const port = parseInt(process.env.PORT ?? "3001", 10);
+const wsPort = parseInt(process.env.WS_PORT ?? "3002", 10);
 
-console.log(`PULL API server starting on port ${port}`);
+// Initialize WebSocket server
+const wsServer = initWebSocketServer({
+  port: wsPort,
+  path: "/ws",
+  redisUrl: process.env.REDIS_URL,
+  redisToken: process.env.REDIS_TOKEN,
+});
+
+// Start WebSocket server components
+wsServer.start().catch((err) => {
+  log.error("Failed to start WebSocket server", { error: err });
+});
+
+log.info("PULL API server starting", {
+  port,
+  wsPort,
+  environment: process.env.NODE_ENV || "development",
+  version: process.env.APP_VERSION || "0.0.0",
+});
+
+// Graceful shutdown handling
+process.on("SIGTERM", async () => {
+  log.info("Received SIGTERM, initiating graceful shutdown");
+  stopUptime();
+  await wsServer.stop();
+  // Allow time for final metrics/traces to be exported
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  log.info("Received SIGINT, initiating graceful shutdown");
+  stopUptime();
+  await wsServer.stop();
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  process.exit(0);
+});
 
 export default {
   port,
   fetch: app.fetch,
+  websocket: wsServer.getHandler(),
 };

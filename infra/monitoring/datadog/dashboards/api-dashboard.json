@@ -1,0 +1,546 @@
+{
+  "title": "PULL API - Comprehensive Dashboard",
+  "description": "Complete API monitoring with SLO tracking, latency breakdown, and error analysis for PULL backend services",
+  "widgets": [
+    {
+      "id": 1,
+      "definition": {
+        "title": "SLO Status",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 101,
+            "definition": {
+              "title": "Availability SLO (99.9%)",
+              "type": "slo",
+              "view_type": "detail",
+              "time_windows": ["7d", "30d", "90d"],
+              "slo_id": "pull-api-availability-slo",
+              "show_error_budget": true,
+              "view_mode": "overall",
+              "global_time_target": "0"
+            }
+          },
+          {
+            "id": 102,
+            "definition": {
+              "title": "Latency SLO (p99 < 500ms)",
+              "type": "slo",
+              "view_type": "detail",
+              "time_windows": ["7d", "30d", "90d"],
+              "slo_id": "pull-api-latency-slo",
+              "show_error_budget": true,
+              "view_mode": "overall",
+              "global_time_target": "0"
+            }
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 3
+      }
+    },
+    {
+      "id": 2,
+      "definition": {
+        "title": "Request Overview",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 201,
+            "definition": {
+              "title": "Total Requests/sec",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "per_second(a)"}],
+                  "queries": [
+                    {
+                      "name": "a",
+                      "data_source": "metrics",
+                      "query": "sum:pull.api.requests.count{service:pull-api,$env}.as_count()"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 1,
+              "autoscale": true,
+              "text_align": "center"
+            }
+          },
+          {
+            "id": 202,
+            "definition": {
+              "title": "Success Rate",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [
+                    {"formula": "100 - ((a / b) * 100)"}
+                  ],
+                  "queries": [
+                    {
+                      "name": "a",
+                      "data_source": "metrics",
+                      "query": "sum:pull.api.requests.count{service:pull-api,$env,status_code:5*}.as_count()"
+                    },
+                    {
+                      "name": "b",
+                      "data_source": "metrics",
+                      "query": "sum:pull.api.requests.count{service:pull-api,$env}.as_count()"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 3,
+              "custom_unit": "%",
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": ">=", "value": 99.9, "palette": "white_on_green"},
+                {"comparator": ">=", "value": 99.0, "palette": "white_on_yellow"},
+                {"comparator": "<", "value": 99.0, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 203,
+            "definition": {
+              "title": "P50 Latency",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {
+                      "name": "a",
+                      "data_source": "metrics",
+                      "query": "avg:pull.api.latency.p50{service:pull-api,$env}"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "custom_unit": "ms",
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "<=", "value": 100, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 200, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 200, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 204,
+            "definition": {
+              "title": "P99 Latency",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {
+                      "name": "a",
+                      "data_source": "metrics",
+                      "query": "avg:pull.api.latency.p99{service:pull-api,$env}"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "custom_unit": "ms",
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "<=", "value": 500, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 1000, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 1000, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 205,
+            "definition": {
+              "title": "Active Pods",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {
+                      "name": "a",
+                      "data_source": "metrics",
+                      "query": "sum:kubernetes.pods.running{app:pull-api,$env}"
+                    }
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "autoscale": false,
+              "text_align": "center"
+            }
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 2
+      }
+    },
+    {
+      "id": 3,
+      "definition": {
+        "title": "Request Rate (req/s)",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [{"formula": "per_second(a)", "alias": "Total"}],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api,$env}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "dog_classic", "line_type": "solid", "line_width": "normal"},
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {"include_zero": true, "scale": "linear"}
+      },
+      "layout": {"x": 0, "y": 5, "width": 6, "height": 3}
+    },
+    {
+      "id": 4,
+      "definition": {
+        "title": "Latency Distribution (P50/P95/P99)",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "P50"},
+              {"formula": "b", "alias": "P95"},
+              {"formula": "c", "alias": "P99"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "avg:pull.api.latency.p50{service:pull-api,$env}"},
+              {"name": "b", "data_source": "metrics", "query": "avg:pull.api.latency.p95{service:pull-api,$env}"},
+              {"name": "c", "data_source": "metrics", "query": "avg:pull.api.latency.p99{service:pull-api,$env}"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "warm"},
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {"include_zero": true, "label": "ms", "scale": "linear"},
+        "markers": [
+          {"value": "y = 500", "display_type": "error dashed", "label": "SLO Target"},
+          {"value": "y = 200", "display_type": "warning dashed", "label": "Warning"}
+        ]
+      },
+      "layout": {"x": 6, "y": 5, "width": 6, "height": 3}
+    },
+    {
+      "id": 5,
+      "definition": {
+        "title": "Error Rate by Type",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "per_second(a)", "alias": "4xx Client Errors"},
+              {"formula": "per_second(b)", "alias": "5xx Server Errors"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "sum:pull.api.requests.count{service:pull-api,$env,status_code:4*}.as_count()"},
+              {"name": "b", "data_source": "metrics", "query": "sum:pull.api.requests.count{service:pull-api,$env,status_code:5*}.as_count()"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "semantic"},
+            "display_type": "bars"
+          }
+        ],
+        "yaxis": {"include_zero": true, "scale": "linear"}
+      },
+      "layout": {"x": 0, "y": 8, "width": 6, "height": 3}
+    },
+    {
+      "id": 6,
+      "definition": {
+        "title": "Request Rate by Endpoint",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [{"formula": "per_second(a)"}],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api,$env} by {endpoint}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "dog_classic"},
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {"x": 6, "y": 8, "width": 6, "height": 3}
+    },
+    {
+      "id": 7,
+      "definition": {
+        "title": "Critical Endpoints - Trading",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 701,
+            "definition": {
+              "title": "Order Creation Latency",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {"formula": "a", "alias": "P50"},
+                    {"formula": "b", "alias": "P99"}
+                  ],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:pull.api.latency.p50{endpoint:POST_/api/v1/trading/orders,$env}"},
+                    {"name": "b", "data_source": "metrics", "query": "avg:pull.api.latency.p99{endpoint:POST_/api/v1/trading/orders,$env}"}
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {"label": "ms"},
+              "markers": [{"value": "y = 200", "display_type": "error dashed", "label": "Critical SLA"}]
+            }
+          },
+          {
+            "id": 702,
+            "definition": {
+              "title": "Portfolio Query Latency",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {"formula": "a", "alias": "P50"},
+                    {"formula": "b", "alias": "P99"}
+                  ],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:pull.api.latency.p50{endpoint:GET_/api/v1/trading/portfolio,$env}"},
+                    {"name": "b", "data_source": "metrics", "query": "avg:pull.api.latency.p99{endpoint:GET_/api/v1/trading/portfolio,$env}"}
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {"label": "ms"}
+            }
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 11, "width": 6, "height": 4}
+    },
+    {
+      "id": 8,
+      "definition": {
+        "title": "Critical Endpoints - Auth & KYC",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 801,
+            "definition": {
+              "title": "Authentication Latency",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {"formula": "a", "alias": "Login"},
+                    {"formula": "b", "alias": "Token Refresh"}
+                  ],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:pull.api.latency.p95{endpoint:POST_/api/auth/login,$env}"},
+                    {"name": "b", "data_source": "metrics", "query": "avg:pull.api.latency.p95{endpoint:POST_/api/auth/refresh,$env}"}
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {"label": "ms"}
+            }
+          },
+          {
+            "id": 802,
+            "definition": {
+              "title": "KYC Flow Latency",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [
+                    {"formula": "a", "alias": "Start KYC"},
+                    {"formula": "b", "alias": "Status Check"}
+                  ],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:pull.api.latency.p95{endpoint:POST_/api/v1/kyc/start,$env}"},
+                    {"name": "b", "data_source": "metrics", "query": "avg:pull.api.latency.p95{endpoint:GET_/api/v1/kyc/status,$env}"}
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {"label": "ms"}
+            }
+          }
+        ]
+      },
+      "layout": {"x": 6, "y": 11, "width": 6, "height": 4}
+    },
+    {
+      "id": 9,
+      "definition": {
+        "title": "External Service Dependencies",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Kalshi API"},
+              {"formula": "b", "alias": "Plaid API"},
+              {"formula": "c", "alias": "Convex"},
+              {"formula": "d", "alias": "Redis"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "avg:pull.external.latency.p95{service:kalshi,$env}"},
+              {"name": "b", "data_source": "metrics", "query": "avg:pull.external.latency.p95{service:plaid,$env}"},
+              {"name": "c", "data_source": "metrics", "query": "avg:pull.external.latency.p95{service:convex,$env}"},
+              {"name": "d", "data_source": "metrics", "query": "avg:pull.external.latency.p95{service:redis,$env}"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "dog_classic"},
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {"include_zero": true, "label": "ms"}
+      },
+      "layout": {"x": 0, "y": 15, "width": 6, "height": 3}
+    },
+    {
+      "id": 10,
+      "definition": {
+        "title": "External Service Error Rates",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "(a / b) * 100", "alias": "Kalshi Error %"},
+              {"formula": "(c / d) * 100", "alias": "Plaid Error %"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "sum:pull.external.errors{service:kalshi,$env}.as_count()"},
+              {"name": "b", "data_source": "metrics", "query": "sum:pull.external.requests{service:kalshi,$env}.as_count()"},
+              {"name": "c", "data_source": "metrics", "query": "sum:pull.external.errors{service:plaid,$env}.as_count()"},
+              {"name": "d", "data_source": "metrics", "query": "sum:pull.external.requests{service:plaid,$env}.as_count()"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "warm"},
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {"include_zero": true, "label": "%", "max": "10"}
+      },
+      "layout": {"x": 6, "y": 15, "width": 6, "height": 3}
+    },
+    {
+      "id": 11,
+      "definition": {
+        "title": "Rate Limiting",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "per_second(a)", "alias": "Requests Limited (429s)"},
+              {"formula": "per_second(b)", "alias": "Requests Allowed"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "sum:pull.api.rate_limit.exceeded{service:pull-api,$env}.as_count()"},
+              {"name": "b", "data_source": "metrics", "query": "sum:pull.api.rate_limit.allowed{service:pull-api,$env}.as_count()"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "semantic"},
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 18, "width": 6, "height": 3}
+    },
+    {
+      "id": 12,
+      "definition": {
+        "title": "Slowest Endpoints (P95)",
+        "type": "toplist",
+        "requests": [
+          {
+            "formulas": [{"formula": "a", "limit": {"count": 10, "order": "desc"}}],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "avg:pull.api.latency.p95{service:pull-api,$env} by {endpoint}"}
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "style": {"display": {"type": "stacked", "legend": "automatic"}}
+      },
+      "layout": {"x": 6, "y": 18, "width": 3, "height": 3}
+    },
+    {
+      "id": 13,
+      "definition": {
+        "title": "Most Errored Endpoints",
+        "type": "toplist",
+        "requests": [
+          {
+            "formulas": [{"formula": "a", "limit": {"count": 10, "order": "desc"}}],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "sum:pull.api.requests.count{service:pull-api,$env,status_code:5*} by {endpoint}.as_count()"}
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "style": {"display": {"type": "stacked", "legend": "automatic"}}
+      },
+      "layout": {"x": 9, "y": 18, "width": 3, "height": 3}
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "env",
+      "default": "production",
+      "prefix": "env",
+      "available_values": ["production", "staging", "development"]
+    }
+  ],
+  "layout_type": "ordered",
+  "notify_list": [],
+  "reflow_type": "fixed",
+  "tags": ["team:backend", "service:pull-api"]
+}

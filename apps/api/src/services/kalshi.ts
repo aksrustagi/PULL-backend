@@ -4,6 +4,9 @@
  */
 
 import { webcrypto } from "crypto";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger().child({ service: "kalshi" });
 
 // Configuration
 const KALSHI_BASE_URL =
@@ -449,7 +452,7 @@ export class KalshiWebSocket {
       this.ws = new WebSocket(this.url);
 
       this.ws.onopen = async () => {
-        console.log("Kalshi WebSocket connected");
+        logger.info("Kalshi WebSocket connected");
         await this.authenticate();
         this.reconnectAttempts = 0;
         resolve();
@@ -460,12 +463,12 @@ export class KalshiWebSocket {
       };
 
       this.ws.onerror = (error) => {
-        console.error("Kalshi WebSocket error:", error);
+        logger.error("Kalshi WebSocket error", { error });
         reject(error);
       };
 
       this.ws.onclose = () => {
-        console.log("Kalshi WebSocket closed");
+        logger.info("Kalshi WebSocket closed");
         this.attemptReconnect();
       };
     });
@@ -586,7 +589,10 @@ export class KalshiWebSocket {
    */
   private attemptReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error("Max reconnection attempts reached");
+      logger.error("Max reconnection attempts reached", {
+        attempts: this.reconnectAttempts,
+        maxAttempts: this.maxReconnectAttempts,
+      });
       return;
     }
 
@@ -594,8 +600,13 @@ export class KalshiWebSocket {
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
 
     setTimeout(() => {
-      console.log(`Attempting to reconnect (attempt ${this.reconnectAttempts})`);
-      this.connect().catch(console.error);
+      logger.info("Attempting to reconnect", {
+        attempt: this.reconnectAttempts,
+        delayMs: delay,
+      });
+      this.connect().catch((error) => {
+        logger.error("Reconnection failed", { error });
+      });
     }, delay);
   }
 
@@ -631,7 +642,7 @@ export async function createKalshiClient(): Promise<KalshiClient | null> {
   const privateKey = process.env.KALSHI_PRIVATE_KEY;
 
   if (!apiKey || !privateKey) {
-    console.warn("Kalshi credentials not configured");
+    logger.warn("Kalshi credentials not configured");
     return null;
   }
 

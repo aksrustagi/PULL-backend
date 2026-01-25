@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+import { authenticatedQuery, authenticatedMutation, systemMutation } from "./lib/auth";
 
 // Get points balance
 export const getBalance = query({
@@ -331,3 +333,383 @@ function getPointsToNextTier(currentTier: string, lifetimePoints: number): numbe
   const nextThreshold = thresholds[currentTier] ?? 0;
   return Math.max(0, nextThreshold - lifetimePoints);
 }
+
+// ============================================================================
+// AUTHENTICATED MUTATIONS
+// ============================================================================
+
+/**
+ * Earn points - authenticated user earns points for activity
+ */
+export const earnPoints = authenticatedMutation({
+  args: {
+    type: v.union(
+      v.literal("trade"),
+      v.literal("referral"),
+      v.literal("signup"),
+      v.literal("daily_login"),
+      v.literal("daily_streak"),
+      v.literal("deposit"),
+      v.literal("achievement"),
+      v.literal("promo"),
+      v.literal("other")
+    ),
+    amount: v.number(),
+    description: v.string(),
+    referenceType: v.optional(v.string()),
+    referenceId: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+    const now = Date.now();
+
+    // Validate amount
+    if (args.amount <= 0) {
+      throw new Error("Points amount must be positive");
+    }
+
+    // Get current balance
+    let balance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q.eq("userId", userId).eq("assetType", "points").eq("assetId", "PULL_POINTS")
+      )
+      .unique();
+
+    const newBalance = (balance?.available ?? 0) + args.amount;
+
+    if (balance) {
+      await ctx.db.patch(balance._id, {
+        available: newBalance,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("balances", {
+        userId,
+        assetType: "points",
+        assetId: "PULL_POINTS",
+        symbol: "PTS",
+        available: args.amount,
+        held: 0,
+        pending: 0,
+        updatedAt: now,
+      });
+    }
+
+    // Record transaction
+    const transactionId = await ctx.db.insert("pointsTransactions", {
+      userId,
+      type: args.type,
+      amount: args.amount,
+      balance: newBalance,
+      status: "completed",
+      description: args.description,
+      referenceType: args.referenceType,
+      referenceId: args.referenceId,
+      metadata: args.metadata,
+      createdAt: now,
+      completedAt: now,
+    });
+
+    // Log audit
+    await ctx.db.insert("auditLog", {
+      userId,
+      action: "points.earned",
+      resourceType: "pointsTransactions",
+      resourceId: transactionId,
+      metadata: {
+        type: args.type,
+        amount: args.amount,
+        newBalance,
+        description: args.description,
+      },
+      timestamp: now,
+    });
+
+    return {
+      transactionId,
+      pointsEarned: args.amount,
+      newBalance,
+      tier: calculateTier(newBalance),
+    };
+  },
+});
+
+/**
+ * Spend points - authenticated user spends points
+ */
+export const spendPoints = authenticatedMutation({
+  args: {
+    type: v.union(
+      v.literal("redemption"),
+      v.literal("boost"),
+      v.literal("premium_feature"),
+      v.literal("transfer"),
+      v.literal("other")
+    ),
+    amount: v.number(),
+    description: v.string(),
+    referenceType: v.optional(v.string()),
+    referenceId: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+    const now = Date.now();
+
+    // Validate amount
+    if (args.amount <= 0) {
+      throw new Error("Points amount must be positive");
+    }
+
+    // Get current balance
+    const balance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q.eq("userId", userId).eq("assetType", "points").eq("assetId", "PULL_POINTS")
+      )
+      .unique();
+
+    if (!balance || balance.available < args.amount) {
+      throw new Error(
+        `Insufficient points. Available: ${balance?.available ?? 0}, Required: ${args.amount}`
+      );
+    }
+
+    const newBalance = balance.available - args.amount;
+
+    await ctx.db.patch(balance._id, {
+      available: newBalance,
+      updatedAt: now,
+    });
+
+    // Record transaction (negative amount for spend)
+    const transactionId = await ctx.db.insert("pointsTransactions", {
+      userId,
+      type: args.type,
+      amount: -args.amount,
+      balance: newBalance,
+      status: "completed",
+      description: args.description,
+      referenceType: args.referenceType,
+      referenceId: args.referenceId,
+      metadata: args.metadata,
+      createdAt: now,
+      completedAt: now,
+    });
+
+    // Log audit
+    await ctx.db.insert("auditLog", {
+      userId,
+      action: "points.spent",
+      resourceType: "pointsTransactions",
+      resourceId: transactionId,
+      metadata: {
+        type: args.type,
+        amount: args.amount,
+        newBalance,
+        description: args.description,
+      },
+      timestamp: now,
+    });
+
+    return {
+      transactionId,
+      pointsSpent: args.amount,
+      newBalance,
+      tier: calculateTier(newBalance),
+    };
+  },
+});
+
+/**
+ * Get authenticated user's points balance with tier info
+ */
+export const getMyBalance = authenticatedQuery({
+  args: {},
+  handler: async (ctx) => {
+    const userId = ctx.userId as Id<"users">;
+
+    const balance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q.eq("userId", userId).eq("assetType", "points").eq("assetId", "PULL_POINTS")
+      )
+      .unique();
+
+    // Get lifetime stats from transactions
+    const transactions = await ctx.db
+      .query("pointsTransactions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    const lifetimeEarned = transactions
+      .filter(t => t.amount > 0 && t.status === "completed")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const lifetimeRedeemed = transactions
+      .filter(t => t.amount < 0 && t.status === "completed")
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+    const pending = transactions
+      .filter(t => t.status === "pending")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Calculate tier
+    const tier = calculateTier(lifetimeEarned);
+    const nextTier = getNextTier(tier);
+    const pointsToNextTier = getPointsToNextTier(tier, lifetimeEarned);
+
+    return {
+      available: balance?.available ?? 0,
+      pending,
+      lifetimeEarned,
+      lifetimeRedeemed,
+      tier,
+      nextTier,
+      pointsToNextTier,
+      tierProgress: nextTier ? (lifetimeEarned / (lifetimeEarned + pointsToNextTier)) * 100 : 100,
+    };
+  },
+});
+
+/**
+ * Get authenticated user's points history
+ */
+export const getMyHistory = authenticatedQuery({
+  args: {
+    type: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+
+    let transactions = await ctx.db
+      .query("pointsTransactions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
+
+    if (args.type) {
+      transactions = transactions.filter(t => t.type === args.type);
+    }
+
+    const total = transactions.length;
+    const offset = args.offset ?? 0;
+    const limit = args.limit ?? 50;
+
+    return {
+      transactions: transactions.slice(offset, offset + limit),
+      total,
+      hasMore: offset + limit < total,
+    };
+  },
+});
+
+/**
+ * Award points to user - system only (for automated rewards)
+ */
+export const awardPoints = systemMutation({
+  args: {
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("trade"),
+      v.literal("referral"),
+      v.literal("signup"),
+      v.literal("daily_login"),
+      v.literal("daily_streak"),
+      v.literal("deposit"),
+      v.literal("achievement"),
+      v.literal("promo"),
+      v.literal("admin_adjustment"),
+      v.literal("other")
+    ),
+    amount: v.number(),
+    description: v.string(),
+    referenceType: v.optional(v.string()),
+    referenceId: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Validate amount (can be negative for admin adjustments)
+    if (args.amount === 0) {
+      throw new Error("Points amount cannot be zero");
+    }
+
+    // Get current balance
+    let balance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q.eq("userId", args.userId).eq("assetType", "points").eq("assetId", "PULL_POINTS")
+      )
+      .unique();
+
+    const currentBalance = balance?.available ?? 0;
+    const newBalance = currentBalance + args.amount;
+
+    // Prevent negative balance
+    if (newBalance < 0) {
+      throw new Error(
+        `Operation would result in negative balance. Current: ${currentBalance}, Adjustment: ${args.amount}`
+      );
+    }
+
+    if (balance) {
+      await ctx.db.patch(balance._id, {
+        available: newBalance,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("balances", {
+        userId: args.userId,
+        assetType: "points",
+        assetId: "PULL_POINTS",
+        symbol: "PTS",
+        available: args.amount,
+        held: 0,
+        pending: 0,
+        updatedAt: now,
+      });
+    }
+
+    // Record transaction
+    const transactionId = await ctx.db.insert("pointsTransactions", {
+      userId: args.userId,
+      type: args.type,
+      amount: args.amount,
+      balance: newBalance,
+      status: "completed",
+      description: args.description,
+      referenceType: args.referenceType,
+      referenceId: args.referenceId,
+      metadata: args.metadata,
+      createdAt: now,
+      completedAt: now,
+    });
+
+    // Log audit
+    await ctx.db.insert("auditLog", {
+      userId: args.userId,
+      action: args.amount > 0 ? "points.awarded" : "points.deducted",
+      resourceType: "pointsTransactions",
+      resourceId: transactionId,
+      metadata: {
+        type: args.type,
+        amount: args.amount,
+        newBalance,
+        description: args.description,
+      },
+      timestamp: now,
+    });
+
+    return {
+      transactionId,
+      amount: args.amount,
+      newBalance,
+    };
+  },
+});

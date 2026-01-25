@@ -5,3 +5,4 @@
 
 export { analyticsRoutes } from "./analytics";
 export { experimentsRoutes } from "./experiments";
+export { backupRoutes } from "./backup";

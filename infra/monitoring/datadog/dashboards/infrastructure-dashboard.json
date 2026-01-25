@@ -1,0 +1,763 @@
+{
+  "title": "PULL Infrastructure Dashboard",
+  "description": "System metrics: Kubernetes, Cloud SQL, Redis, and Temporal worker health for PULL platform",
+  "widgets": [
+    {
+      "id": 1,
+      "definition": {
+        "title": "Cluster Health Overview",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 101,
+            "definition": {
+              "title": "API Pods Running",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:kubernetes.pods.running{app:pull-api,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": ">=", "value": 3, "palette": "white_on_green"},
+                {"comparator": ">=", "value": 2, "palette": "white_on_yellow"},
+                {"comparator": "<", "value": 2, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 102,
+            "definition": {
+              "title": "Worker Pods Running",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:kubernetes.pods.running{app:pull-temporal-worker,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": ">=", "value": 5, "palette": "white_on_green"},
+                {"comparator": ">=", "value": 3, "palette": "white_on_yellow"},
+                {"comparator": "<", "value": 3, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 103,
+            "definition": {
+              "title": "Node Count",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:kubernetes.nodes.count{$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center"
+            }
+          },
+          {
+            "id": 104,
+            "definition": {
+              "title": "Pods Pending",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:kubernetes.pods.pending{namespace:pull,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "==", "value": 0, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 2, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 2, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 105,
+            "definition": {
+              "title": "Pod Restarts (1h)",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:kubernetes.containers.restarts{namespace:pull,$env}.rollup(sum, 3600)"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "==", "value": 0, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 3, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 3, "palette": "white_on_red"}
+              ]
+            }
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 0, "width": 12, "height": 2}
+    },
+    {
+      "id": 2,
+      "definition": {
+        "title": "API Pod Resources",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 201,
+            "definition": {
+              "title": "API CPU Usage %",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [{"formula": "(a / b) * 100"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:kubernetes.cpu.usage.total{app:pull-api,$env} by {pod_name}"},
+                    {"name": "b", "data_source": "metrics", "query": "avg:kubernetes.cpu.limits{app:pull-api,$env} by {pod_name}"}
+                  ],
+                  "response_format": "timeseries",
+                  "style": {"palette": "dog_classic"},
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {"include_zero": true, "max": "100", "label": "%"},
+              "markers": [
+                {"value": "y = 70", "display_type": "warning dashed", "label": "HPA Scale-up"},
+                {"value": "y = 90", "display_type": "error dashed", "label": "Critical"}
+              ]
+            }
+          },
+          {
+            "id": 202,
+            "definition": {
+              "title": "API Memory Usage %",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [{"formula": "(a / b) * 100"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:kubernetes.memory.usage{app:pull-api,$env} by {pod_name}"},
+                    {"name": "b", "data_source": "metrics", "query": "avg:kubernetes.memory.limits{app:pull-api,$env} by {pod_name}"}
+                  ],
+                  "response_format": "timeseries",
+                  "style": {"palette": "warm"},
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {"include_zero": true, "max": "100", "label": "%"},
+              "markers": [
+                {"value": "y = 80", "display_type": "warning dashed", "label": "HPA Scale-up"},
+                {"value": "y = 95", "display_type": "error dashed", "label": "OOM Risk"}
+              ]
+            }
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 2, "width": 12, "height": 4}
+    },
+    {
+      "id": 3,
+      "definition": {
+        "title": "Worker Pod Resources",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 301,
+            "definition": {
+              "title": "Worker CPU Usage %",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [{"formula": "(a / b) * 100"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:kubernetes.cpu.usage.total{app:pull-temporal-worker,$env} by {pod_name}"},
+                    {"name": "b", "data_source": "metrics", "query": "avg:kubernetes.cpu.limits{app:pull-temporal-worker,$env} by {pod_name}"}
+                  ],
+                  "response_format": "timeseries",
+                  "style": {"palette": "dog_classic"},
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {"include_zero": true, "max": "100", "label": "%"},
+              "markers": [
+                {"value": "y = 70", "display_type": "warning dashed", "label": "HPA Scale-up"}
+              ]
+            }
+          },
+          {
+            "id": 302,
+            "definition": {
+              "title": "Worker Memory Usage %",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "formulas": [{"formula": "(a / b) * 100"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:kubernetes.memory.usage{app:pull-temporal-worker,$env} by {pod_name}"},
+                    {"name": "b", "data_source": "metrics", "query": "avg:kubernetes.memory.limits{app:pull-temporal-worker,$env} by {pod_name}"}
+                  ],
+                  "response_format": "timeseries",
+                  "style": {"palette": "warm"},
+                  "display_type": "line"
+                }
+              ],
+              "yaxis": {"include_zero": true, "max": "100", "label": "%"},
+              "markers": [
+                {"value": "y = 75", "display_type": "warning dashed", "label": "HPA Scale-up"}
+              ]
+            }
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 6, "width": 12, "height": 4}
+    },
+    {
+      "id": 4,
+      "definition": {
+        "title": "Cloud SQL (PostgreSQL)",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 401,
+            "definition": {
+              "title": "Active Connections",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:gcp.cloudsql.database.postgresql.num_backends{database_id:pull*,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center"
+            }
+          },
+          {
+            "id": 402,
+            "definition": {
+              "title": "Connection Utilization %",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "(a / 200) * 100"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:gcp.cloudsql.database.postgresql.num_backends{database_id:pull*,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 1,
+              "custom_unit": "%",
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "<=", "value": 70, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 85, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 85, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 403,
+            "definition": {
+              "title": "Disk Utilization %",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:gcp.cloudsql.database.disk.utilization{database_id:pull*,$env} * 100"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 1,
+              "custom_unit": "%",
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "<=", "value": 70, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 85, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 85, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 404,
+            "definition": {
+              "title": "CPU Utilization %",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:gcp.cloudsql.database.cpu.utilization{database_id:pull*,$env} * 100"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 1,
+              "custom_unit": "%",
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "<=", "value": 70, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 85, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 85, "palette": "white_on_red"}
+              ]
+            }
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 10, "width": 12, "height": 2}
+    },
+    {
+      "id": 5,
+      "definition": {
+        "title": "Database Performance",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Read Ops/s"},
+              {"formula": "b", "alias": "Write Ops/s"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "avg:gcp.cloudsql.database.disk.read_ops_count{database_id:pull*,$env}.as_rate()"},
+              {"name": "b", "data_source": "metrics", "query": "avg:gcp.cloudsql.database.disk.write_ops_count{database_id:pull*,$env}.as_rate()"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "dog_classic"},
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 12, "width": 6, "height": 3}
+    },
+    {
+      "id": 6,
+      "definition": {
+        "title": "Database Connection Trend",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [{"formula": "a", "alias": "Active Connections"}],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "avg:gcp.cloudsql.database.postgresql.num_backends{database_id:pull*,$env}"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "warm"},
+            "display_type": "line"
+          }
+        ],
+        "markers": [
+          {"value": "y = 170", "display_type": "warning dashed", "label": "85% of max"},
+          {"value": "y = 200", "display_type": "error dashed", "label": "Max Connections"}
+        ]
+      },
+      "layout": {"x": 6, "y": 12, "width": 6, "height": 3}
+    },
+    {
+      "id": 7,
+      "definition": {
+        "title": "Redis (Memorystore)",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 701,
+            "definition": {
+              "title": "Memory Usage %",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:gcp.redis.stats.memory.usage_ratio{instance_id:pull*,$env} * 100"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 1,
+              "custom_unit": "%",
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "<=", "value": 70, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 85, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 85, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 702,
+            "definition": {
+              "title": "Hit Rate %",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "(a / (a + b)) * 100"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:gcp.redis.stats.keyspace_hits{instance_id:pull*,$env}.as_count()"},
+                    {"name": "b", "data_source": "metrics", "query": "sum:gcp.redis.stats.keyspace_misses{instance_id:pull*,$env}.as_count()"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 1,
+              "custom_unit": "%",
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": ">=", "value": 90, "palette": "white_on_green"},
+                {"comparator": ">=", "value": 80, "palette": "white_on_yellow"},
+                {"comparator": "<", "value": 80, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 703,
+            "definition": {
+              "title": "Connected Clients",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:gcp.redis.clients.connected{instance_id:pull*,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center"
+            }
+          },
+          {
+            "id": 704,
+            "definition": {
+              "title": "Evicted Keys (1h)",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:gcp.redis.stats.evicted_keys{instance_id:pull*,$env}.as_count().rollup(sum, 3600)"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "==", "value": 0, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 100, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 100, "palette": "white_on_red"}
+              ]
+            }
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 15, "width": 12, "height": 2}
+    },
+    {
+      "id": 8,
+      "definition": {
+        "title": "Redis Operations",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Hits/s"},
+              {"formula": "b", "alias": "Misses/s"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "sum:gcp.redis.stats.keyspace_hits{instance_id:pull*,$env}.as_rate()"},
+              {"name": "b", "data_source": "metrics", "query": "sum:gcp.redis.stats.keyspace_misses{instance_id:pull*,$env}.as_rate()"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "semantic"},
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 17, "width": 6, "height": 3}
+    },
+    {
+      "id": 9,
+      "definition": {
+        "title": "Redis Memory Trend",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [{"formula": "a * 100", "alias": "Memory Usage %"}],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "avg:gcp.redis.stats.memory.usage_ratio{instance_id:pull*,$env}"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "warm"},
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {"include_zero": true, "max": "100"},
+        "markers": [
+          {"value": "y = 85", "display_type": "warning dashed", "label": "Warning"},
+          {"value": "y = 95", "display_type": "error dashed", "label": "Critical"}
+        ]
+      },
+      "layout": {"x": 6, "y": 17, "width": 6, "height": 3}
+    },
+    {
+      "id": 10,
+      "definition": {
+        "title": "Temporal Workers",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "id": 1001,
+            "definition": {
+              "title": "Workflow Task Queue Backlog",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:temporal.workflow_task_queue_backlog{task_queue:pull-*,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "<=", "value": 10, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 50, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 50, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 1002,
+            "definition": {
+              "title": "Activity Task Queue Backlog",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "avg:temporal.activity_task_queue_backlog{task_queue:pull-*,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "<=", "value": 50, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 200, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 200, "palette": "white_on_red"}
+              ]
+            }
+          },
+          {
+            "id": 1003,
+            "definition": {
+              "title": "Active Workflows",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:temporal.workflow_active{namespace:pull*,$env}"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center"
+            }
+          },
+          {
+            "id": 1004,
+            "definition": {
+              "title": "Failed Workflows (1h)",
+              "type": "query_value",
+              "requests": [
+                {
+                  "formulas": [{"formula": "a"}],
+                  "queries": [
+                    {"name": "a", "data_source": "metrics", "query": "sum:temporal.workflow_failed{namespace:pull*,$env}.as_count().rollup(sum, 3600)"}
+                  ],
+                  "response_format": "scalar"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center",
+              "conditional_formats": [
+                {"comparator": "==", "value": 0, "palette": "white_on_green"},
+                {"comparator": "<=", "value": 5, "palette": "white_on_yellow"},
+                {"comparator": ">", "value": 5, "palette": "white_on_red"}
+              ]
+            }
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 20, "width": 12, "height": 2}
+    },
+    {
+      "id": 11,
+      "definition": {
+        "title": "Temporal Task Queue Backlog",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Workflow Tasks"},
+              {"formula": "b", "alias": "Activity Tasks"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "avg:temporal.workflow_task_queue_backlog{task_queue:pull-*,$env}"},
+              {"name": "b", "data_source": "metrics", "query": "avg:temporal.activity_task_queue_backlog{task_queue:pull-*,$env}"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "dog_classic"},
+            "display_type": "line"
+          }
+        ],
+        "markers": [
+          {"value": "y = 50", "display_type": "warning dashed", "label": "Scale Trigger"},
+          {"value": "y = 200", "display_type": "error dashed", "label": "Critical Backlog"}
+        ]
+      },
+      "layout": {"x": 0, "y": 22, "width": 6, "height": 3}
+    },
+    {
+      "id": 12,
+      "definition": {
+        "title": "Workflow Execution Rate",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "per_second(a)", "alias": "Started"},
+              {"formula": "per_second(b)", "alias": "Completed"},
+              {"formula": "per_second(c)", "alias": "Failed"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "sum:temporal.workflow_started{namespace:pull*,$env}.as_count()"},
+              {"name": "b", "data_source": "metrics", "query": "sum:temporal.workflow_completed{namespace:pull*,$env}.as_count()"},
+              {"name": "c", "data_source": "metrics", "query": "sum:temporal.workflow_failed{namespace:pull*,$env}.as_count()"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "semantic"},
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {"x": 6, "y": 22, "width": 6, "height": 3}
+    },
+    {
+      "id": 13,
+      "definition": {
+        "title": "Network",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Ingress MB/s"},
+              {"formula": "b", "alias": "Egress MB/s"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "sum:kubernetes.network.rx_bytes{namespace:pull,$env}.as_rate() / 1048576"},
+              {"name": "b", "data_source": "metrics", "query": "sum:kubernetes.network.tx_bytes{namespace:pull,$env}.as_rate() / 1048576"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "cool"},
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {"label": "MB/s"}
+      },
+      "layout": {"x": 0, "y": 25, "width": 6, "height": 3}
+    },
+    {
+      "id": 14,
+      "definition": {
+        "title": "HPA Scaling Events",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "API Replicas"},
+              {"formula": "b", "alias": "Worker Replicas"}
+            ],
+            "queries": [
+              {"name": "a", "data_source": "metrics", "query": "avg:kubernetes.hpa.current_replicas{hpa:pull-api-hpa,$env}"},
+              {"name": "b", "data_source": "metrics", "query": "avg:kubernetes.hpa.current_replicas{hpa:pull-temporal-worker-hpa,$env}"}
+            ],
+            "response_format": "timeseries",
+            "style": {"palette": "dog_classic"},
+            "display_type": "line"
+          }
+        ],
+        "markers": [
+          {"value": "y = 3", "display_type": "ok dashed", "label": "API Min"},
+          {"value": "y = 5", "display_type": "ok dashed", "label": "Worker Min"}
+        ]
+      },
+      "layout": {"x": 6, "y": 25, "width": 6, "height": 3}
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "env",
+      "default": "production",
+      "prefix": "env",
+      "available_values": ["production", "staging", "development"]
+    }
+  ],
+  "layout_type": "ordered",
+  "notify_list": [],
+  "reflow_type": "fixed",
+  "tags": ["team:infrastructure", "team:sre", "service:pull"]
+}

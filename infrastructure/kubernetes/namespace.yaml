@@ -1,39 +1,233 @@
+# =============================================================================
+# PULL Namespace Configuration
+# =============================================================================
+# This file defines the namespace and resource governance for the PULL platform.
+# It includes:
+#   - Namespace with proper labels for organization and policy enforcement
+#   - ResourceQuota to prevent resource exhaustion and enforce capacity limits
+#   - LimitRange to set default and maximum container resource constraints
+#
+# Apply first: kubectl apply -f namespace.yaml
+# =============================================================================
+
+---
+# -----------------------------------------------------------------------------
+# Namespace Definition
+# -----------------------------------------------------------------------------
+# The 'pull' namespace isolates all PULL workloads from other applications.
+# Labels are used for:
+#   - pod-security.kubernetes.io/*: Enforce Pod Security Standards (PSS)
+#   - istio-injection: Enable/disable service mesh injection if using Istio
+#   - app.kubernetes.io/*: Standard Kubernetes labels for tooling integration
+# -----------------------------------------------------------------------------
 apiVersion: v1
 kind: Namespace
 metadata:
   name: pull
   labels:
+    # Standard Kubernetes application labels
     name: pull
     app.kubernetes.io/name: pull
     app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: pull-platform
+
+    # Pod Security Standards (PSS) enforcement
+    # 'restricted' is the most secure profile - enforces:
+    #   - Must run as non-root
+    #   - Must drop all capabilities
+    #   - Must use read-only root filesystem
+    #   - Must not allow privilege escalation
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+
+    # Network policy enforcement indicator
+    network-policy: enabled
+
+    # Environment indicator (change for staging/dev)
+    environment: production
+
 ---
+# -----------------------------------------------------------------------------
+# Resource Quota
+# -----------------------------------------------------------------------------
+# Defines hard limits on aggregate resource consumption in the namespace.
+# This prevents any single namespace from consuming all cluster resources.
+#
+# Quota categories:
+#   - Compute: CPU and memory requests/limits
+#   - Storage: Ephemeral storage and PVC claims
+#   - Object counts: Pods, services, secrets, configmaps
+#
+# Best practices:
+#   - Set requests lower than limits to allow bursting
+#   - Monitor quota usage: kubectl describe quota -n pull
+#   - Adjust based on actual usage patterns
+# -----------------------------------------------------------------------------
 apiVersion: v1
 kind: ResourceQuota
 metadata:
-  name: pull-quota
+  name: pull-compute-quota
   namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: resource-governance
+  annotations:
+    description: "Compute resource quota for PULL namespace"
 spec:
   hard:
+    # CPU Resources
+    # requests.cpu: Total CPU that can be requested by all pods
+    # limits.cpu: Maximum CPU that can be used by all pods
     requests.cpu: "20"
-    requests.memory: 40Gi
     limits.cpu: "40"
+
+    # Memory Resources
+    # requests.memory: Total memory that can be requested by all pods
+    # limits.memory: Maximum memory that can be used by all pods
+    requests.memory: 40Gi
     limits.memory: 80Gi
+
+    # Ephemeral Storage (for logs, tmp files, etc.)
+    requests.ephemeral-storage: 50Gi
+    limits.ephemeral-storage: 100Gi
+
+---
+# Separate quota for object counts to prevent resource exhaustion attacks
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: pull-object-quota
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: resource-governance
+  annotations:
+    description: "Object count quota for PULL namespace"
+spec:
+  hard:
+    # Pod limits
     pods: "100"
+
+    # Service limits
     services: "20"
+    services.loadbalancers: "2"
+    services.nodeports: "5"
+
+    # Configuration limits
     secrets: "50"
     configmaps: "50"
+
+    # PVC limits (if using persistent storage)
+    persistentvolumeclaims: "20"
+
+    # Replication controller limits
+    replicationcontrollers: "20"
+
+    # Count of running pods with specific priority classes
+    count/deployments.apps: "20"
+    count/statefulsets.apps: "10"
+    count/jobs.batch: "50"
+    count/cronjobs.batch: "10"
+
 ---
+# -----------------------------------------------------------------------------
+# Limit Range
+# -----------------------------------------------------------------------------
+# Sets default resource requests/limits and enforces min/max constraints.
+# This ensures:
+#   - Every container has resource requests (for scheduling)
+#   - No single container can consume excessive resources
+#   - Reasonable defaults for containers without explicit resources
+#
+# Types of limits:
+#   - Container: Per-container limits (most common)
+#   - Pod: Aggregate limits for all containers in a pod
+#   - PersistentVolumeClaim: Storage request limits
+# -----------------------------------------------------------------------------
 apiVersion: v1
 kind: LimitRange
 metadata:
-  name: pull-limits
+  name: pull-container-limits
   namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: resource-governance
+  annotations:
+    description: "Container resource limits for PULL namespace"
 spec:
   limits:
-    - default:
+    # Container-level limits
+    - type: Container
+      # Default limits applied if not specified
+      default:
         cpu: "500m"
         memory: "512Mi"
+        ephemeral-storage: "500Mi"
+      # Default requests applied if not specified
       defaultRequest:
         cpu: "100m"
         memory: "128Mi"
-      type: Container
+        ephemeral-storage: "100Mi"
+      # Maximum allowed values
+      max:
+        cpu: "4"
+        memory: "8Gi"
+        ephemeral-storage: "2Gi"
+      # Minimum allowed values
+      min:
+        cpu: "10m"
+        memory: "32Mi"
+        ephemeral-storage: "10Mi"
+      # Maximum ratio of limit/request (prevents overcommit)
+      # A ratio of 10 means limit can be at most 10x the request
+      maxLimitRequestRatio:
+        cpu: "10"
+        memory: "4"
+
+---
+# Pod-level limit range for aggregate container resources
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pull-pod-limits
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: resource-governance
+  annotations:
+    description: "Pod aggregate resource limits for PULL namespace"
+spec:
+  limits:
+    - type: Pod
+      # Maximum resources for all containers in a pod combined
+      max:
+        cpu: "8"
+        memory: "16Gi"
+      # Minimum resources for a pod
+      min:
+        cpu: "20m"
+        memory: "64Mi"
+
+---
+# PVC limit range for storage requests
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: pull-pvc-limits
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: resource-governance
+  annotations:
+    description: "PVC storage limits for PULL namespace"
+spec:
+  limits:
+    - type: PersistentVolumeClaim
+      max:
+        storage: 100Gi
+      min:
+        storage: 1Gi

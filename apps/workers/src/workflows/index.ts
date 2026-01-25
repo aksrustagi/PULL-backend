@@ -6,10 +6,18 @@
 // KYC Workflows
 export {
   kycOnboardingWorkflow,
+  upgradeKYCWorkflow,
+  kycReverificationWorkflow,
   emailVerifiedSignal,
   personaCompletedSignal,
+  personaApprovedSignal,
+  personaDeclinedSignal,
   checkrCompletedSignal,
+  plaidLinkedSignal,
+  cancelKYCSignal,
+  getKYCStatusQuery,
 } from "./kyc";
+export type { KYCWorkflowParams, KYCWorkflowStatus, PlaidLinkData } from "./kyc";
 
 // Trading Workflows
 export {
