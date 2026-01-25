@@ -4,8 +4,10 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@pull/db/convex/_generated/api";
 import { PersonaClient } from "@pull/core/services/persona";
 import type { WebhookPayload, Inquiry, Verification } from "@pull/core/services/persona/types";
+import { getLogger } from "@pull/core/services";
 
 const app = new Hono();
+const logger = getLogger().child({ service: "webhooks" });
 
 // Initialize Convex client
 function getConvexClient(): ConvexHttpClient {
@@ -73,7 +75,7 @@ function verifyPersonaSignature(
     // Verify timestamp is within 5 minutes
     const webhookTimestamp = parseInt(timestamp, 10) * 1000;
     if (Math.abs(Date.now() - webhookTimestamp) > 5 * 60 * 1000) {
-      console.warn("Persona webhook: timestamp too old");
+      logger.warn("Persona webhook: timestamp too old");
       return false;
     }
 
@@ -89,7 +91,7 @@ function verifyPersonaSignature(
       Buffer.from(expectedSignature, "hex")
     );
   } catch (error) {
-    console.error("Persona signature verification error:", error);
+    logger.error("Persona signature verification error:", error);
     return false;
   }
 }
@@ -136,12 +138,12 @@ app.post("/persona", async (c) => {
 
   const secret = process.env.PERSONA_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("PERSONA_WEBHOOK_SECRET not configured");
+    logger.error("PERSONA_WEBHOOK_SECRET not configured");
     return c.json({ error: "Webhook not configured" }, 500);
   }
 
   if (!verifyPersonaSignature(rawBody, signature, secret)) {
-    console.warn("Persona webhook: invalid signature");
+    logger.warn("Persona webhook: invalid signature");
     return c.json({ error: "Invalid signature" }, 401);
   }
 
@@ -161,11 +163,11 @@ app.post("/persona", async (c) => {
       payload: rawBody,
     });
   } catch (error) {
-    console.error("Failed to store webhook event:", error);
+    logger.error("Failed to store webhook event:", error);
   }
 
   const event = parsePersonaWebhook(body);
-  console.log(`Persona webhook received: ${event.type}`, {
+  logger.info(`Persona webhook received: ${event.type}`, {
     inquiryId: event.inquiryId,
     referenceId: event.referenceId,
   });
@@ -199,7 +201,7 @@ app.post("/persona", async (c) => {
             personaCompletedAt: Date.now(),
           });
 
-          console.log(`Inquiry ${event.inquiryId} completed for user ${userId}`, {
+          logger.info(`Inquiry ${event.inquiryId} completed for user ${userId}`, {
             allPassed,
             verificationCount: verifications.length,
           });
@@ -237,7 +239,7 @@ app.post("/persona", async (c) => {
             expiresAt,
           });
 
-          console.log(`KYC approved for user ${userId}`, {
+          logger.info(`KYC approved for user ${userId}`, {
             tier: approvedTier,
             inquiryId: event.inquiryId,
           });
@@ -264,7 +266,7 @@ app.post("/persona", async (c) => {
             completedAt: Date.now(),
           });
 
-          console.log(`KYC declined for user ${userId}`, {
+          logger.info(`KYC declined for user ${userId}`, {
             inquiryId: event.inquiryId,
             reason: reviewerComment,
           });
@@ -287,7 +289,7 @@ app.post("/persona", async (c) => {
             rejectionReason: "Verification process failed",
           });
 
-          console.log(`Inquiry failed for user ${userId}`, {
+          logger.info(`Inquiry failed for user ${userId}`, {
             inquiryId: event.inquiryId,
           });
         }
@@ -306,7 +308,7 @@ app.post("/persona", async (c) => {
             personaReviewStatus: "expired",
           });
 
-          console.log(`Inquiry expired for user ${userId}`, {
+          logger.info(`Inquiry expired for user ${userId}`, {
             inquiryId: event.inquiryId,
           });
 
@@ -318,7 +320,7 @@ app.post("/persona", async (c) => {
       case "inquiry.transitioned": {
         // Inquiry moved to a new step
         if (event.inquiry && event.referenceId) {
-          console.log(`Inquiry transitioned for user ${event.referenceId}`, {
+          logger.info(`Inquiry transitioned for user ${event.referenceId}`, {
             inquiryId: event.inquiryId,
             currentStep: event.inquiry.attributes.current_step_name,
             nextStep: event.inquiry.attributes.next_step_name,
@@ -334,7 +336,7 @@ app.post("/persona", async (c) => {
       case "verification.passed": {
         // Individual verification check passed
         if (event.verification) {
-          console.log(`Verification passed`, {
+          logger.info(`Verification passed`, {
             type: event.verification.type,
             id: event.verification.id,
           });
@@ -354,7 +356,7 @@ app.post("/persona", async (c) => {
               reasons: c.reasons,
             }));
 
-          console.log(`Verification failed`, {
+          logger.info(`Verification failed`, {
             type: event.verification.type,
             id: event.verification.id,
             failedChecks,
@@ -366,7 +368,7 @@ app.post("/persona", async (c) => {
       case "verification.requires-retry": {
         // Verification needs retry (e.g., blurry photo)
         if (event.verification) {
-          console.log(`Verification requires retry`, {
+          logger.info(`Verification requires retry`, {
             type: event.verification.type,
             id: event.verification.id,
           });
@@ -375,7 +377,7 @@ app.post("/persona", async (c) => {
       }
 
       default:
-        console.log(`Unhandled Persona event type: ${event.type}`);
+        logger.info(`Unhandled Persona event type: ${event.type}`);
     }
 
     // Mark webhook as processed
@@ -387,7 +389,7 @@ app.post("/persona", async (c) => {
 
     return c.json({ received: true, eventType: event.type });
   } catch (error) {
-    console.error(`Error processing Persona webhook ${event.type}:`, error);
+    logger.error(`Error processing Persona webhook ${event.type}:`, error);
 
     // Mark webhook as failed
     if (webhookEventId) {
@@ -411,18 +413,18 @@ app.post("/checkr", async (c) => {
 
   const secret = process.env.CHECKR_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("CHECKR_WEBHOOK_SECRET not configured");
+    logger.error("CHECKR_WEBHOOK_SECRET not configured");
     return c.json({ error: "Webhook not configured" }, 500);
   }
 
   if (!verifyHmacSignature(rawBody, signature, secret)) {
-    console.warn("Checkr webhook: invalid signature");
+    logger.warn("Checkr webhook: invalid signature");
     return c.json({ error: "Invalid signature" }, 401);
   }
 
   const body = JSON.parse(rawBody);
   // TODO: Process background check webhook
-  console.log("Checkr webhook verified:", body.type);
+  logger.info("Checkr webhook verified:", body.type);
 
   return c.json({ received: true });
 });
@@ -445,17 +447,17 @@ app.post("/nylas", async (c) => {
   const signature = c.req.header("X-Nylas-Signature");
   const secret = process.env.NYLAS_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("NYLAS_WEBHOOK_SECRET not configured");
+    logger.error("NYLAS_WEBHOOK_SECRET not configured");
     return c.json({ error: "Webhook not configured" }, 500);
   }
 
   if (!verifyHmacSignature(rawBody, signature, secret)) {
-    console.warn("Nylas webhook: invalid signature");
+    logger.warn("Nylas webhook: invalid signature");
     return c.json({ error: "Invalid signature" }, 401);
   }
 
   // TODO: Process email sync notifications
-  console.log("Nylas webhook verified:", body.trigger);
+  logger.info("Nylas webhook verified:", body.trigger);
 
   return c.json({ received: true });
 });
@@ -469,18 +471,18 @@ app.post("/massive", async (c) => {
 
   const secret = process.env.MASSIVE_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("MASSIVE_WEBHOOK_SECRET not configured");
+    logger.error("MASSIVE_WEBHOOK_SECRET not configured");
     return c.json({ error: "Webhook not configured" }, 500);
   }
 
   if (!verifyHmacSignature(rawBody, signature, secret)) {
-    console.warn("Massive webhook: invalid signature");
+    logger.warn("Massive webhook: invalid signature");
     return c.json({ error: "Invalid signature" }, 401);
   }
 
   const body = JSON.parse(rawBody);
   // TODO: Process order execution updates
-  console.log("Massive webhook verified:", body.event);
+  logger.info("Massive webhook verified:", body.event);
 
   return c.json({ received: true });
 });
@@ -494,7 +496,7 @@ app.post("/stripe", async (c) => {
   const rawBody = await c.req.text();
 
   if (!signature) {
-    console.warn("Stripe webhook: missing signature");
+    logger.warn("Stripe webhook: missing signature");
     return c.json({ error: "Missing signature" }, 401);
   }
 
@@ -509,7 +511,7 @@ app.post("/stripe", async (c) => {
     const webhookHandler = initializeWebhookHandler({
       // Handle successful deposit
       onDepositCompleted: async (event) => {
-        console.log("Processing deposit completed", {
+        logger.info("Processing deposit completed", {
           userId: event.userId,
           netAmount: event.netAmount,
           sessionId: event.sessionId,
@@ -526,12 +528,12 @@ app.post("/stripe", async (c) => {
             stripeCustomerId: event.customerId,
           });
 
-          console.log("Deposit completed successfully", {
+          logger.info("Deposit completed successfully", {
             userId: event.userId,
             netAmount: event.netAmount,
           });
         } catch (error) {
-          console.error("Failed to complete deposit", {
+          logger.error("Failed to complete deposit", {
             error,
             userId: event.userId,
             sessionId: event.sessionId,
@@ -542,7 +544,7 @@ app.post("/stripe", async (c) => {
 
       // Handle failed deposit
       onDepositFailed: async (event) => {
-        console.warn("Deposit payment failed", {
+        logger.warn("Deposit payment failed", {
           paymentIntentId: event.paymentIntentId,
           failureCode: event.failureCode,
           failureMessage: event.failureMessage,
@@ -554,13 +556,13 @@ app.post("/stripe", async (c) => {
             failureReason: event.failureMessage ?? event.failureCode ?? "Payment failed",
           });
         } catch (error) {
-          console.error("Failed to mark deposit as failed", { error });
+          logger.error("Failed to mark deposit as failed", { error });
         }
       },
 
       // Handle successful payout
       onPayoutPaid: async (event) => {
-        console.log("Payout paid", {
+        logger.info("Payout paid", {
           payoutId: event.payoutId,
           amount: event.amount,
         });
@@ -570,13 +572,13 @@ app.post("/stripe", async (c) => {
             stripePayoutId: event.payoutId,
           });
         } catch (error) {
-          console.error("Failed to complete withdrawal", { error });
+          logger.error("Failed to complete withdrawal", { error });
         }
       },
 
       // Handle failed payout
       onPayoutFailed: async (event) => {
-        console.warn("Payout failed", {
+        logger.warn("Payout failed", {
           payoutId: event.payoutId,
           failureCode: event.failureCode,
           failureMessage: event.failureMessage,
@@ -588,13 +590,13 @@ app.post("/stripe", async (c) => {
             failureReason: event.failureMessage ?? event.failureCode ?? "Payout failed",
           });
         } catch (error) {
-          console.error("Failed to mark withdrawal as failed", { error });
+          logger.error("Failed to mark withdrawal as failed", { error });
         }
       },
 
       // Handle payment method attached
       onPaymentMethodAttached: async (event) => {
-        console.log("Payment method attached", {
+        logger.info("Payment method attached", {
           paymentMethodId: event.paymentMethodId,
           customerId: event.customerId,
           type: event.type,
@@ -604,7 +606,7 @@ app.post("/stripe", async (c) => {
 
       // Handle connected account updates
       onAccountUpdated: async (event) => {
-        console.log("Connected account updated", {
+        logger.info("Connected account updated", {
           accountId: event.accountId,
           payoutsEnabled: event.payoutsEnabled,
           detailsSubmitted: event.detailsSubmitted,
@@ -617,7 +619,7 @@ app.post("/stripe", async (c) => {
               stripeConnectedAccountId: event.accountId,
             });
           } catch (error) {
-            console.error("Failed to update connected account status", { error });
+            logger.error("Failed to update connected account status", { error });
           }
         }
       },
@@ -627,7 +629,7 @@ app.post("/stripe", async (c) => {
     const result = await webhookHandler.processWebhook(rawBody, signature);
 
     if (!result.success) {
-      console.warn("Webhook processing failed", {
+      logger.warn("Webhook processing failed", {
         eventId: result.eventId,
         eventType: result.eventType,
         error: result.error,
@@ -642,7 +644,7 @@ app.post("/stripe", async (c) => {
       return c.json({ received: true, processed: false, error: result.error });
     }
 
-    console.log("Stripe webhook processed", {
+    logger.info("Stripe webhook processed", {
       eventId: result.eventId,
       eventType: result.eventType,
       processed: result.processed,
@@ -650,7 +652,7 @@ app.post("/stripe", async (c) => {
 
     return c.json({ received: true, processed: result.processed });
   } catch (error) {
-    console.error("Stripe webhook error:", error);
+    logger.error("Stripe webhook error:", error);
     return c.json(
       { error: error instanceof Error ? error.message : "Internal error" },
       500
@@ -667,18 +669,18 @@ app.post("/polygon", async (c) => {
 
   const secret = process.env.POLYGON_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("POLYGON_WEBHOOK_SECRET not configured");
+    logger.error("POLYGON_WEBHOOK_SECRET not configured");
     return c.json({ error: "Webhook not configured" }, 500);
   }
 
   if (!verifyHmacSignature(rawBody, signature, secret)) {
-    console.warn("Polygon webhook: invalid signature");
+    logger.warn("Polygon webhook: invalid signature");
     return c.json({ error: "Invalid signature" }, 401);
   }
 
   const body = JSON.parse(rawBody);
   // TODO: Process blockchain events
-  console.log("Polygon webhook verified:", body.event);
+  logger.info("Polygon webhook verified:", body.event);
 
   return c.json({ received: true });
 });
