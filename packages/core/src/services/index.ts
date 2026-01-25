@@ -83,3 +83,51 @@ export type {
   Grant as NylasGrant,
   Contact as NylasContact,
 } from "./nylas/types";
+
+// ============================================================================
+// 10x Feature Enhancement Services
+// ============================================================================
+
+// Presence & Real-time
+export { presenceService, PresenceService } from "./presence/client";
+export * as presenceTypes from "./presence/types";
+
+// AI Trade Advisor
+export { aiTradeAdvisorService, AITradeAdvisorService } from "./ai-trade-advisor/client";
+export * as aiTradeAdvisorTypes from "./ai-trade-advisor/types";
+
+// Voice
+export { voiceService, VoiceService } from "./voice/client";
+export * as voiceTypes from "./voice/types";
+
+// Vision
+export { visionService, VisionService } from "./vision/client";
+export * as visionTypes from "./vision/types";
+
+// Injury Prediction
+export { injuryPredictionService, InjuryPredictionService } from "./injury-prediction/client";
+export * as injuryPredictionTypes from "./injury-prediction/types";
+
+// Social Graph
+export { socialGraphService, SocialGraphService } from "./social-graph/client";
+export * as socialGraphTypes from "./social-graph/types";
+
+// Finance
+export { financeService, FinanceService } from "./finance/client";
+export * as financeTypes from "./finance/types";
+
+// Engagement
+export { engagementService, EngagementService } from "./engagement/client";
+export * as engagementTypes from "./engagement/types";
+
+// Compliance
+export { complianceService, ComplianceService } from "./compliance/client";
+export * as complianceTypes from "./compliance/types";
+
+// Second Screen
+export { secondScreenService, SecondScreenService } from "./second-screen/client";
+export * as secondScreenTypes from "./second-screen/types";
+
+// Advanced Analytics
+export { advancedAnalyticsService, AdvancedAnalyticsService } from "./analytics/advanced/client";
+export * as advancedAnalyticsTypes from "./analytics/advanced/types";
