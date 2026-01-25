@@ -3850,4 +3850,181 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_type", ["type", "status"])
     .index("by_started_at", ["startedAt"]),
+
+  // ============================================================================
+  // FRAUD DETECTION TABLES
+  // ============================================================================
+
+  /**
+   * Fraud Flags - Store fraud flags for users
+   */
+  fraudFlags: defineTable({
+    userId: v.string(),
+    flagType: v.string(),
+    severity: v.union(v.literal("warning"), v.literal("alert"), v.literal("critical")),
+    reason: v.string(),
+    evidence: v.optional(v.any()),
+    status: v.union(v.literal("active"), v.literal("resolved"), v.literal("dismissed"), v.literal("false_positive")),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    resolvedAt: v.optional(v.number()),
+    resolvedBy: v.optional(v.string()),
+    resolution: v.optional(v.string()),
+    notes: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_type", ["flagType"])
+    .index("by_severity", ["severity"])
+    .index("by_created", ["createdAt"]),
+
+  /**
+   * Device Fingerprints - Track device fingerprints for fraud detection
+   */
+  deviceFingerprints: defineTable({
+    fingerprintId: v.string(),
+    userId: v.string(),
+    hash: v.string(),
+    userAgent: v.optional(v.string()),
+    platform: v.optional(v.string()),
+    screenResolution: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    language: v.optional(v.string()),
+    hardwareConcurrency: v.optional(v.number()),
+    canvasHash: v.optional(v.string()),
+    webglHash: v.optional(v.string()),
+    webglVendor: v.optional(v.string()),
+    webglRenderer: v.optional(v.string()),
+    audioHash: v.optional(v.string()),
+    fontHash: v.optional(v.string()),
+    isBot: v.boolean(),
+    isEmulator: v.boolean(),
+    isVirtualMachine: v.boolean(),
+    trustScore: v.number(),
+    isSuspicious: v.boolean(),
+    suspiciousReasons: v.optional(v.array(v.string())),
+    firstSeen: v.number(),
+    lastSeen: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_hash", ["hash"])
+    .index("by_fingerprint_id", ["fingerprintId"]),
+
+  /**
+   * Risk Scores - Store user risk scores
+   */
+  riskScores: defineTable({
+    userId: v.string(),
+    overallScore: v.number(),
+    riskLevel: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")),
+    velocityScore: v.number(),
+    deviceScore: v.number(),
+    ipScore: v.number(),
+    behaviorScore: v.number(),
+    multiAccountScore: v.number(),
+    bonusAbuseScore: v.number(),
+    tradingScore: v.number(),
+    historyScore: v.number(),
+    lastAssessment: v.number(),
+    nextAssessment: v.number(),
+    signalCount: v.number(),
+    flagCount: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_risk_level", ["riskLevel"])
+    .index("by_score", ["overallScore"]),
+
+  /**
+   * Fraud Alerts - Store fraud alerts
+   */
+  fraudAlerts: defineTable({
+    alertId: v.string(),
+    alertType: v.string(),
+    severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")),
+    entityId: v.string(),
+    entityType: v.union(v.literal("user"), v.literal("trade"), v.literal("market"), v.literal("transaction"), v.literal("device"), v.literal("ip")),
+    userId: v.optional(v.string()),
+    description: v.string(),
+    evidence: v.optional(v.any()),
+    status: v.union(v.literal("new"), v.literal("investigating"), v.literal("escalated"), v.literal("resolved"), v.literal("dismissed"), v.literal("false_positive")),
+    assignedTo: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+    resolvedAt: v.optional(v.number()),
+    resolution: v.optional(v.object({
+      action: v.string(),
+      reason: v.string(),
+      resolvedBy: v.string(),
+      notes: v.optional(v.string()),
+    })),
+    relatedAlerts: v.optional(v.array(v.string())),
+  })
+    .index("by_user", ["userId"])
+    .index("by_entity", ["entityId"])
+    .index("by_status", ["status"])
+    .index("by_severity", ["severity"])
+    .index("by_type", ["alertType"])
+    .index("by_created", ["createdAt"]),
+
+  /**
+   * IP History - Track IP address history for users
+   */
+  ipHistory: defineTable({
+    userId: v.string(),
+    ipAddress: v.string(),
+    isVPN: v.boolean(),
+    isProxy: v.boolean(),
+    isTor: v.boolean(),
+    isDatacenter: v.boolean(),
+    country: v.optional(v.string()),
+    countryCode: v.optional(v.string()),
+    city: v.optional(v.string()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    isp: v.optional(v.string()),
+    asn: v.optional(v.string()),
+    reputationScore: v.number(),
+    firstSeen: v.number(),
+    lastSeen: v.number(),
+    accessCount: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_ip", ["ipAddress"])
+    .index("by_user_ip", ["userId", "ipAddress"]),
+
+  /**
+   * Velocity Records - Track velocity for rate limiting
+   */
+  velocityRecords: defineTable({
+    userId: v.string(),
+    actionType: v.string(),
+    period: v.union(v.literal("hourly"), v.literal("daily"), v.literal("weekly"), v.literal("monthly")),
+    count: v.number(),
+    amount: v.number(),
+    windowStart: v.number(),
+    windowEnd: v.number(),
+    lastAction: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_action", ["userId", "actionType"])
+    .index("by_user_action_period", ["userId", "actionType", "period"]),
+
+  /**
+   * Account Links - Track linked accounts for multi-account detection
+   */
+  accountLinks: defineTable({
+    userId: v.string(),
+    linkedUserId: v.string(),
+    linkType: v.string(),
+    confidence: v.number(),
+    evidence: v.optional(v.array(v.string())),
+    firstDetected: v.number(),
+    lastSeen: v.number(),
+    isConfirmed: v.boolean(),
+    confirmedBy: v.optional(v.string()),
+    confirmedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_linked_user", ["linkedUserId"])
+    .index("by_link_type", ["linkType"]),
 });
