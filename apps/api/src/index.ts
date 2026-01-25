@@ -87,6 +87,11 @@ import { cashBattlesRoutes } from "./routes/cash-battles";
 import { squadsRoutes } from "./routes/squads";
 import { aiCopilotRoutes } from "./routes/ai-copilot";
 import { streaksRoutes } from "./routes/streaks";
+import { vipRoutes } from "./routes/vip";
+import { insuranceRoutes } from "./routes/insurance";
+import { propsRoutes } from "./routes/props";
+import { watchPartyRoutes } from "./routes/watch-party";
+import { nftsRoutes } from "./routes/nfts";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -224,6 +229,13 @@ app.route("/api/v1/battles", cashBattlesRoutes);
 app.route("/api/v1/squads", squadsRoutes);
 app.route("/api/v1/copilot", aiCopilotRoutes);
 app.route("/api/v1/streaks", streaksRoutes);
+
+// VIP & Premium Features routes
+app.route("/api/v1/vip", vipRoutes);
+app.route("/api/v1/insurance", insuranceRoutes);
+app.route("/api/v1/props", propsRoutes);
+app.route("/api/v1/watch-party", watchPartyRoutes);
+app.route("/api/v1/nfts", nftsRoutes);
 
 // Admin routes (require auth + admin role)
 // TODO: Add admin role check middleware
