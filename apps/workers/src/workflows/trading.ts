@@ -21,7 +21,10 @@ const {
 } = proxyActivities<typeof activities>({
   startToCloseTimeout: "30 seconds",
   retry: {
+    initialInterval: "1 second",
+    backoffCoefficient: 2,
     maximumAttempts: 3,
+    maximumInterval: "30 seconds",
   },
 });
 
@@ -94,11 +97,13 @@ export async function orderExecutionWorkflow(
     let averagePrice: number | undefined;
     let orderComplete = false;
 
+    // Calculate max polling iterations based on time-in-force
+    // Each iteration sleeps 10 seconds, so iterations = desired_seconds / 10
     const maxPolls =
       timeInForce === "day"
-        ? 6.5 * 60 // ~6.5 hours market hours
+        ? Math.floor((6.5 * 60 * 60) / 10) // ~6.5 hours = 2,340 iterations
         : timeInForce === "gtc"
-          ? 30 * 24 // 30 days
+          ? Math.floor((30 * 24 * 60 * 60) / 10) // 30 days = 259,200 iterations
           : 1; // IOC/FOK are immediate
 
     for (let poll = 0; poll < maxPolls && !orderComplete && !cancelled; poll++) {

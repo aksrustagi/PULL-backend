@@ -77,19 +77,5 @@ export {
   type DraftAttachment,
 } from "./components/email/compose-modal";
 
-// Messaging Components
-export {
-  ChatRoom,
-  type ChatRoomProps,
-  type ChatMessage,
-  type ChatMember,
-  type RoomSettings,
-} from "./components/messaging/chat-room";
-export {
-  RoomList,
-  type RoomListProps,
-  type Room,
-} from "./components/messaging/room-list";
-
 // Utilities
 export { cn } from "./lib/utils";

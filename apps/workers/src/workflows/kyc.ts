@@ -19,7 +19,10 @@ const {
 } = proxyActivities<typeof activities>({
   startToCloseTimeout: "1 minute",
   retry: {
+    initialInterval: "2 seconds",
+    backoffCoefficient: 2,
     maximumAttempts: 3,
+    maximumInterval: "30 seconds",
   },
 });
 
@@ -38,6 +41,7 @@ interface KYCWorkflowParams {
   firstName: string;
   lastName: string;
   walletAddress?: string;
+  templateId: string; // Persona template ID - must be passed as input for determinism
 }
 
 /**
@@ -46,7 +50,7 @@ interface KYCWorkflowParams {
 export async function kycOnboardingWorkflow(
   params: KYCWorkflowParams
 ): Promise<{ success: boolean; kycTier: string }> {
-  const { userId, email, firstName, lastName, walletAddress } = params;
+  const { userId, email, firstName, lastName, walletAddress, templateId } = params;
 
   // State tracking
   let emailVerified = false;
@@ -101,7 +105,7 @@ export async function kycOnboardingWorkflow(
   await updateUserKYCStatus(userId, "identity_pending");
   const personaInquiry = await createPersonaInquiry(
     userId,
-    process.env.PERSONA_TEMPLATE_ID ?? "tmpl_default"
+    templateId
   );
 
   // Poll for Persona completion (or wait for signal)

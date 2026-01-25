@@ -305,6 +305,24 @@ async function getWebhookVerificationKey(
     const key = data.key.alg === "ES256" ? createPublicKey(data.key) : null;
 
     if (key) {
+      // Prune expired entries if cache grows beyond max size
+      const MAX_CACHE_SIZE = 50;
+      if (keyCache.size >= MAX_CACHE_SIZE) {
+        const now = Date.now();
+        for (const [cachedId, cached] of keyCache) {
+          if (cached.expiresAt <= now) {
+            keyCache.delete(cachedId);
+          }
+        }
+        // If still too large after pruning expired, remove oldest entries
+        if (keyCache.size >= MAX_CACHE_SIZE) {
+          const entries = Array.from(keyCache.entries());
+          entries.sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+          for (let i = 0; i < entries.length - MAX_CACHE_SIZE + 1; i++) {
+            keyCache.delete(entries[i][0]);
+          }
+        }
+      }
       // Cache for 24 hours
       keyCache.set(keyId, {
         key,

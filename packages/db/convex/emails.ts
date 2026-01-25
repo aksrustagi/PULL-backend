@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { authenticatedQuery, authenticatedMutation, systemMutation } from "./lib/auth";
+import { Id } from "./_generated/dataModel";
 
 /**
  * Email queries and mutations for PULL
@@ -12,9 +14,8 @@ import { mutation, query } from "./_generated/server";
 /**
  * Get emails for a user
  */
-export const getEmails = query({
+export const getEmails = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     accountId: v.optional(v.id("emailAccounts")),
     status: v.optional(v.string()),
     folder: v.optional(v.string()),
@@ -22,21 +23,22 @@ export const getEmails = query({
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db.query("emails");
+    const userId = ctx.userId as Id<"users">;
+    let emailQuery = ctx.db.query("emails");
 
     if (args.accountId && args.folder) {
-      query = query.withIndex("by_folder", (q) =>
+      emailQuery = emailQuery.withIndex("by_folder", (q) =>
         q.eq("accountId", args.accountId!).eq("folderId", args.folder!)
       );
     } else if (args.status) {
-      query = query.withIndex("by_status", (q) =>
-        q.eq("userId", args.userId).eq("status", args.status as "unread")
+      emailQuery = emailQuery.withIndex("by_status", (q) =>
+        q.eq("userId", userId).eq("status", args.status as "unread")
       );
     } else {
-      query = query.withIndex("by_user", (q) => q.eq("userId", args.userId));
+      emailQuery = emailQuery.withIndex("by_user", (q) => q.eq("userId", userId));
     }
 
-    const emails = await query.order("desc").take(args.limit ?? 50);
+    const emails = await emailQuery.order("desc").take(args.limit ?? 50);
 
     return {
       emails,
@@ -84,26 +86,31 @@ export const getByThread = query({
 /**
  * Get email by ID
  */
-export const getById = query({
+export const getById = authenticatedQuery({
   args: { id: v.id("emails") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const userId = ctx.userId as Id<"users">;
+    const email = await ctx.db.get(args.id);
+    if (!email || email.userId !== userId) {
+      return null;
+    }
+    return email;
   },
 });
 
 /**
  * Get unread emails
  */
-export const getUnread = query({
+export const getUnread = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("emails")
       .withIndex("by_status", (q) =>
-        q.eq("userId", args.userId).eq("status", "unread")
+        q.eq("userId", userId).eq("status", "unread")
       )
       .order("desc")
       .take(args.limit ?? 50);
@@ -113,33 +120,36 @@ export const getUnread = query({
 /**
  * Get email thread
  */
-export const getThread = query({
+export const getThread = authenticatedQuery({
   args: { threadId: v.string() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const userId = ctx.userId as Id<"users">;
+    const emails = await ctx.db
       .query("emails")
       .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
       .order("asc")
       .collect();
+
+    return emails.filter((email) => email.userId === userId);
   },
 });
 
 /**
  * Search emails
  */
-export const search = query({
+export const search = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     query: v.string(),
     status: v.optional(v.string()),
     category: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     let searchQuery = ctx.db
       .query("emails")
       .withSearchIndex("search_emails", (q) => {
-        let search = q.search("subject", args.query).eq("userId", args.userId);
+        let search = q.search("subject", args.query).eq("userId", userId);
         if (args.status) {
           search = search.eq("status", args.status as "unread");
         }
@@ -156,12 +166,13 @@ export const search = query({
 /**
  * Get email accounts for user
  */
-export const getAccounts = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
+export const getAccounts = authenticatedQuery({
+  args: {},
+  handler: async (ctx, _args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("emailAccounts")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
   },
 });
@@ -169,13 +180,14 @@ export const getAccounts = query({
 /**
  * Get email stats
  */
-export const getStats = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
+export const getStats = authenticatedQuery({
+  args: {},
+  handler: async (ctx, _args) => {
+    const userId = ctx.userId as Id<"users">;
     const unread = await ctx.db
       .query("emails")
       .withIndex("by_status", (q) =>
-        q.eq("userId", args.userId).eq("status", "unread")
+        q.eq("userId", userId).eq("status", "unread")
       )
       .collect();
 
@@ -205,7 +217,7 @@ export const getStats = query({
 /**
  * Upsert an email (sync from Nylas)
  */
-export const upsertEmail = mutation({
+export const upsertEmail = systemMutation({
   args: {
     accountId: v.id("emailAccounts"),
     userId: v.id("users"),
@@ -289,7 +301,7 @@ export const upsertEmail = mutation({
 /**
  * Update email triage (from AI processing)
  */
-export const updateTriage = mutation({
+export const updateTriage = systemMutation({
   args: {
     id: v.id("emails"),
     priority: v.string(),
@@ -317,11 +329,16 @@ export const updateTriage = mutation({
 /**
  * Mark email as read
  */
-export const markRead = mutation({
+export const markRead = authenticatedMutation({
   args: { id: v.id("emails") },
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const userId = ctx.userId as Id<"users">;
+    const email = await ctx.db.get(args.id);
+    if (!email || email.userId !== userId) {
+      throw new Error("Email not found or access denied");
+    }
 
+    const now = Date.now();
     await ctx.db.patch(args.id, {
       status: "read",
       updatedAt: now,
@@ -334,12 +351,17 @@ export const markRead = mutation({
 /**
  * Mark multiple emails as read
  */
-export const markManyRead = mutation({
+export const markManyRead = authenticatedMutation({
   args: { ids: v.array(v.id("emails")) },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
 
     for (const id of args.ids) {
+      const email = await ctx.db.get(id);
+      if (!email || email.userId !== userId) {
+        throw new Error("Email not found or access denied");
+      }
       await ctx.db.patch(id, {
         status: "read",
         updatedAt: now,
@@ -353,11 +375,16 @@ export const markManyRead = mutation({
 /**
  * Archive email
  */
-export const archiveEmail = mutation({
+export const archiveEmail = authenticatedMutation({
   args: { id: v.id("emails") },
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const userId = ctx.userId as Id<"users">;
+    const email = await ctx.db.get(args.id);
+    if (!email || email.userId !== userId) {
+      throw new Error("Email not found or access denied");
+    }
 
+    const now = Date.now();
     await ctx.db.patch(args.id, {
       status: "archived",
       updatedAt: now,
@@ -370,14 +397,19 @@ export const archiveEmail = mutation({
 /**
  * Snooze email
  */
-export const snoozeEmail = mutation({
+export const snoozeEmail = authenticatedMutation({
   args: {
     id: v.id("emails"),
     until: v.number(),
   },
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const userId = ctx.userId as Id<"users">;
+    const email = await ctx.db.get(args.id);
+    if (!email || email.userId !== userId) {
+      throw new Error("Email not found or access denied");
+    }
 
+    const now = Date.now();
     await ctx.db.patch(args.id, {
       status: "snoozed",
       snoozedUntil: args.until,
@@ -391,11 +423,14 @@ export const snoozeEmail = mutation({
 /**
  * Star/unstar email
  */
-export const toggleStar = mutation({
+export const toggleStar = authenticatedMutation({
   args: { id: v.id("emails") },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const email = await ctx.db.get(args.id);
-    if (!email) throw new Error("Email not found");
+    if (!email || email.userId !== userId) {
+      throw new Error("Email not found or access denied");
+    }
 
     await ctx.db.patch(args.id, {
       isStarred: !email.isStarred,
@@ -409,11 +444,16 @@ export const toggleStar = mutation({
 /**
  * Delete email (move to trash)
  */
-export const deleteEmail = mutation({
+export const deleteEmail = authenticatedMutation({
   args: { id: v.id("emails") },
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const userId = ctx.userId as Id<"users">;
+    const email = await ctx.db.get(args.id);
+    if (!email || email.userId !== userId) {
+      throw new Error("Email not found or access denied");
+    }
 
+    const now = Date.now();
     await ctx.db.patch(args.id, {
       status: "deleted",
       updatedAt: now,
@@ -448,9 +488,8 @@ export const updateStatus = mutation({
 /**
  * Connect email account
  */
-export const connectAccount = mutation({
+export const connectAccount = authenticatedMutation({
   args: {
-    userId: v.id("users"),
     provider: v.string(),
     email: v.string(),
     name: v.optional(v.string()),
@@ -458,6 +497,7 @@ export const connectAccount = mutation({
     isDefault: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     const now = Date.now();
 
     // Check if account already connected
@@ -473,13 +513,13 @@ export const connectAccount = mutation({
     // If this is the first account, make it default
     const existingAccounts = await ctx.db
       .query("emailAccounts")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
     const isDefault = args.isDefault ?? existingAccounts.length === 0;
 
     const accountId = await ctx.db.insert("emailAccounts", {
-      userId: args.userId,
+      userId,
       provider: args.provider,
       email: args.email,
       name: args.name,
@@ -491,7 +531,7 @@ export const connectAccount = mutation({
     });
 
     await ctx.db.insert("auditLog", {
-      userId: args.userId,
+      userId,
       action: "email.account_connected",
       resourceType: "emailAccounts",
       resourceId: accountId,
@@ -506,7 +546,7 @@ export const connectAccount = mutation({
 /**
  * Update account sync status
  */
-export const updateAccountSync = mutation({
+export const updateAccountSync = systemMutation({
   args: {
     accountId: v.id("emailAccounts"),
     syncStatus: v.union(

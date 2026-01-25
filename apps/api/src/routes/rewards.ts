@@ -296,7 +296,7 @@ app.get("/leaderboard", async (c) => {
 });
 
 /**
- * Claim daily streak bonus
+ * Claim daily streak bonus (idempotent - one claim per day per user)
  */
 app.post("/daily-streak", async (c) => {
   const userId = c.get("userId");

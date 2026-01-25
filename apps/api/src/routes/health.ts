@@ -15,9 +15,16 @@ app.get("/", (c) => {
 });
 
 /**
- * Detailed health check with service status
+ * Detailed health check with service status (requires internal/admin auth)
+ * Returns infrastructure details - not publicly accessible
  */
 app.get("/detailed", async (c) => {
+  // Only allow internal requests (check for internal API key)
+  const internalKey = c.req.header("X-Internal-Key");
+  if (internalKey !== process.env.INTERNAL_API_KEY) {
+    return c.json({ status: "healthy", timestamp: new Date().toISOString() });
+  }
+
   const checks: Array<{
     name: string;
     status: "pass" | "warn" | "fail";

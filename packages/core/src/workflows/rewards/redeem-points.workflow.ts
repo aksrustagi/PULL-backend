@@ -272,9 +272,27 @@ export async function redeemPointsWorkflow(
     // Compensation: refund points if already debited
     if (status.status === "processing" || status.status === "fulfilling") {
       try {
-        // TODO: Implement points refund
+        // Credit points back by debiting a negative amount (refund)
+        await debitPoints(userId, -pointsCost, `refund_${redemptionId}`);
+        await recordAuditLog({
+          userId,
+          action: "points_refunded",
+          resourceType: "redemption",
+          resourceId: redemptionId,
+          metadata: { amount: pointsCost, reason: status.failureReason },
+        });
       } catch (refundError) {
-        console.error("Failed to refund points:", refundError);
+        // Log refund failure for manual reconciliation
+        await recordAuditLog({
+          userId,
+          action: "points_refund_failed",
+          resourceType: "redemption",
+          resourceId: redemptionId,
+          metadata: {
+            amount: pointsCost,
+            refundError: refundError instanceof Error ? refundError.message : String(refundError),
+          },
+        });
       }
     }
 

@@ -133,7 +133,12 @@ export default defineSchema({
       v.union(v.literal("pass"), v.literal("fail"), v.literal("review"))
     ),
     riskScore: v.optional(v.number()),
-    data: v.optional(v.any()),
+    data: v.optional(v.object({
+      verificationResult: v.optional(v.string()),
+      documentType: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      rawResponse: v.optional(v.string()),
+    })),
     expiresAt: v.optional(v.number()),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
@@ -213,7 +218,12 @@ export default defineSchema({
     ),
     fees: v.number(),
     feeCurrency: v.string(),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      source: v.optional(v.string()),
+      exchange: v.optional(v.string()),
+      cancellationReason: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
     expiresAt: v.optional(v.number()),
     submittedAt: v.optional(v.number()),
     filledAt: v.optional(v.number()),
@@ -301,7 +311,11 @@ export default defineSchema({
     netAmount: v.number(),
     externalId: v.optional(v.string()),
     txHash: v.optional(v.string()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      provider: v.optional(v.string()),
+      processorId: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })
@@ -332,7 +346,11 @@ export default defineSchema({
     destination: v.string(),
     externalId: v.optional(v.string()),
     txHash: v.optional(v.string()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      provider: v.optional(v.string()),
+      processorId: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })
@@ -1028,7 +1046,13 @@ export default defineSchema({
     year: v.optional(v.number()),
 
     verificationDocuments: v.array(v.string()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      condition: v.optional(v.string()),
+      edition: v.optional(v.string()),
+      language: v.optional(v.string()),
+      marketPrice: v.optional(v.number()),
+      notes: v.optional(v.string()),
+    })),
     verifiedAt: v.optional(v.number()),
     listedAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -1492,8 +1516,20 @@ export default defineSchema({
       v.literal("failed")
     ),
     fulfillmentType: v.string(),
-    fulfillmentDetails: v.optional(v.any()),
-    shippingAddress: v.optional(v.any()),
+    fulfillmentDetails: v.optional(v.object({
+      code: v.optional(v.string()),
+      url: v.optional(v.string()),
+      instructions: v.optional(v.string()),
+    })),
+    shippingAddress: v.optional(v.object({
+      name: v.string(),
+      line1: v.string(),
+      line2: v.optional(v.string()),
+      city: v.string(),
+      state: v.string(),
+      postalCode: v.string(),
+      country: v.string(),
+    })),
     trackingNumber: v.optional(v.string()),
     notes: v.optional(v.string()),
     redeemedAt: v.number(),
@@ -1551,7 +1587,12 @@ export default defineSchema({
     blockNumber: v.optional(v.number()),
     gasUsed: v.optional(v.number()),
     fee: v.optional(v.number()),
-    metadata: v.optional(v.any()),
+    metadata: v.optional(v.object({
+      network: v.optional(v.string()),
+      contractAddress: v.optional(v.string()),
+      method: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    })),
     createdAt: v.number(),
     confirmedAt: v.optional(v.number()),
   })
@@ -1595,6 +1636,8 @@ export default defineSchema({
     action: v.string(),
     resourceType: v.string(),
     resourceId: v.string(),
+    // Audit log changes/metadata are polymorphic by design (different actions store different shapes).
+    // Auth wrappers (systemMutation/authenticatedMutation) prevent unauthorized writes.
     changes: v.optional(v.any()),
     metadata: v.optional(v.any()),
     ipAddress: v.optional(v.string()),
@@ -1613,7 +1656,7 @@ export default defineSchema({
     source: v.string(),
     eventType: v.string(),
     externalId: v.optional(v.string()),
-    payload: v.any(),
+    payload: v.string(), // JSON-serialized webhook payload for type safety
     status: v.union(
       v.literal("received"),
       v.literal("processing"),
@@ -1636,7 +1679,8 @@ export default defineSchema({
     agentType: v.string(),
     sessionId: v.optional(v.string()),
     key: v.string(),
-    value: v.any(),
+    value: v.string(), // JSON-serialized value for type safety
+    embedding: v.optional(v.array(v.float64())),
     expiresAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),

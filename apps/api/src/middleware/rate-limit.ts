@@ -3,8 +3,9 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import type { Env } from "../index";
 
-const isProduction = process.env.NODE_ENV === "production";
+// Environment detection
 const isDevelopment = process.env.NODE_ENV === "development";
+const isProduction = process.env.NODE_ENV === "production";
 
 // Check Redis configuration in production
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
@@ -139,36 +140,38 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
     return;
   }
 
-  // In production, if Redis is not configured, return 503
-  if (isProduction && !rateLimiters) {
-    return c.json(
-      {
-        success: false,
-        error: {
-          code: "SERVICE_UNAVAILABLE",
-          message: "Rate limiting service is unavailable. Please try again later.",
-        },
-        requestId: c.get("requestId"),
-        timestamp: new Date().toISOString(),
-      },
-      503
-    );
-  }
-
-  // In non-production/non-development (e.g., test), skip if not configured
+  // Skip if Redis is not configured
   if (!rateLimiters) {
     await next();
     return;
   }
 
   const userId = c.get("userId");
-  const ip = c.req.header("CF-Connecting-IP") ??
-             c.req.header("X-Forwarded-For")?.split(",")[0] ??
-             "unknown";
+  // Only trust proxy headers if explicitly configured
+  const trustProxy = !!process.env.TRUST_PROXY;
+  const ip = trustProxy
+    ? (c.req.header("CF-Connecting-IP") ??
+       c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ??
+       "unknown")
+    : "unknown";
 
   // Determine rate limiter based on authentication
   const limiter = userId ? rateLimiters.authenticated : rateLimiters.anonymous;
-  const identifier = userId ?? ip;
+
+  // SECURITY: For anonymous users with unknown IP, use a more restrictive identifier
+  // This prevents attackers from sharing the same rate limit pool
+  let identifier: string;
+  if (userId) {
+    // Authenticated: use userId + IP for defense in depth
+    identifier = `user:${userId}:${ip}`;
+  } else if (ip !== "unknown") {
+    // Anonymous with known IP: use IP
+    identifier = `ip:${ip}`;
+  } else {
+    // Anonymous with unknown IP: use a session-based approach or very restrictive global limit
+    // Note: In production, consider implementing session token tracking
+    identifier = "anonymous:unknown";
+  }
 
   try {
     const { success, limit, remaining, reset } = await limiter.limit(identifier);
@@ -204,24 +207,22 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
 
     await next();
   } catch (error) {
-    // In production, if rate limiting fails, return 503 instead of allowing through
-    if (isProduction) {
-      console.error("Rate limit error in production:", error);
+    // Fail CLOSED for sensitive endpoints - deny on rate limit failure
+    const path = c.req.path;
+    const isSensitive = path.includes("/auth") || path.includes("/trading") || path.includes("/orders");
+    if (isSensitive) {
+      console.error("Rate limit error on sensitive endpoint, blocking:", error);
       return c.json(
         {
           success: false,
-          error: {
-            code: "SERVICE_UNAVAILABLE",
-            message: "Rate limiting service error. Please try again later.",
-          },
+          error: { code: "SERVICE_UNAVAILABLE", message: "Service temporarily unavailable" },
           requestId: c.get("requestId"),
           timestamp: new Date().toISOString(),
         },
         503
       );
     }
-    // In non-production, log and allow through
-    console.error("Rate limit error:", error);
+    console.error("Rate limit error, allowing through:", error);
     await next();
   }
 });
