@@ -2,6 +2,8 @@ import { createMiddleware } from "hono/factory";
 import * as jose from "jose";
 import type { Env } from "../index";
 import { isTokenBlacklisted } from "../lib/redis";
+import { convex, api } from "../lib/convex";
+import type { Id } from "@pull/db/convex/_generated/dataModel";
 
 // Fail fast if JWT_SECRET is not configured
 const jwtSecretValue = process.env.JWT_SECRET;
@@ -100,6 +102,81 @@ export const authMiddleware = createMiddleware<Env>(async (c, next) => {
         timestamp: new Date().toISOString(),
       },
       401
+    );
+  }
+});
+
+/**
+ * Admin-only middleware
+ * Verifies the user is authenticated and has admin privileges
+ * Must be used after authMiddleware
+ */
+export const adminOnly = createMiddleware<Env>(async (c, next) => {
+  const userId = c.get("userId");
+
+  if (!userId) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      401
+    );
+  }
+
+  try {
+    // Check if user is an admin
+    const isAdmin = await convex.query(api.admin.isAdmin, {
+      id: userId as Id<"users">,
+    });
+
+    if (!isAdmin) {
+      // Log unauthorized admin access attempt
+      await convex.mutation(api.audit.log, {
+        userId: userId as Id<"users">,
+        action: "admin.access.denied",
+        resourceType: "admin",
+        resourceId: "dashboard",
+        metadata: {
+          requestPath: c.req.path,
+          requestMethod: c.req.method,
+        },
+        requestId: c.get("requestId"),
+      });
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "FORBIDDEN",
+            message: "Admin access required",
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        403
+      );
+    }
+
+    await next();
+  } catch (error) {
+    console.error("Admin middleware error:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Failed to verify admin status",
+        },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      500
     );
   }
 });

@@ -3,15 +3,19 @@
  *
  * Provides data export functionality for disaster recovery and compliance.
  * Convex handles automatic backups, but this provides on-demand exports.
+ *
+ * All export queries require admin authorization.
  */
 
 import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { adminQuery } from "./lib/auth";
 
 /**
  * Export users data for backup
+ * Requires admin authorization
  */
-export const exportUsers = query({
+export const exportUsers = adminQuery({
   args: {
     limit: v.optional(v.number()),
     cursor: v.optional(v.string()),
@@ -38,8 +42,9 @@ export const exportUsers = query({
 
 /**
  * Export orders data for backup
+ * Requires admin authorization
  */
-export const exportOrders = query({
+export const exportOrders = adminQuery({
   args: {
     limit: v.optional(v.number()),
     startDate: v.optional(v.number()),

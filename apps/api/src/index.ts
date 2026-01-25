@@ -55,6 +55,7 @@ const stopUptime = startUptimeUpdates();
 import { initSentry, captureException } from "./lib/sentry";
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { csrfProtection, sanitizeInput } from "./middleware/security";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { tradingRoutes } from "./routes/trading";
@@ -196,8 +197,10 @@ app.route("/docs", docsRoutes);
 // Server-Sent Events (SSE) for real-time data (public access with optional auth)
 app.route("/sse", sseRoutes);
 
-// Protected routes - auth first, then rate limit (so userId is available)
+// Protected routes - auth first, then CSRF/sanitization, then rate limit (so userId is available)
 app.use("/api/v1/*", authMiddleware);
+app.use("/api/v1/*", csrfProtection);
+app.use("/api/v1/*", sanitizeInput);
 app.use("/api/v1/*", rateLimitMiddleware);
 app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
@@ -240,11 +243,15 @@ app.route("/api/v1/nfts", nftsRoutes);
 // Admin routes (require auth + admin role)
 // TODO: Add admin role check middleware
 app.use("/admin/*", authMiddleware);
+app.use("/admin/*", csrfProtection);
+app.use("/admin/*", sanitizeInput);
 app.route("/admin/analytics", analyticsRoutes);
 app.route("/admin/experiments", experimentsRoutes);
 app.route("/admin/backup", backupRoutes);
 
 app.use("/api/admin/*", authMiddleware);
+app.use("/api/admin/*", csrfProtection);
+app.use("/api/admin/*", sanitizeInput);
 app.route("/api/admin", adminRoutes);
 
 // tRPC endpoint (uses its own auth via context)
