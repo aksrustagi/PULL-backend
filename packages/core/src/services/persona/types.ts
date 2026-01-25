@@ -183,6 +183,80 @@ export interface DatabaseVerification extends Verification {
 }
 
 // ============================================================================
+// Document Types
+// ============================================================================
+
+export interface Document {
+  id: string;
+  type: "document";
+  attributes: {
+    status: "initiated" | "submitted" | "valid" | "invalid" | "processed";
+    created_at: string;
+    processed_at: string | null;
+    kind: "government_id" | "utility_bill" | "bank_statement" | "tax_document" | "other";
+    files: DocumentFile[];
+    fields: Record<string, unknown>;
+    extracted_data: Record<string, unknown>;
+  };
+}
+
+export interface DocumentFile {
+  id: string;
+  filename: string;
+  page: string;
+  url: string;
+  byte_size: number;
+  created_at: string;
+}
+
+// ============================================================================
+// Selfie Types
+// ============================================================================
+
+export interface Selfie {
+  id: string;
+  type: "selfie";
+  attributes: {
+    status: "initiated" | "submitted" | "valid" | "invalid" | "processed";
+    created_at: string;
+    processed_at: string | null;
+    capture_method: "photo" | "video";
+    center_photo_url: string | null;
+    left_photo_url: string | null;
+    right_photo_url: string | null;
+    photos: SelfiePhoto[];
+  };
+}
+
+export interface SelfiePhoto {
+  page: string;
+  url: string;
+  normalized_url: string | null;
+  byte_size: number;
+}
+
+// ============================================================================
+// Report Types
+// ============================================================================
+
+export interface Report {
+  id: string;
+  type: string;
+  attributes: {
+    status: "pending" | "ready" | "errored";
+    created_at: string;
+    completed_at: string | null;
+    redacted_at: string | null;
+    report_template_version_name: string;
+    has_match: boolean | null;
+    is_continuous: boolean;
+    is_recurring: boolean;
+    tags: string[];
+    term: string | null;
+  };
+}
+
+// ============================================================================
 // Request/Response Types
 // ============================================================================
 

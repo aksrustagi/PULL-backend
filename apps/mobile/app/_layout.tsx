@@ -74,6 +74,19 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
+              name="trade/[id]"
+              options={{
+                headerShown: false,
+                presentation: "modal",
+              }}
+            />
+            <Stack.Screen
+              name="event/[id]"
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
               name="chat/[roomId]"
               options={{
                 headerBackTitle: "Back",

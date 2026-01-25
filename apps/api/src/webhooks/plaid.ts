@@ -6,8 +6,10 @@
 import { Hono } from "hono";
 import { Client } from "@temporalio/client";
 import { PlaidClient, type PlaidWebhookPayload } from "@pull/core/services/plaid";
+import { getLogger } from "@pull/core/services";
 
 const plaid = new Hono();
+const logger = getLogger().child({ service: "plaid-webhook" });
 
 // ==========================================================================
 // HELPERS
@@ -31,7 +33,10 @@ function getTemporalClient(): Client {
 
 async function storeWebhookEvent(payload: PlaidWebhookPayload, rawPayload: string): Promise<void> {
   // TODO: Store in Convex webhookEvents table
-  console.log(`[Plaid Webhook] Storing event: ${payload.webhook_type}/${payload.webhook_code}`);
+  logger.info("Storing webhook event", {
+    webhookType: payload.webhook_type,
+    webhookCode: payload.webhook_code,
+  });
 }
 
 // ==========================================================================
@@ -55,14 +60,18 @@ plaid.post("/", async (c) => {
     });
 
     if (!isValid) {
-      console.warn("[Plaid Webhook] Invalid signature");
+      logger.warn("Invalid webhook signature");
       return c.json({ success: false, error: "Invalid signature" }, 200);
     }
 
     // Parse payload
     const payload = client.parseWebhookPayload(rawBody);
 
-    console.log(`[Plaid Webhook] Received: ${payload.webhook_type}/${payload.webhook_code}`);
+    logger.info("Webhook received", {
+      webhookType: payload.webhook_type,
+      webhookCode: payload.webhook_code,
+      itemId: payload.item_id,
+    });
 
     // Store raw event
     await storeWebhookEvent(payload, rawBody);
@@ -86,12 +95,12 @@ plaid.post("/", async (c) => {
         break;
 
       default:
-        console.log(`[Plaid Webhook] Unhandled webhook type: ${payload.webhook_type}`);
+        logger.info("Unhandled webhook type", { webhookType: payload.webhook_type });
     }
 
     return c.json({ success: true });
   } catch (error) {
-    console.error("[Plaid Webhook] Error:", error);
+    logger.error("Webhook processing error", { error });
     return c.json({ success: false, error: "Processing failed" }, 500);
   }
 });
@@ -103,17 +112,20 @@ plaid.post("/", async (c) => {
 async function handleAuthWebhook(payload: PlaidWebhookPayload): Promise<void> {
   switch (payload.webhook_code) {
     case "AUTOMATICALLY_VERIFIED":
-      console.log(`[Plaid Webhook] Auth automatically verified for item: ${payload.item_id}`);
+      logger.info("Auth automatically verified", { itemId: payload.item_id });
       // Account numbers are now available
       break;
 
     case "VERIFICATION_EXPIRED":
-      console.log(`[Plaid Webhook] Auth verification expired for item: ${payload.item_id}`);
+      logger.warn("Auth verification expired", { itemId: payload.item_id });
       // User needs to re-verify
       break;
 
     default:
-      console.log(`[Plaid Webhook] Unhandled auth code: ${payload.webhook_code}`);
+      logger.info("Unhandled auth webhook code", {
+        webhookCode: payload.webhook_code,
+        itemId: payload.item_id,
+      });
   }
 }
 
@@ -122,13 +134,13 @@ async function handleIdentityVerificationWebhook(payload: PlaidWebhookPayload): 
 
   switch (payload.webhook_code) {
     case "STATUS_UPDATED":
-      console.log(`[Plaid Webhook] IDV status updated: ${idvId}`);
+      logger.info("IDV status updated", { idvId });
 
       // Get updated status
       const plaidClient = getPlaidClient();
       const idv = await plaidClient.getIdentityVerification(idvId!);
 
-      console.log(`[Plaid Webhook] IDV new status: ${idv.status}`);
+      logger.info("IDV new status", { idvId, status: idv.status });
 
       if (idv.status === "success" || idv.status === "failed") {
         // TODO: Signal workflow if needed
@@ -136,15 +148,18 @@ async function handleIdentityVerificationWebhook(payload: PlaidWebhookPayload): 
       break;
 
     case "STEP_UPDATED":
-      console.log(`[Plaid Webhook] IDV step updated: ${idvId}`);
+      logger.info("IDV step updated", { idvId });
       break;
 
     case "RETRIED":
-      console.log(`[Plaid Webhook] IDV retried: ${idvId}`);
+      logger.info("IDV retried", { idvId });
       break;
 
     default:
-      console.log(`[Plaid Webhook] Unhandled IDV code: ${payload.webhook_code}`);
+      logger.info("Unhandled IDV webhook code", {
+        webhookCode: payload.webhook_code,
+        idvId,
+      });
   }
 }
 
@@ -153,13 +168,16 @@ async function handleTransferWebhook(payload: PlaidWebhookPayload): Promise<void
 
   switch (payload.webhook_code) {
     case "TRANSFER_EVENTS_UPDATE":
-      console.log(`[Plaid Webhook] Transfer events update`);
+      logger.info("Transfer events update", { transferId });
       // New transfer events available
       // TODO: Process transfer events
       break;
 
     default:
-      console.log(`[Plaid Webhook] Unhandled transfer code: ${payload.webhook_code}`);
+      logger.info("Unhandled transfer webhook code", {
+        webhookCode: payload.webhook_code,
+        transferId,
+      });
   }
 }
 
@@ -168,27 +186,34 @@ async function handleItemWebhook(payload: PlaidWebhookPayload): Promise<void> {
 
   switch (payload.webhook_code) {
     case "ERROR":
-      console.log(`[Plaid Webhook] Item error: ${itemId}`);
-      console.log(`[Plaid Webhook] Error: ${JSON.stringify(payload.error)}`);
+      logger.error("Item error", {
+        itemId,
+        error: payload.error,
+      });
       // Item has an error, user may need to re-link
       break;
 
     case "NEW_ACCOUNTS_AVAILABLE":
-      console.log(`[Plaid Webhook] New accounts available for item: ${itemId}`);
+      logger.info("New accounts available", { itemId });
       break;
 
     case "PENDING_EXPIRATION":
-      console.log(`[Plaid Webhook] Item consent expiring: ${itemId}`);
-      // Consent expires at: payload.consent_expiration_time
+      logger.warn("Item consent expiring", {
+        itemId,
+        expirationTime: (payload as any).consent_expiration_time,
+      });
       break;
 
     case "USER_PERMISSION_REVOKED":
-      console.log(`[Plaid Webhook] User revoked permission for item: ${itemId}`);
+      logger.warn("User revoked permission", { itemId });
       // Remove item from database
       break;
 
     default:
-      console.log(`[Plaid Webhook] Unhandled item code: ${payload.webhook_code}`);
+      logger.info("Unhandled item webhook code", {
+        webhookCode: payload.webhook_code,
+        itemId,
+      });
   }
 }
 

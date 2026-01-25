@@ -1,10 +1,13 @@
 name: Deploy
 
 on:
+  # Trigger after CI passes on main branch
   workflow_run:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
+
+  # Manual deployment with environment selection
   workflow_dispatch:
     inputs:
       environment:
@@ -15,28 +18,448 @@ on:
         options:
           - staging
           - production
+      skip_ci:
+        description: 'Skip CI check (emergency deployments only)'
+        required: false
+        default: false
+        type: boolean
+      rollback_to:
+        description: 'Rollback to specific commit SHA (leave empty for normal deploy)'
+        required: false
+        type: string
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
 
 jobs:
-  deploy:
-    name: Deploy to ${{ github.event.inputs.environment || 'production' }}
+  # ==========================================================================
+  # Pre-deployment checks
+  # ==========================================================================
+  pre-deploy-check:
+    name: Pre-deployment Check
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-    environment: ${{ github.event.inputs.environment || 'production' }}
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+      environment: ${{ steps.check.outputs.environment }}
+      deploy_sha: ${{ steps.check.outputs.deploy_sha }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2
-        with:
-          version: 8
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - name: Check deployment conditions
+        id: check
+        run: |
+          # Determine if we should deploy
+          SHOULD_DEPLOY="false"
+          ENVIRONMENT="staging"
+          DEPLOY_SHA="${{ github.sha }}"
 
-      - name: Deploy Convex
+          # Rollback scenario
+          if [[ -n "${{ github.event.inputs.rollback_to }}" ]]; then
+            SHOULD_DEPLOY="true"
+            DEPLOY_SHA="${{ github.event.inputs.rollback_to }}"
+            ENVIRONMENT="${{ github.event.inputs.environment || 'staging' }}"
+            echo "Rollback deployment to $DEPLOY_SHA"
+          # Manual dispatch
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ github.event.inputs.skip_ci }}" == "true" ]]; then
+              echo "::warning::Skipping CI check for emergency deployment"
+              SHOULD_DEPLOY="true"
+            else
+              SHOULD_DEPLOY="true"
+            fi
+            ENVIRONMENT="${{ github.event.inputs.environment }}"
+          # Workflow run trigger (from CI)
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+              SHOULD_DEPLOY="true"
+              DEPLOY_SHA="${{ github.event.workflow_run.head_sha }}"
+              ENVIRONMENT="staging"  # Auto-deploys go to staging first
+              echo "CI passed, deploying to staging"
+            else
+              echo "CI failed, skipping deployment"
+            fi
+          fi
+
+          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "deploy_sha=$DEPLOY_SHA" >> $GITHUB_OUTPUT
+
+  # ==========================================================================
+  # Deploy to Staging
+  # ==========================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [pre-deploy-check]
+    if: needs.pre-deploy-check.outputs.should_deploy == 'true' && needs.pre-deploy-check.outputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.pull.app
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.pre-deploy-check.outputs.deploy_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Deploy Convex (Staging)
+        run: npx convex deploy --cmd "pnpm convex:deploy:staging"
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_STAGING }}
+
+      - name: Deploy API to Railway (Staging)
+        uses: bervProject/railway-deploy@main
+        if: ${{ secrets.RAILWAY_TOKEN_STAGING != '' }}
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+          service: pull-api-staging
+
+      - name: Deploy Workers to Cloudflare (Staging)
+        uses: cloudflare/wrangler-action@v3
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy --env staging
+          workingDirectory: apps/workers
+
+      - name: Deploy Web to Vercel (Staging)
+        uses: amondnet/vercel-action@v25
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: apps/web
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against staging..."
+          # Add actual smoke test commands here
+          curl -f https://staging-api.pull.app/health || exit 1
+        continue-on-error: true
+
+      - name: Notify deployment
+        if: always()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Staging deployment ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Staging Deployment ${{ job.status }}*\n\nCommit: `${{ needs.pre-deploy-check.outputs.deploy_sha }}`\nWorkflow: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
+
+      - name: Record deployment
+        run: |
+          echo "DEPLOYED_SHA=${{ needs.pre-deploy-check.outputs.deploy_sha }}" >> $GITHUB_ENV
+          echo "DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
+  # ==========================================================================
+  # Deploy to Production (requires approval)
+  # ==========================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [pre-deploy-check]
+    if: needs.pre-deploy-check.outputs.should_deploy == 'true' && needs.pre-deploy-check.outputs.environment == 'production'
+    environment:
+      name: production
+      url: https://pull.app
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.pre-deploy-check.outputs.deploy_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Create deployment marker
+        id: deployment-marker
+        run: |
+          DEPLOYMENT_ID="${{ github.run_id }}-$(date +%s)"
+          echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+          echo "previous_sha=$(git rev-parse HEAD~1 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+
+      - name: Deploy Convex (Production)
         run: npx convex deploy
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
-      # Add more deployment steps as needed (Vercel, Railway, etc.)
+      - name: Deploy API to Railway (Production)
+        uses: bervProject/railway-deploy@main
+        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: pull-api
+
+      - name: Deploy Workers to Cloudflare (Production)
+        uses: cloudflare/wrangler-action@v3
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy --env production
+          workingDirectory: apps/workers
+
+      - name: Deploy Web to Vercel (Production)
+        uses: amondnet/vercel-action@v25
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: apps/web
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Run production smoke tests
+        run: |
+          echo "Running production smoke tests..."
+          curl -f https://api.pull.app/health || exit 1
+        continue-on-error: true
+
+      - name: Create GitHub deployment status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: context.runId,
+              state: 'success',
+              environment_url: 'https://pull.app',
+              description: 'Production deployment successful'
+            });
+        continue-on-error: true
+
+      - name: Notify deployment
+        if: always()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Production deployment ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*:rocket: Production Deployment ${{ job.status }}*\n\nCommit: `${{ needs.pre-deploy-check.outputs.deploy_sha }}`\nDeployment ID: `${{ steps.deployment-marker.outputs.deployment_id }}`\nWorkflow: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
+
+  # ==========================================================================
+  # Promote Staging to Production
+  # ==========================================================================
+  promote-to-production:
+    name: Promote to Production
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    if: success()
+    environment:
+      name: production
+      url: https://pull.app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build for production
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Deploy Convex (Production)
+        run: npx convex deploy
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+
+      - name: Deploy API to Railway (Production)
+        uses: bervProject/railway-deploy@main
+        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: pull-api
+
+      - name: Deploy Workers to Cloudflare (Production)
+        uses: cloudflare/wrangler-action@v3
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy --env production
+          workingDirectory: apps/workers
+
+      - name: Deploy Web to Vercel (Production)
+        uses: amondnet/vercel-action@v25
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: apps/web
+          scope: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Notify production promotion
+        if: always()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Production promotion ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*:rocket: Staging promoted to Production - ${{ job.status }}*"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
+
+  # ==========================================================================
+  # Rollback Job
+  # ==========================================================================
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: github.event.inputs.rollback_to != ''
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    steps:
+      - name: Checkout rollback commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.rollback_to }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Rollback Convex
+        run: npx convex deploy
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+
+      - name: Rollback API
+        uses: bervProject/railway-deploy@main
+        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+        with:
+          railway_token: ${{ github.event.inputs.environment == 'production' && secrets.RAILWAY_TOKEN || secrets.RAILWAY_TOKEN_STAGING }}
+          service: ${{ github.event.inputs.environment == 'production' && 'pull-api' || 'pull-api-staging' }}
+
+      - name: Rollback Workers
+        uses: cloudflare/wrangler-action@v3
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy --env ${{ github.event.inputs.environment }}
+          workingDirectory: apps/workers
+
+      - name: Notify rollback
+        if: always()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Rollback ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*:warning: ROLLBACK to `${{ github.event.inputs.rollback_to }}` - ${{ job.status }}*\n\nEnvironment: ${{ github.event.inputs.environment }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true

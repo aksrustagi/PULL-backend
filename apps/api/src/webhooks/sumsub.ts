@@ -6,8 +6,10 @@
 import { Hono } from "hono";
 import { Client } from "@temporalio/client";
 import { SumsubClient, type WebhookPayload } from "@pull/core/services/sumsub";
+import { getLogger } from "@pull/core/services";
 
 const sumsub = new Hono();
+const logger = getLogger().child({ service: "sumsub-webhook" });
 
 // ==========================================================================
 // HELPERS
@@ -31,7 +33,10 @@ function getTemporalClient(): Client {
 
 async function storeWebhookEvent(payload: WebhookPayload, rawPayload: string): Promise<void> {
   // TODO: Store in Convex webhookEvents table
-  console.log(`[Sumsub Webhook] Storing event: ${payload.type} for applicant: ${payload.applicantId}`);
+  logger.info("Storing webhook event", {
+    eventType: payload.type,
+    applicantId: payload.applicantId,
+  });
 }
 
 async function isEventProcessed(applicantId: string, eventType: string, createdAtMs: string): Promise<boolean> {
@@ -57,7 +62,11 @@ sumsub.post("/", async (c) => {
     // Verify and parse webhook
     const payload = client.verifyAndParseWebhook(rawBody, signature);
 
-    console.log(`[Sumsub Webhook] Received: ${payload.type} for applicant: ${payload.applicantId}`);
+    logger.info("Webhook received", {
+      eventType: payload.type,
+      applicantId: payload.applicantId,
+      reviewStatus: payload.reviewStatus,
+    });
 
     // Check idempotency
     const alreadyProcessed = await isEventProcessed(
@@ -66,7 +75,7 @@ sumsub.post("/", async (c) => {
       payload.createdAtMs ?? ""
     );
     if (alreadyProcessed) {
-      console.log(`[Sumsub Webhook] Event already processed, skipping`);
+      logger.debug("Event already processed, skipping", { applicantId: payload.applicantId });
       return c.json({ success: true, message: "Already processed" });
     }
 
@@ -88,24 +97,24 @@ sumsub.post("/", async (c) => {
         break;
 
       case "applicantCreated":
-        console.log(`[Sumsub Webhook] Applicant created: ${payload.applicantId}`);
+        logger.info("Applicant created", { applicantId: payload.applicantId });
         break;
 
       case "applicantPrechecked":
-        console.log(`[Sumsub Webhook] Applicant prechecked: ${payload.applicantId}`);
+        logger.info("Applicant prechecked", { applicantId: payload.applicantId });
         break;
 
       case "applicantReset":
-        console.log(`[Sumsub Webhook] Applicant reset: ${payload.applicantId}`);
+        logger.info("Applicant reset", { applicantId: payload.applicantId });
         break;
 
       default:
-        console.log(`[Sumsub Webhook] Unhandled event type: ${payload.type}`);
+        logger.info("Unhandled event type", { eventType: payload.type });
     }
 
     return c.json({ success: true });
   } catch (error) {
-    console.error("[Sumsub Webhook] Error:", error);
+    logger.error("Webhook processing error", { error });
 
     // Return 200 to prevent retries for invalid signatures
     if (error instanceof Error && error.message.includes("signature")) {
@@ -121,9 +130,11 @@ sumsub.post("/", async (c) => {
 // ==========================================================================
 
 async function handleApplicantReviewed(payload: WebhookPayload): Promise<void> {
-  console.log(`[Sumsub Webhook] Applicant reviewed: ${payload.applicantId}`);
-  console.log(`[Sumsub Webhook] Review status: ${payload.reviewStatus}`);
-  console.log(`[Sumsub Webhook] Review result: ${JSON.stringify(payload.reviewResult)}`);
+  logger.info("Applicant reviewed", {
+    applicantId: payload.applicantId,
+    reviewStatus: payload.reviewStatus,
+    reviewAnswer: payload.reviewResult?.reviewAnswer,
+  });
 
   const temporalClient = getTemporalClient();
 
@@ -138,7 +149,10 @@ async function handleApplicantReviewed(payload: WebhookPayload): Promise<void> {
       const status = await handle.query("getKYCStatus");
 
       if (status.sumsubApplicantId === payload.applicantId) {
-        console.log(`[Sumsub Webhook] Signaling workflow: ${workflow.workflowId}`);
+        logger.info("Signaling workflow", {
+          workflowId: workflow.workflowId,
+          applicantId: payload.applicantId,
+        });
 
         // Signal workflow with result
         await handle.signal("sumsubCompleted", {
@@ -153,22 +167,22 @@ async function handleApplicantReviewed(payload: WebhookPayload): Promise<void> {
       }
     } catch (error) {
       // Continue searching
-      console.error(`[Sumsub Webhook] Error querying workflow: ${error}`);
+      logger.error("Error querying workflow", { error, workflowId: workflow.workflowId });
     }
   }
 
-  console.warn(`[Sumsub Webhook] No matching workflow found for applicant: ${payload.applicantId}`);
+  logger.warn("No matching workflow found for applicant", { applicantId: payload.applicantId });
 }
 
 async function handleApplicantPending(payload: WebhookPayload): Promise<void> {
-  console.log(`[Sumsub Webhook] Applicant pending: ${payload.applicantId}`);
+  logger.info("Applicant pending", { applicantId: payload.applicantId });
 
   // Update database status to pending
   // TODO: Call Convex mutation
 }
 
 async function handleApplicantOnHold(payload: WebhookPayload): Promise<void> {
-  console.log(`[Sumsub Webhook] Applicant on hold: ${payload.applicantId}`);
+  logger.warn("Applicant on hold", { applicantId: payload.applicantId });
 
   // This usually means manual review is needed
   // TODO: Create alert/task for compliance team

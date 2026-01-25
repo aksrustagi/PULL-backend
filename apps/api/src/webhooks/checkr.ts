@@ -6,8 +6,10 @@
 import { Hono } from "hono";
 import { Client } from "@temporalio/client";
 import { CheckrClient, type WebhookEvent } from "@pull/core/services/checkr";
+import { getLogger } from "@pull/core/services";
 
 const checkr = new Hono();
+const logger = getLogger().child({ service: "checkr-webhook" });
 
 // ==========================================================================
 // HELPERS
@@ -30,7 +32,7 @@ function getTemporalClient(): Client {
 
 async function storeWebhookEvent(event: WebhookEvent, rawPayload: string): Promise<void> {
   // TODO: Store in Convex webhookEvents table
-  console.log(`[Checkr Webhook] Storing event: ${event.type}`);
+  logger.info("Storing webhook event", { eventType: event.type, eventId: event.id });
 }
 
 async function isEventProcessed(eventId: string): Promise<boolean> {
@@ -56,12 +58,16 @@ checkr.post("/", async (c) => {
     // Verify and parse webhook
     const event = client.verifyAndParseWebhook(rawBody, signature);
 
-    console.log(`[Checkr Webhook] Received: ${event.type}`);
+    logger.info("Webhook received", {
+      eventType: event.type,
+      eventId: event.id,
+      objectId: event.data?.object?.id,
+    });
 
     // Check idempotency
     const alreadyProcessed = await isEventProcessed(event.id);
     if (alreadyProcessed) {
-      console.log(`[Checkr Webhook] Event already processed, skipping`);
+      logger.debug("Event already processed, skipping", { eventId: event.id });
       return c.json({ success: true, message: "Already processed" });
     }
 
@@ -79,28 +85,28 @@ checkr.post("/", async (c) => {
         break;
 
       case "report.created":
-        console.log(`[Checkr Webhook] Report created: ${event.data.object.id}`);
+        logger.info("Report created", { reportId: event.data.object.id });
         break;
 
       case "report.upgraded":
-        console.log(`[Checkr Webhook] Report upgraded: ${event.data.object.id}`);
+        logger.info("Report upgraded", { reportId: event.data.object.id });
         break;
 
       case "candidate.created":
-        console.log(`[Checkr Webhook] Candidate created: ${event.data.object.id}`);
+        logger.info("Candidate created", { candidateId: event.data.object.id });
         break;
 
       case "screening.completed":
-        console.log(`[Checkr Webhook] Screening completed: ${event.data.object.id}`);
+        logger.info("Screening completed", { screeningId: event.data.object.id });
         break;
 
       default:
-        console.log(`[Checkr Webhook] Unhandled event type: ${event.type}`);
+        logger.info("Unhandled event type", { eventType: event.type });
     }
 
     return c.json({ success: true });
   } catch (error) {
-    console.error("[Checkr Webhook] Error:", error);
+    logger.error("Webhook processing error", { error });
 
     if (error instanceof Error && error.message.includes("signature")) {
       return c.json({ success: false, error: "Invalid signature" }, 200);
@@ -120,8 +126,12 @@ async function handleReportCompleted(event: WebhookEvent): Promise<void> {
   const result = event.data.object.result as string | null;
   const adjudication = event.data.object.adjudication as string | null;
 
-  console.log(`[Checkr Webhook] Report completed: ${reportId}`);
-  console.log(`[Checkr Webhook] Status: ${status}, Result: ${result}, Adjudication: ${adjudication}`);
+  logger.info("Report completed", {
+    reportId,
+    status,
+    result,
+    adjudication,
+  });
 
   const temporalClient = getTemporalClient();
 
@@ -147,7 +157,7 @@ async function handleReportCompleted(event: WebhookEvent): Promise<void> {
       }
 
       if (workflowStatus.checkrReportId === reportId) {
-        console.log(`[Checkr Webhook] Signaling workflow: ${workflow.workflowId}`);
+        logger.info("Signaling workflow", { workflowId: workflow.workflowId, reportId });
 
         // Map result to signal format
         const signalResult = result === "clear" ? "clear"
@@ -164,17 +174,17 @@ async function handleReportCompleted(event: WebhookEvent): Promise<void> {
         return;
       }
     } catch (error) {
-      console.error(`[Checkr Webhook] Error querying workflow: ${error}`);
+      logger.error("Error querying workflow", { error, workflowId: workflow.workflowId });
     }
   }
 
-  console.warn(`[Checkr Webhook] No matching workflow found for report: ${reportId}`);
+  logger.warn("No matching workflow found for report", { reportId });
 }
 
 async function handleReportSuspended(event: WebhookEvent): Promise<void> {
   const reportId = event.data.object.id;
 
-  console.log(`[Checkr Webhook] Report suspended: ${reportId}`);
+  logger.warn("Report suspended", { reportId });
 
   // Report suspended usually means additional information needed
   // TODO: Notify user and compliance team
