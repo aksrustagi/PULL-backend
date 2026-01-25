@@ -1,19 +1,27 @@
+// Validate required environment variables at startup
+const REQUIRED_ENV_VARS = [
+  "JWT_SECRET",
+  "CONVEX_URL",
+] as const;
+
+const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
+if (missing.length > 0) {
+  throw new Error(
+    `FATAL: Missing required environment variables: ${missing.join(", ")}. ` +
+    "Check your .env file or deployment configuration."
+  );
+}
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { secureHeaders } from "hono/secure-headers";
+import { timing } from "hono/timing";
 import { trpcServer } from "@hono/trpc-server";
 
 import { initSentry, captureException } from "./lib/sentry";
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
-import {
-  securityHeaders,
-  csrfProtection,
-  requestId,
-  requestTiming,
-} from "./middleware/security";
-import { errorHandler } from "./middleware/error-handler";
-import { sentryMiddleware } from "./middleware/sentry";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { tradingRoutes } from "./routes/trading";
@@ -34,70 +42,78 @@ import { docsRoutes } from "./routes/docs";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
-// Initialize Sentry for error tracking
-initSentry();
-
 // Types
 export type Env = {
   Variables: {
     userId?: string;
     requestId: string;
-    sanitizedBody?: unknown;
   };
 };
 
 const app = new Hono<Env>();
 
-// Global middleware - order matters!
-// 1. Request ID first for tracking
-app.use("*", requestId);
-
-// 2. Request timing for performance monitoring
-app.use("*", requestTiming);
-
-// 3. Security headers for all responses
-app.use("*", securityHeaders);
-
-// 4. CSRF protection for state-changing requests
-app.use("*", csrfProtection);
-
-// 5. Sentry middleware for error tracking
-app.use("*", sentryMiddleware);
-
-// 6. Error handler wraps entire app
-app.use("*", errorHandler);
-
-// 7. Logging
+// Global middleware
+app.use("*", timing());
 app.use("*", logger());
-
-// 8. CORS configuration
+app.use("*", secureHeaders());
 app.use(
   "*",
   cors({
-    origin: [
-      "http://localhost:3000",
-      "https://pull.app",
-      "https://*.pull.app",
-    ],
+    origin: (origin) => {
+      const allowed = [
+        "http://localhost:3000",
+        "https://pull.app",
+      ];
+      if (allowed.includes(origin)) return origin;
+      // Match subdomains of pull.app
+      if (/^https:\/\/[\w-]+\.pull\.app$/.test(origin)) return origin;
+      return undefined;
+    },
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-API-Key"],
-    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-Response-Time"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID"],
+    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
     credentials: true,
     maxAge: 86400,
   })
 );
 
-// Rate limiting for non-webhook routes
-app.use("/api/*", rateLimitMiddleware);
+// Request ID middleware - always generate server-side for security
+app.use("*", async (c, next) => {
+  const requestId = crypto.randomUUID();
+  c.set("requestId", requestId);
+  c.header("X-Request-ID", requestId);
+  await next();
+});
 
-// Public routes
+// Body size limit (1MB max) to prevent DoS
+app.use("*", async (c, next) => {
+  const contentLength = c.req.header("Content-Length");
+  if (contentLength && parseInt(contentLength, 10) > 1024 * 1024) {
+    return c.json(
+      {
+        success: false,
+        error: { code: "PAYLOAD_TOO_LARGE", message: "Request body too large (max 1MB)" },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      413
+    );
+  }
+  await next();
+});
+
+// Public routes (no auth required)
 app.route("/health", healthRoutes);
 app.route("/api/auth", authRoutes);
+
+// Webhook routes (with rate limiting and their own signature-based auth)
+app.use("/webhooks/*", rateLimitMiddleware);
 app.route("/webhooks", webhookRoutes);
 app.route("/docs", docsRoutes);
 
-// Protected routes (require auth)
+// Protected routes - auth first, then rate limit (so userId is available)
 app.use("/api/v1/*", authMiddleware);
+app.use("/api/v1/*", rateLimitMiddleware);
 app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
 app.route("/api/v1/real-estate", realEstateRoutes);
@@ -119,7 +135,7 @@ app.route("/admin/experiments", experimentsRoutes);
 app.use("/api/admin/*", authMiddleware);
 app.route("/api/admin", adminRoutes);
 
-// tRPC endpoint
+// tRPC endpoint (uses its own auth via context)
 app.use(
   "/trpc/*",
   trpcServer({
@@ -144,7 +160,7 @@ app.notFound((c) => {
   );
 });
 
-// Error handler
+// Error handler - never leak internal details
 app.onError((err, c) => {
   const requestId = c.get("requestId");
   console.error(`[${requestId}] Error:`, err);
@@ -163,10 +179,7 @@ app.onError((err, c) => {
       success: false,
       error: {
         code: status === 500 ? "INTERNAL_SERVER_ERROR" : "ERROR",
-        message:
-          process.env.NODE_ENV === "production"
-            ? "An unexpected error occurred"
-            : err.message,
+        message: "An unexpected error occurred",
       },
       requestId,
       timestamp: new Date().toISOString(),
@@ -178,7 +191,7 @@ app.onError((err, c) => {
 // Start server
 const port = parseInt(process.env.PORT ?? "3001", 10);
 
-console.log(`🚀 PULL API server starting on port ${port}`);
+console.log(`PULL API server starting on port ${port}`);
 
 export default {
   port,

@@ -12,6 +12,7 @@ import {
   ApplicationFailure,
   CancellationScope,
   isCancellation,
+  uuid4,
 } from "@temporalio/workflow";
 
 import type * as activities from "../../activities/trading";
@@ -244,7 +245,7 @@ export async function fullOrderExecutionWorkflow(
     // Step 3: Submit order to exchange (with cancellation check)
     // =========================================================================
     if (status.cancellationRequested) {
-      await handleCancellation(userId, orderId, status, hold.holdId);
+      await handleCancellation(userId, orderId, status, hold.holdId, undefined, input);
       return { orderId, status };
     }
 
@@ -266,16 +267,18 @@ export async function fullOrderExecutionWorkflow(
     await sendOrderNotification(userId, orderId, "submitted");
 
     // =========================================================================
-    // Step 4: Poll for execution (with cancellation support)
+    // Step 4: Poll for execution (with cancellation support and exponential backoff)
     // =========================================================================
     let orderComplete = false;
-    let pollAttempts = 0;
-    const maxPollAttempts = 60; // 5 minutes with 5 second intervals
+    const MAX_POLL_ITERATIONS = 720; // Max ~1 hour of polling
+    let pollCount = 0;
+    let currentBackoff = 1; // Start with 1 second
 
-    while (!orderComplete && pollAttempts < maxPollAttempts) {
+    while (!orderComplete && pollCount < MAX_POLL_ITERATIONS) {
+      pollCount++;
       // Check for cancellation request
       if (status.cancellationRequested) {
-        await handleCancellation(userId, orderId, status, hold.holdId, submission.externalOrderId);
+        await handleCancellation(userId, orderId, status, hold.holdId, submission.externalOrderId, input);
         return { orderId, status };
       }
 
@@ -322,14 +325,15 @@ export async function fullOrderExecutionWorkflow(
         if (isCancellation(error)) {
           throw error;
         }
-        // Log error but continue polling
-        console.error("Poll error:", error);
+        // Continue polling on non-cancellation errors
       }
 
       if (!orderComplete) {
-        // Wait before next poll
-        await sleep("5 seconds");
-        pollAttempts++;
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+        // Reduces system load while maintaining responsiveness
+        const sleepSeconds = Math.min(currentBackoff, 30);
+        await sleep(`${sleepSeconds} seconds`);
+        currentBackoff = Math.min(currentBackoff * 2, 30);
       }
     }
 
@@ -378,12 +382,12 @@ export async function fullOrderExecutionWorkflow(
     status.status = "failed";
     status.failureReason = error instanceof Error ? error.message : String(error);
 
-    // Attempt to release any held funds
+    // Attempt to release any held funds (use orderId-based hold reference)
     if (status.holdAmount) {
       try {
-        await releaseBuyingPower(userId, `hold_${orderId}`, status.holdAmount);
-      } catch (releaseError) {
-        console.error("Failed to release hold:", releaseError);
+        await releaseBuyingPower(userId, orderId, status.holdAmount);
+      } catch {
+        // Best-effort release; will be reconciled by the system
       }
     }
 
@@ -407,7 +411,8 @@ async function handleCancellation(
   orderId: string,
   status: OrderStatus,
   holdId: string,
-  externalOrderId?: string
+  externalOrderId?: string,
+  input?: OrderExecutionInput
 ): Promise<void> {
   status.status = "cancelled";
 

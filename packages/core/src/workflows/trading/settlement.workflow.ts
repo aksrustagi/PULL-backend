@@ -45,7 +45,7 @@ export interface SettlementInput {
 export interface SettlementStatus {
   eventId: string;
   outcome: string;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "pending" | "processing" | "completed" | "completed_with_errors" | "failed";
   totalPositions: number;
   processedPositions: number;
   totalPayout: number;
@@ -184,7 +184,7 @@ export async function settlementWorkflow(
       },
     });
 
-    status.status = status.errors.length > 0 ? "completed" : "completed";
+    status.status = status.errors.length > 0 ? "completed_with_errors" : "completed";
 
     return status;
   } catch (error) {

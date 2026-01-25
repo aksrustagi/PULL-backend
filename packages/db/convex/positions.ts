@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+import { authenticatedQuery, systemMutation } from "./lib/auth";
 
 /**
  * Position queries and mutations for PULL
@@ -12,12 +14,13 @@ import { mutation, query } from "./_generated/server";
 /**
  * Get all positions for a user
  */
-export const getByUser = query({
-  args: { userId: v.id("users") },
+export const getByUser = authenticatedQuery({
+  args: {},
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("positions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
   },
 });
@@ -25,9 +28,8 @@ export const getByUser = query({
 /**
  * Get position by user and asset
  */
-export const getByUserAndAsset = query({
+export const getByUserAndAsset = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     assetClass: v.union(
       v.literal("crypto"),
       v.literal("prediction"),
@@ -36,11 +38,12 @@ export const getByUserAndAsset = query({
     symbol: v.string(),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     return await ctx.db
       .query("positions")
       .withIndex("by_user_asset", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", userId)
           .eq("assetClass", args.assetClass)
           .eq("symbol", args.symbol)
       )
@@ -51,17 +54,17 @@ export const getByUserAndAsset = query({
 /**
  * Get portfolio positions with current prices
  */
-export const getPortfolioPositions = query({
+export const getPortfolioPositions = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     assetClass: v.optional(
       v.union(v.literal("crypto"), v.literal("prediction"), v.literal("rwa"))
     ),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
     let positions = await ctx.db
       .query("positions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
     if (args.assetClass) {
@@ -106,10 +109,17 @@ export const getPortfolioPositions = query({
 /**
  * Get position by ID
  */
-export const getById = query({
+export const getById = authenticatedQuery({
   args: { id: v.id("positions") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const position = await ctx.db.get(args.id);
+    if (!position) {
+      return null;
+    }
+    if (position.userId !== ctx.userId) {
+      return null;
+    }
+    return position;
   },
 });
 
@@ -120,7 +130,7 @@ export const getById = query({
 /**
  * Update position with new price
  */
-export const updatePosition = mutation({
+export const updatePosition = systemMutation({
   args: {
     id: v.id("positions"),
     currentPrice: v.number(),
@@ -149,7 +159,7 @@ export const updatePosition = mutation({
 /**
  * Update multiple positions with new prices
  */
-export const updatePrices = mutation({
+export const updatePrices = systemMutation({
   args: {
     updates: v.array(
       v.object({
@@ -200,7 +210,7 @@ export const updatePrices = mutation({
 /**
  * Close position (sell all)
  */
-export const closePosition = mutation({
+export const closePosition = systemMutation({
   args: {
     id: v.id("positions"),
     exitPrice: v.number(),
@@ -261,7 +271,7 @@ export const closePosition = mutation({
 /**
  * Adjust position (for corporate actions, splits, etc.)
  */
-export const adjustPosition = mutation({
+export const adjustPosition = systemMutation({
   args: {
     id: v.id("positions"),
     quantityMultiplier: v.number(),

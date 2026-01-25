@@ -259,37 +259,48 @@ export interface NetworkConfig {
   stakingAddress: string;
 }
 
+function requireEnvOrThrow(key: string, network: string): string {
+  const value = process.env[key];
+  if (!value) {
+    throw new Error(
+      `FATAL: ${key} is required for ${network} network. ` +
+      "Set this environment variable in your deployment configuration."
+    );
+  }
+  return value;
+}
+
 export const NETWORKS: Record<string, NetworkConfig> = {
   mainnet: {
     chainId: 1,
     name: "Ethereum Mainnet",
     rpcUrl: process.env.ETH_MAINNET_RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/",
     blockExplorer: "https://etherscan.io",
-    tokenAddress: process.env.PULL_TOKEN_MAINNET || "",
-    stakingAddress: process.env.PULL_STAKING_MAINNET || "",
+    get tokenAddress() { return requireEnvOrThrow("PULL_TOKEN_MAINNET", "mainnet"); },
+    get stakingAddress() { return requireEnvOrThrow("PULL_STAKING_MAINNET", "mainnet"); },
   },
   polygon: {
     chainId: 137,
     name: "Polygon Mainnet",
     rpcUrl: process.env.POLYGON_RPC_URL || "https://polygon-mainnet.g.alchemy.com/v2/",
     blockExplorer: "https://polygonscan.com",
-    tokenAddress: process.env.PULL_TOKEN_POLYGON || "",
-    stakingAddress: process.env.PULL_STAKING_POLYGON || "",
+    get tokenAddress() { return requireEnvOrThrow("PULL_TOKEN_POLYGON", "polygon"); },
+    get stakingAddress() { return requireEnvOrThrow("PULL_STAKING_POLYGON", "polygon"); },
   },
   base: {
     chainId: 8453,
     name: "Base Mainnet",
     rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org",
     blockExplorer: "https://basescan.org",
-    tokenAddress: process.env.PULL_TOKEN_BASE || "",
-    stakingAddress: process.env.PULL_STAKING_BASE || "",
+    get tokenAddress() { return requireEnvOrThrow("PULL_TOKEN_BASE", "base"); },
+    get stakingAddress() { return requireEnvOrThrow("PULL_STAKING_BASE", "base"); },
   },
   sepolia: {
     chainId: 11155111,
     name: "Sepolia Testnet",
     rpcUrl: process.env.SEPOLIA_RPC_URL || "https://eth-sepolia.g.alchemy.com/v2/",
     blockExplorer: "https://sepolia.etherscan.io",
-    tokenAddress: process.env.PULL_TOKEN_SEPOLIA || "",
-    stakingAddress: process.env.PULL_STAKING_SEPOLIA || "",
+    get tokenAddress() { return requireEnvOrThrow("PULL_TOKEN_SEPOLIA", "sepolia"); },
+    get stakingAddress() { return requireEnvOrThrow("PULL_STAKING_SEPOLIA", "sepolia"); },
   },
 };
