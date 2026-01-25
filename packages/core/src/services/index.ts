@@ -47,6 +47,35 @@ export * as persona from "./persona";
 export * as plaid from "./plaid";
 export * as fireblocks from "./fireblocks";
 
+// Feature Flags
+export * as featureFlags from "./feature-flags";
+export {
+  initializeFeatureFlags,
+  getFeatureFlagClient,
+  createFeatureFlagClient,
+  isFeatureEnabled,
+  getAllFeatureFlags,
+  FeatureFlagClient,
+  featureFlagMiddleware,
+  getFeatureFlags,
+  isEnabled,
+  getFlag,
+  requireFeature,
+  checkMaintenanceMode,
+  requireBetaAccess,
+  FEATURE_FLAGS,
+  getAllFlagKeys,
+  getDefaultValue,
+} from "./feature-flags";
+
+export type {
+  FeatureFlagName,
+  FeatureFlagValue,
+  FeatureFlagContext,
+  FeatureFlagClientConfig,
+  FeatureFlagMiddlewareContext,
+} from "./feature-flags";
+
 // Convenience type exports
 export type {
   Market as KalshiMarket,
