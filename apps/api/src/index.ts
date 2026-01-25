@@ -32,6 +32,11 @@ import { analyticsRoutes, experimentsRoutes } from "./routes/admin";
 import { adminRoutes } from "./routes/admin";
 import { portfolioAgentRoutes } from "./routes/portfolio-agent";
 import { docsRoutes } from "./routes/docs";
+import { aiInsightsRoutes } from "./routes/ai-insights";
+import { ncaaRoutes } from "./routes/ncaa";
+import { golfRoutes } from "./routes/golf";
+import { nbaRoutes } from "./routes/nba";
+import { mlbRoutes } from "./routes/mlb";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -111,6 +116,13 @@ app.route("/api/v1/social", socialRoutes);
 app.route("/api/v1/kyc", kycRoutes);
 app.route("/api/v1/portfolio-agent", portfolioAgentRoutes);
 app.route("/api/v1/gamification", gamificationRoutes);
+
+// AI Insights & Sports routes
+app.route("/api/v1/ai-insights", aiInsightsRoutes);
+app.route("/api/v1/ncaa", ncaaRoutes);
+app.route("/api/v1/golf", golfRoutes);
+app.route("/api/v1/nba", nbaRoutes);
+app.route("/api/v1/mlb", mlbRoutes);
 
 // Admin routes (require auth + admin role)
 // TODO: Add admin role check middleware
