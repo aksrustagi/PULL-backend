@@ -210,6 +210,9 @@ app.route("/api/v1/golf", golfRoutes);
 app.route("/api/v1/nba", nbaRoutes);
 app.route("/api/v1/mlb", mlbRoutes);
 
+// Viral Growth Engine routes
+app.route("/api/v1/viral", viralGrowthRoutes);
+
 // Admin routes (require auth + admin role)
 // TODO: Add admin role check middleware
 app.use("/admin/*", authMiddleware);
