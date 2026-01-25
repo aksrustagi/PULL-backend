@@ -456,12 +456,39 @@ function createTestApp(options: { authenticated?: boolean; userId?: string } = {
       const { documents, selfies } = await mockPersonaClient.getInquiryFiles(targetInquiryId);
       const verifications = await mockPersonaClient.getVerifications(targetInquiryId);
 
+      // Format document response (matching actual route implementation)
+      const formattedDocuments = documents.map((doc: any) => ({
+        id: doc.id,
+        kind: doc.attributes.kind,
+        status: doc.attributes.status,
+        createdAt: doc.attributes.created_at,
+        processedAt: doc.attributes.processed_at,
+        files: doc.attributes.files.map((f: any) => ({
+          id: f.id,
+          filename: f.filename,
+          page: f.page,
+          url: f.url,
+          byteSize: f.byte_size,
+        })),
+      }));
+
+      const formattedSelfies = selfies.map((selfie: any) => ({
+        id: selfie.id,
+        status: selfie.attributes.status,
+        captureMethod: selfie.attributes.capture_method,
+        createdAt: selfie.attributes.created_at,
+        processedAt: selfie.attributes.processed_at,
+        centerPhotoUrl: selfie.attributes.center_photo_url,
+        leftPhotoUrl: selfie.attributes.left_photo_url,
+        rightPhotoUrl: selfie.attributes.right_photo_url,
+      }));
+
       return c.json({
         success: true,
         data: {
           inquiryId: targetInquiryId,
-          documents,
-          selfies,
+          documents: formattedDocuments,
+          selfies: formattedSelfies,
           verifications,
           totalDocuments: documents.length,
           totalSelfies: selfies.length,
