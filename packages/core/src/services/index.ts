@@ -228,6 +228,53 @@ export type {
   WithdrawalResult,
 } from "./stripe";
 
+// Redis Services
+export * as redis from "./redis";
+export {
+  RedisClient,
+  RedisPubSub,
+  getRedisPubSub,
+  initRedisPubSub,
+} from "./redis";
+
+export type {
+  RedisClientConfig,
+  CacheOptions,
+  LeaderboardEntry,
+  RateLimitConfig,
+  RateLimitResult,
+  Session,
+  PubSubMessage,
+  MessageHandler,
+  PriceUpdate,
+  OrderbookUpdate,
+  TradeUpdate,
+  MarketStatusUpdate,
+} from "./redis";
+
+// Odds API Services
+export * as oddsApi from "./odds-api";
+export {
+  OddsApiClient,
+  getOddsApiClient,
+  initOddsApiClient,
+  OddsPoller,
+  getOddsPoller,
+  initOddsPoller,
+} from "./odds-api";
+
+export type {
+  OddsApiClientConfig,
+  SportKey,
+  MarketKey,
+  Event as OddsEvent,
+  OddsUpdate,
+  NormalizedMarket,
+  NormalizedOutcome,
+  PollingConfig,
+  OddsChange,
+} from "./odds-api";
+
 // Re-export individual services for convenient access
 export * as kalshi from "./kalshi";
 export * as massive from "./massive";
