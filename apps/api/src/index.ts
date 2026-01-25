@@ -82,6 +82,11 @@ import { golfRoutes } from "./routes/golf";
 import { nbaRoutes } from "./routes/nba";
 import { mlbRoutes } from "./routes/mlb";
 import { viralGrowthRoutes } from "./routes/viral-growth";
+import { storiesRoutes } from "./routes/stories";
+import { cashBattlesRoutes } from "./routes/cash-battles";
+import { squadsRoutes } from "./routes/squads";
+import { aiCopilotRoutes } from "./routes/ai-copilot";
+import { streaksRoutes } from "./routes/streaks";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -212,6 +217,13 @@ app.route("/api/v1/mlb", mlbRoutes);
 
 // Viral Growth Engine routes
 app.route("/api/v1/viral", viralGrowthRoutes);
+
+// Killer Features routes
+app.route("/api/v1/stories", storiesRoutes);
+app.route("/api/v1/battles", cashBattlesRoutes);
+app.route("/api/v1/squads", squadsRoutes);
+app.route("/api/v1/copilot", aiCopilotRoutes);
+app.route("/api/v1/streaks", streaksRoutes);
 
 // Admin routes (require auth + admin role)
 // TODO: Add admin role check middleware
