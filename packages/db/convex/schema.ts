@@ -4168,12 +4168,13 @@ export default defineSchema({
 
   /**
    * Virtual Cards - PULL credit cards
+   * NOTE: Card data is tokenized via Stripe. We only store references, never raw card numbers.
    */
   virtualCards: defineTable({
     cardId: v.string(),
     userId: v.id("users"),
-    cardNumber: v.string(), // Encrypted/masked
-    last4: v.string(),
+    stripeCardToken: v.string(), // Stripe token reference, NOT raw card number
+    last4: v.string(), // Safe to store for display
     expiryMonth: v.number(),
     expiryYear: v.number(),
     balance: v.number(),
@@ -4461,13 +4462,13 @@ export default defineSchema({
 
   /**
    * Geo Checks - Location verification logs
+   * NOTE: For privacy, we store location at city/state level only, NOT precise coordinates.
+   * Coordinates are used for the check but never persisted. IP addresses are hashed.
    */
   geoChecks: defineTable({
     checkId: v.string(),
     userId: v.id("users"),
-    ipAddress: v.string(),
-    latitude: v.optional(v.number()),
-    longitude: v.optional(v.number()),
+    ipAddressHash: v.string(), // Hashed, not plaintext
     country: v.string(),
     state: v.optional(v.string()),
     city: v.optional(v.string()),

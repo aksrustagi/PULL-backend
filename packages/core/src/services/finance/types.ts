@@ -6,11 +6,11 @@
 export interface VirtualCard {
   cardId: string;
   userId: string;
-  cardNumber: string; // Masked
+  stripeCardToken: string; // Stripe token, not raw card number
   last4: string;
   expiryMonth: number;
   expiryYear: number;
-  cvv?: string; // Only for creation
+  cvv?: string; // Only for creation, never stored
   balance: number;
   cashbackRate: number; // e.g., 0.02 for 2%
   status: 'active' | 'suspended' | 'closed';

@@ -58,8 +58,10 @@ export class PresenceService {
 
   async createCollaborationSession(roomId: string, participants: string[]): Promise<CollaborationSession> {
     // TODO: Initialize collaboration session with CRDT
+    // Use a more portable UUID generation method
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     return {
-      sessionId: crypto.randomUUID(),
+      sessionId,
       roomId,
       participants,
       activeEditors: [],

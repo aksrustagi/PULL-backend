@@ -39,9 +39,7 @@ export interface SessionLimit {
 export interface GeoCheck {
   checkId: string;
   userId: string;
-  ipAddress: string;
-  latitude?: number;
-  longitude?: number;
+  ipAddressHash: string; // Hashed for privacy
   country: string;
   state?: string;
   city?: string;

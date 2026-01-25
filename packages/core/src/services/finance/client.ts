@@ -36,14 +36,17 @@ export class FinanceService {
 
   async createVirtualCard(userId: string): Promise<VirtualCard> {
     // TODO: Integration with Stripe Issuing or similar
-    // 1. Create virtual card via provider
-    // 2. Set initial balance to 0
-    // 3. Configure cashback rate based on user tier
+    // 1. Create virtual card via Stripe
+    // 2. Store only the Stripe token, never raw card number
+    // 3. Set initial balance to 0
+    // 4. Configure cashback rate based on user tier
 
+    const cardId = `card_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    
     return {
-      cardId: crypto.randomUUID(),
+      cardId,
       userId,
-      cardNumber: '****-****-****-****',
+      stripeCardToken: `tok_${Math.random().toString(36).substring(2)}`, // Stripe token placeholder
       last4: '0000',
       expiryMonth: 12,
       expiryYear: 2025,

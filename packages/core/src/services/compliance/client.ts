@@ -41,17 +41,33 @@ export class ComplianceService {
     // TODO: Verify user location is in allowed jurisdiction
     // 1. GeoIP lookup
     // 2. Check against allowed countries/states
-    // 3. Log check
-    // 4. Return allowed/denied
+    // 3. Hash IP address for privacy
+    // 4. Log check (without precise coordinates)
+    // 5. Return allowed/denied
+
+    // Hash IP address for privacy (simple hash for demo)
+    const ipHash = await this.hashString(ipAddress);
 
     return {
-      checkId: crypto.randomUUID(),
+      checkId: `geo_${Date.now()}_${Math.random().toString(36).substring(7)}`,
       userId,
-      ipAddress,
+      ipAddressHash: ipHash,
       country: 'US',
       allowed: false,
       timestamp: new Date(),
     };
+  }
+
+  private async hashString(input: string): Promise<string> {
+    // Simple hash implementation for privacy
+    // In production, use a proper crypto hash like SHA-256
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+      const char = input.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return `hash_${Math.abs(hash).toString(36)}`;
   }
 
   async createSelfExclusion(userId: string, durationDays: number | 'permanent'): Promise<SelfExclusion> {
