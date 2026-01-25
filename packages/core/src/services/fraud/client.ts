@@ -959,7 +959,11 @@ export class FraudDetectionClient {
         type: 'geo_velocity_violation',
         severity: 'high',
         description: `Impossible travel: ${geoVelocityResult.distanceKm.toFixed(0)}km in ${(geoVelocityResult.timeDifferenceMs / 3600000).toFixed(1)}h`,
-        evidence: geoVelocityResult,
+        evidence: {
+          distanceKm: geoVelocityResult.distanceKm,
+          timeDifferenceMs: geoVelocityResult.timeDifferenceMs,
+          isPossible: geoVelocityResult.isPossible,
+        },
         confidence: 0.9,
         detectedAt: now,
       });
