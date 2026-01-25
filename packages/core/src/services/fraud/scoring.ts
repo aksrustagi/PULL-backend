@@ -721,10 +721,11 @@ export class RiskScoringEngine {
     // Critical geo-velocity violation
     if (context.geoVelocityResult && !context.geoVelocityResult.isPossible) {
       if (context.geoVelocityResult.distanceKm > 5000) {
+        const timeHours = context.geoVelocityResult.timeDifferenceMs / 3600000;
         penalties.push({
           name: 'extreme_geo_velocity',
           value: 0.2,
-          reason: `Impossible travel: ${context.geoVelocityResult.distanceKm.toFixed(0)}km in ${context.geoVelocityResult.timeHours.toFixed(1)}h`,
+          reason: `Impossible travel: ${context.geoVelocityResult.distanceKm.toFixed(0)}km in ${timeHours.toFixed(1)}h`,
         });
       }
     }

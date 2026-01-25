@@ -699,18 +699,17 @@ export class FraudRulesEngine {
 
   constructor(config: RulesEngineConfig = {}) {
     this.rules = config.rules ?? this.getDefaultRules();
-    this.enabledCategories = new Set(
-      config.enabledCategories ?? [
-        'velocity',
-        'device',
-        'ip',
-        'behavior',
-        'multi_account',
-        'bonus',
-        'trading',
-        'financial',
-      ]
-    );
+    const defaultCategories: RuleCategory[] = [
+      'velocity',
+      'device',
+      'ip',
+      'behavior',
+      'multi_account',
+      'bonus',
+      'trading',
+      'financial',
+    ];
+    this.enabledCategories = new Set<RuleCategory>(config.enabledCategories ?? defaultCategories);
     this.logger = config.logger ?? this.createDefaultLogger();
   }
 

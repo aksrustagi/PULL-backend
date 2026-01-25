@@ -1809,31 +1809,8 @@ export class FraudDetectionClient {
       userId,
       sessionId: context.deviceFingerprint?.sessionId,
       transaction,
-      device: context.deviceFingerprint
-        ? {
-            isNewDevice: deviceResult?.isNewDevice,
-            isEmulator: deviceResult?.isEmulator,
-            isBot: deviceResult?.isBot,
-            trustScore: deviceResult?.trustScore,
-            accountCount: deviceResult?.matchedUsers.length,
-          }
-        : undefined,
-      ip: ipResult
-        ? {
-            isVPN: ipResult.isVPN,
-            isTor: ipResult.isTor,
-            isProxy: ipResult.isProxy,
-            isDatacenter: ipResult.isDatacenter,
-            reputationScore: ipResult.reputationScore,
-            location: ipResult.location,
-          }
-        : undefined,
-      behavior: {
-        timeDeviation: 0,
-        amountDeviation: behaviorResult.deviations.find((d) => d.metric === 'transactionAmount')?.deviationPercent ?? 0,
-        patternScore: 1 - behaviorResult.anomalyScore,
-        sessionAnomalyScore: behaviorResult.anomalyScore,
-      },
+      device: context.deviceFingerprint,
+      ip: ipResult,
       velocityData: {
         'deposits.hourly.count': this.getOrCreateCounter(`velocity:${userId}:deposit:hour`, 3600000).count,
         'deposits.daily.count': this.getOrCreateCounter(`velocity:${userId}:deposit:day`, 86400000).count,
@@ -1848,6 +1825,23 @@ export class FraudDetectionClient {
       geoVelocity: geoVelocityResult
         ? { isPossible: geoVelocityResult.isPossible, distanceKm: geoVelocityResult.distanceKm, timeHours: geoVelocityResult.timeDifferenceMs / 3600000 }
         : undefined,
+      custom: {
+        deviceAnalysis: deviceResult
+          ? {
+              isNewDevice: deviceResult.isNewDevice,
+              isEmulator: deviceResult.isEmulator,
+              isBot: deviceResult.isBot,
+              trustScore: deviceResult.trustScore,
+              accountCount: deviceResult.matchedUsers.length,
+            }
+          : undefined,
+        behaviorAnalysis: {
+          timeDeviation: 0,
+          amountDeviation: behaviorResult.deviations.find((d) => d.metric === 'transactionAmount')?.deviationPercent ?? 0,
+          patternScore: 1 - behaviorResult.anomalyScore,
+          sessionAnomalyScore: behaviorResult.anomalyScore,
+        },
+      },
     };
 
     // Evaluate rules
@@ -2131,7 +2125,8 @@ export class FraudDetectionClient {
       byMarket.set(t.marketId, existing);
     });
 
-    for (const marketTrades of byMarket.values()) {
+    const marketGroups = Array.from(byMarket.values());
+    for (const marketTrades of marketGroups) {
       const buys = marketTrades.filter((t) => t.side === 'buy');
       const sells = marketTrades.filter((t) => t.side === 'sell');
 
