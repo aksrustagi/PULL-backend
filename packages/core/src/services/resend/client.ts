@@ -1,6 +1,7 @@
 /**
  * Resend Email Client
  * Client for sending transactional emails via Resend API
+ * Features: Retry logic with exponential backoff, template rendering, batch sending
  */
 
 import * as crypto from "crypto";
@@ -26,17 +27,43 @@ export interface ResendClientConfig {
   baseUrl?: string;
   webhookSecret?: string;
   timeout?: number;
+  maxRetries?: number;
+  retryDelay?: number;
   logger?: Logger;
 }
 
-interface Logger {
+export interface Logger {
   debug(message: string, meta?: Record<string, unknown>): void;
   info(message: string, meta?: Record<string, unknown>): void;
   warn(message: string, meta?: Record<string, unknown>): void;
   error(message: string, meta?: Record<string, unknown>): void;
 }
 
+export interface RetryConfig {
+  maxRetries: number;
+  baseDelay: number;
+  maxDelay: number;
+  backoffMultiplier: number;
+}
+
+export interface TemplateContext {
+  [key: string]: unknown;
+}
+
+export interface RenderedTemplate {
+  subject: string;
+  html: string;
+  text: string;
+}
+
 const DEFAULT_BASE_URL = "https://api.resend.com";
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelay: 1000,
+  maxDelay: 10000,
+  backoffMultiplier: 2,
+};
 
 // ============================================================================
 // Resend Client
@@ -49,6 +76,7 @@ export class ResendClient {
   private readonly baseUrl: string;
   private readonly webhookSecret?: string;
   private readonly timeout: number;
+  private readonly retryConfig: RetryConfig;
   private readonly logger: Logger;
 
   constructor(config: ResendClientConfig) {
@@ -58,6 +86,11 @@ export class ResendClient {
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.webhookSecret = config.webhookSecret;
     this.timeout = config.timeout ?? 30000;
+    this.retryConfig = {
+      ...DEFAULT_RETRY_CONFIG,
+      maxRetries: config.maxRetries ?? DEFAULT_RETRY_CONFIG.maxRetries,
+      baseDelay: config.retryDelay ?? DEFAULT_RETRY_CONFIG.baseDelay,
+    };
     this.logger = config.logger ?? this.createDefaultLogger();
   }
 
@@ -68,6 +101,66 @@ export class ResendClient {
       warn: (msg, meta) => console.warn(`[Resend] ${msg}`, meta),
       error: (msg, meta) => console.error(`[Resend] ${msg}`, meta),
     };
+  }
+
+  // ==========================================================================
+  // Retry Logic
+  // ==========================================================================
+
+  private async sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private calculateBackoff(attempt: number): number {
+    const delay = Math.min(
+      this.retryConfig.baseDelay * Math.pow(this.retryConfig.backoffMultiplier, attempt),
+      this.retryConfig.maxDelay
+    );
+    // Add jitter (0-25% random variation)
+    return delay + Math.random() * delay * 0.25;
+  }
+
+  private isRetryableError(error: ResendApiError): boolean {
+    // Retry on rate limits (429), server errors (5xx), and timeouts
+    return (
+      error.statusCode === 429 ||
+      error.statusCode === 408 ||
+      (error.statusCode >= 500 && error.statusCode < 600)
+    );
+  }
+
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string
+  ): Promise<T> {
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+
+        if (error instanceof ResendApiError && this.isRetryableError(error)) {
+          if (attempt < this.retryConfig.maxRetries) {
+            const backoff = this.calculateBackoff(attempt);
+            this.logger.warn(`${operationName} failed, retrying in ${Math.round(backoff)}ms`, {
+              attempt: attempt + 1,
+              maxRetries: this.retryConfig.maxRetries,
+              statusCode: error.statusCode,
+              message: error.message,
+            });
+            await this.sleep(backoff);
+            continue;
+          }
+        }
+
+        // Non-retryable error or max retries exceeded
+        throw error;
+      }
+    }
+
+    throw lastError ?? new ResendApiError("Max retries exceeded", 500);
   }
 
   // ==========================================================================
@@ -139,11 +232,53 @@ export class ResendClient {
   }
 
   // ==========================================================================
+  // Template Rendering
+  // ==========================================================================
+
+  /**
+   * Render a template string with context variables
+   * Supports {{variable}} syntax for simple replacements
+   */
+  renderTemplate(template: string, context: TemplateContext): string {
+    return template.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, path) => {
+      const value = this.getNestedValue(context, path);
+      if (value === undefined || value === null) {
+        this.logger.warn(`Template variable not found: ${path}`);
+        return match;
+      }
+      return String(value);
+    });
+  }
+
+  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    return path.split(".").reduce((acc: unknown, part) => {
+      if (acc && typeof acc === "object" && part in acc) {
+        return (acc as Record<string, unknown>)[part];
+      }
+      return undefined;
+    }, obj);
+  }
+
+  /**
+   * Render a complete email template (subject, html, text)
+   */
+  renderEmailTemplate(
+    template: { subject: string; html: string; text: string },
+    context: TemplateContext
+  ): RenderedTemplate {
+    return {
+      subject: this.renderTemplate(template.subject, context),
+      html: this.renderTemplate(template.html, context),
+      text: this.renderTemplate(template.text, context),
+    };
+  }
+
+  // ==========================================================================
   // Email Methods
   // ==========================================================================
 
   /**
-   * Send a single email
+   * Send a single email with automatic retry on failure
    */
   async sendEmail(params: SendEmailParams): Promise<SendEmailResponse> {
     this.logger.info("Sending email", {
@@ -151,17 +286,40 @@ export class ResendClient {
       subject: params.subject,
     });
 
-    const response = await this.request<SendEmailResponse>("POST", "/emails", {
-      from: this.getFromAddress(),
-      ...params,
-    });
+    const response = await this.executeWithRetry(
+      () =>
+        this.request<SendEmailResponse>("POST", "/emails", {
+          from: this.getFromAddress(),
+          ...params,
+        }),
+      "sendEmail"
+    );
 
     this.logger.info("Email sent", { emailId: response.id });
     return response;
   }
 
   /**
-   * Send multiple emails in a batch
+   * Send email using a pre-defined template with context
+   */
+  async sendTemplatedEmail(
+    to: string | string[],
+    template: { subject: string; html: string; text: string },
+    context: TemplateContext,
+    options: Partial<SendEmailParams> = {}
+  ): Promise<SendEmailResponse> {
+    const rendered = this.renderEmailTemplate(template, context);
+    return this.sendEmail({
+      to,
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+      ...options,
+    });
+  }
+
+  /**
+   * Send multiple emails in a batch with automatic retry
    */
   async sendBatchEmails(params: BatchEmailParams): Promise<BatchEmailResponse> {
     this.logger.info("Sending batch emails", { count: params.emails.length });
@@ -171,14 +329,39 @@ export class ResendClient {
       ...email,
     }));
 
-    const response = await this.request<BatchEmailResponse>(
-      "POST",
-      "/emails/batch",
-      { emails }
+    const response = await this.executeWithRetry(
+      () =>
+        this.request<BatchEmailResponse>("POST", "/emails/batch", { emails }),
+      "sendBatchEmails"
     );
 
     this.logger.info("Batch emails sent", { count: response.data.length });
     return response;
+  }
+
+  /**
+   * Send batch templated emails
+   */
+  async sendBatchTemplatedEmails(
+    recipients: Array<{
+      to: string | string[];
+      context: TemplateContext;
+      options?: Partial<SendEmailParams>;
+    }>,
+    template: { subject: string; html: string; text: string }
+  ): Promise<BatchEmailResponse> {
+    const emails = recipients.map(({ to, context, options }) => {
+      const rendered = this.renderEmailTemplate(template, context);
+      return {
+        to,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        ...options,
+      };
+    });
+
+    return this.sendBatchEmails({ emails });
   }
 
   /**

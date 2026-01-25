@@ -985,6 +985,685 @@ app.get(
 // SYSTEM HEALTH
 // ============================================================================
 
+// ============================================================================
+// DEPOSITS MANAGEMENT
+// ============================================================================
+
+const getDepositsQuerySchema = z.object({
+  userId: z.string().optional(),
+  status: z
+    .enum(["pending", "processing", "completed", "failed", "cancelled"])
+    .optional(),
+  method: z.enum(["bank_transfer", "wire", "crypto", "card"]).optional(),
+  startDate: z.coerce.number().optional(),
+  endDate: z.coerce.number().optional(),
+  minAmount: z.coerce.number().optional(),
+  maxAmount: z.coerce.number().optional(),
+  limit: z.coerce.number().min(1).max(100).default(50),
+  offset: z.coerce.number().min(0).default(0),
+});
+
+/**
+ * List all deposits with filters
+ * GET /api/admin/deposits
+ */
+app.get("/deposits", zValidator("query", getDepositsQuerySchema), async (c) => {
+  const adminId = c.get("userId") as Id<"users">;
+  const query = c.req.valid("query");
+
+  try {
+    const result = await convex.query(api.admin.getDeposits, {
+      userId: query.userId as Id<"users"> | undefined,
+      status: query.status,
+      method: query.method,
+      startDate: query.startDate,
+      endDate: query.endDate,
+      minAmount: query.minAmount,
+      maxAmount: query.maxAmount,
+      limit: query.limit,
+      offset: query.offset,
+    });
+
+    // Log admin access
+    await convex.mutation(api.audit.log, {
+      userId: adminId,
+      action: "admin.deposits.listed",
+      resourceType: "admin",
+      resourceId: "deposits",
+      metadata: {
+        filters: query,
+        resultCount: result.deposits.length,
+      },
+      requestId: c.get("requestId"),
+    });
+
+    return c.json({
+      success: true,
+      data: result.deposits,
+      summary: {
+        totalAmount: result.totalAmount,
+        completedAmount: result.completedAmount,
+      },
+      pagination: {
+        page: result.page,
+        pageSize: query.limit,
+        totalItems: result.total,
+        totalPages: result.totalPages,
+        hasNextPage: result.hasMore,
+        hasPreviousPage: query.offset > 0,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch deposits";
+
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message,
+        },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
+});
+
+// ============================================================================
+// WITHDRAWALS MANAGEMENT
+// ============================================================================
+
+const getWithdrawalsQuerySchema = z.object({
+  userId: z.string().optional(),
+  status: z
+    .enum(["pending", "processing", "completed", "failed", "cancelled"])
+    .optional(),
+  method: z.enum(["bank_transfer", "wire", "crypto"]).optional(),
+  startDate: z.coerce.number().optional(),
+  endDate: z.coerce.number().optional(),
+  minAmount: z.coerce.number().optional(),
+  maxAmount: z.coerce.number().optional(),
+  limit: z.coerce.number().min(1).max(100).default(50),
+  offset: z.coerce.number().min(0).default(0),
+});
+
+/**
+ * List all withdrawals with filters
+ * GET /api/admin/withdrawals
+ */
+app.get(
+  "/withdrawals",
+  zValidator("query", getWithdrawalsQuerySchema),
+  async (c) => {
+    const adminId = c.get("userId") as Id<"users">;
+    const query = c.req.valid("query");
+
+    try {
+      const result = await convex.query(api.admin.getWithdrawals, {
+        userId: query.userId as Id<"users"> | undefined,
+        status: query.status,
+        method: query.method,
+        startDate: query.startDate,
+        endDate: query.endDate,
+        minAmount: query.minAmount,
+        maxAmount: query.maxAmount,
+        limit: query.limit,
+        offset: query.offset,
+      });
+
+      // Log admin access
+      await convex.mutation(api.audit.log, {
+        userId: adminId,
+        action: "admin.withdrawals.listed",
+        resourceType: "admin",
+        resourceId: "withdrawals",
+        metadata: {
+          filters: query,
+          resultCount: result.withdrawals.length,
+        },
+        requestId: c.get("requestId"),
+      });
+
+      return c.json({
+        success: true,
+        data: result.withdrawals,
+        summary: {
+          totalAmount: result.totalAmount,
+          pendingAmount: result.pendingAmount,
+          completedAmount: result.completedAmount,
+        },
+        pagination: {
+          page: result.page,
+          pageSize: query.limit,
+          totalItems: result.total,
+          totalPages: result.totalPages,
+          hasNextPage: result.hasMore,
+          hasPreviousPage: query.offset > 0,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch withdrawals";
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "FETCH_FAILED",
+            message,
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        500
+      );
+    }
+  }
+);
+
+/**
+ * Get withdrawal details
+ * GET /api/admin/withdrawals/:withdrawalId
+ */
+app.get("/withdrawals/:withdrawalId", async (c) => {
+  const adminId = c.get("userId") as Id<"users">;
+  const withdrawalId = c.req.param("withdrawalId") as Id<"withdrawals">;
+
+  try {
+    const result = await convex.query(api.admin.getWithdrawalDetails, {
+      withdrawalId,
+    });
+
+    if (!result) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "NOT_FOUND",
+            message: "Withdrawal not found",
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
+
+    // Log admin access
+    await convex.mutation(api.audit.log, {
+      userId: adminId,
+      action: "admin.withdrawal.viewed",
+      resourceType: "withdrawals",
+      resourceId: withdrawalId,
+      requestId: c.get("requestId"),
+    });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch withdrawal details";
+
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message,
+        },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
+});
+
+const approveWithdrawalSchema = z.object({
+  notes: z.string().optional(),
+});
+
+/**
+ * Approve withdrawal
+ * POST /api/admin/withdrawals/:withdrawalId/approve
+ */
+app.post(
+  "/withdrawals/:withdrawalId/approve",
+  zValidator("json", approveWithdrawalSchema),
+  async (c) => {
+    const adminId = c.get("userId") as Id<"users">;
+    const withdrawalId = c.req.param("withdrawalId") as Id<"withdrawals">;
+    const body = c.req.valid("json");
+
+    try {
+      await convex.mutation(api.admin.approveWithdrawal, {
+        withdrawalId,
+        adminId,
+        notes: body.notes,
+      });
+
+      return c.json({
+        success: true,
+        message: "Withdrawal approved successfully",
+        data: {
+          withdrawalId,
+          status: "processing",
+          approvedAt: new Date().toISOString(),
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to approve withdrawal";
+
+      const statusCode = message.includes("Cannot approve") ? 400 : 500;
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: statusCode === 400 ? "INVALID_STATE" : "APPROVE_FAILED",
+            message,
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        statusCode
+      );
+    }
+  }
+);
+
+const rejectWithdrawalSchema = z.object({
+  reason: z.string().min(1, "Reason is required"),
+  notes: z.string().optional(),
+});
+
+/**
+ * Reject withdrawal
+ * POST /api/admin/withdrawals/:withdrawalId/reject
+ */
+app.post(
+  "/withdrawals/:withdrawalId/reject",
+  zValidator("json", rejectWithdrawalSchema),
+  async (c) => {
+    const adminId = c.get("userId") as Id<"users">;
+    const withdrawalId = c.req.param("withdrawalId") as Id<"withdrawals">;
+    const body = c.req.valid("json");
+
+    try {
+      await convex.mutation(api.admin.rejectWithdrawal, {
+        withdrawalId,
+        adminId,
+        reason: body.reason,
+        notes: body.notes,
+      });
+
+      return c.json({
+        success: true,
+        message: "Withdrawal rejected",
+        data: {
+          withdrawalId,
+          status: "cancelled",
+          reason: body.reason,
+          rejectedAt: new Date().toISOString(),
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to reject withdrawal";
+
+      const statusCode = message.includes("Cannot reject") ? 400 : 500;
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: statusCode === 400 ? "INVALID_STATE" : "REJECT_FAILED",
+            message,
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        statusCode
+      );
+    }
+  }
+);
+
+// ============================================================================
+// FRAUD FLAGS MANAGEMENT
+// ============================================================================
+
+const getFraudFlagsQuerySchema = z.object({
+  userId: z.string().optional(),
+  status: z
+    .enum(["pending", "investigating", "confirmed", "cleared", "escalated"])
+    .optional(),
+  severity: z.enum(["low", "medium", "high", "critical"]).optional(),
+  type: z.string().optional(),
+  startDate: z.coerce.number().optional(),
+  endDate: z.coerce.number().optional(),
+  limit: z.coerce.number().min(1).max(100).default(50),
+  offset: z.coerce.number().min(0).default(0),
+});
+
+/**
+ * Get fraud flags
+ * GET /api/admin/fraud-flags
+ */
+app.get(
+  "/fraud-flags",
+  zValidator("query", getFraudFlagsQuerySchema),
+  async (c) => {
+    const adminId = c.get("userId") as Id<"users">;
+    const query = c.req.valid("query");
+
+    try {
+      const result = await convex.query(api.admin.getFraudFlags, {
+        userId: query.userId as Id<"users"> | undefined,
+        status: query.status,
+        severity: query.severity,
+        type: query.type,
+        startDate: query.startDate,
+        endDate: query.endDate,
+        limit: query.limit,
+        offset: query.offset,
+      });
+
+      // Log admin access
+      await convex.mutation(api.audit.log, {
+        userId: adminId,
+        action: "admin.fraud-flags.listed",
+        resourceType: "admin",
+        resourceId: "fraud-flags",
+        metadata: {
+          filters: query,
+          resultCount: result.flags.length,
+        },
+        requestId: c.get("requestId"),
+      });
+
+      return c.json({
+        success: true,
+        data: result.flags,
+        summary: {
+          bySeverity: result.bySeverity,
+          byStatus: result.byStatus,
+        },
+        pagination: {
+          page: result.page,
+          pageSize: query.limit,
+          totalItems: result.total,
+          totalPages: result.totalPages,
+          hasNextPage: result.hasMore,
+          hasPreviousPage: query.offset > 0,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch fraud flags";
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "FETCH_FAILED",
+            message,
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        500
+      );
+    }
+  }
+);
+
+const createFraudFlagSchema = z.object({
+  userId: z.string(),
+  type: z.string(),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  description: z.string().min(1),
+  resourceType: z.string().optional(),
+  resourceId: z.string().optional(),
+  metadata: z.any().optional(),
+});
+
+/**
+ * Create fraud flag
+ * POST /api/admin/fraud-flags
+ */
+app.post(
+  "/fraud-flags",
+  zValidator("json", createFraudFlagSchema),
+  async (c) => {
+    const adminId = c.get("userId") as Id<"users">;
+    const body = c.req.valid("json");
+
+    try {
+      const flagId = await convex.mutation(api.admin.createFraudFlag, {
+        userId: body.userId as Id<"users">,
+        adminId,
+        type: body.type,
+        severity: body.severity,
+        description: body.description,
+        resourceType: body.resourceType,
+        resourceId: body.resourceId,
+        metadata: body.metadata,
+      });
+
+      return c.json({
+        success: true,
+        message: "Fraud flag created",
+        data: {
+          flagId,
+          createdAt: new Date().toISOString(),
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to create fraud flag";
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "CREATE_FAILED",
+            message,
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        500
+      );
+    }
+  }
+);
+
+const reviewFraudFlagSchema = z.object({
+  status: z.enum(["investigating", "confirmed", "cleared", "escalated"]),
+  notes: z.string().min(1, "Notes are required"),
+  actionTaken: z.string().optional(),
+});
+
+/**
+ * Review fraud flag
+ * POST /api/admin/fraud-flags/:flagId/review
+ */
+app.post(
+  "/fraud-flags/:flagId/review",
+  zValidator("json", reviewFraudFlagSchema),
+  async (c) => {
+    const adminId = c.get("userId") as Id<"users">;
+    const flagId = c.req.param("flagId") as Id<"auditLog">;
+    const body = c.req.valid("json");
+
+    try {
+      await convex.mutation(api.admin.reviewFraudFlag, {
+        flagId,
+        adminId,
+        status: body.status,
+        notes: body.notes,
+        actionTaken: body.actionTaken,
+      });
+
+      return c.json({
+        success: true,
+        message: "Fraud flag reviewed",
+        data: {
+          flagId,
+          status: body.status,
+          reviewedAt: new Date().toISOString(),
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to review fraud flag";
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "REVIEW_FAILED",
+            message,
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        500
+      );
+    }
+  }
+);
+
+// ============================================================================
+// PLATFORM STATISTICS
+// ============================================================================
+
+const getPlatformStatsQuerySchema = z.object({
+  period: z.enum(["day", "week", "month", "all"]).optional(),
+});
+
+/**
+ * Get platform statistics
+ * GET /api/admin/platform-stats
+ */
+app.get(
+  "/platform-stats",
+  zValidator("query", getPlatformStatsQuerySchema),
+  async (c) => {
+    const adminId = c.get("userId") as Id<"users">;
+    const query = c.req.valid("query");
+
+    try {
+      const result = await convex.query(api.admin.getPlatformStats, {
+        period: query.period,
+      });
+
+      // Log admin access
+      await convex.mutation(api.audit.log, {
+        userId: adminId,
+        action: "admin.platform-stats.viewed",
+        resourceType: "admin",
+        resourceId: "platform-stats",
+        metadata: { period: query.period },
+        requestId: c.get("requestId"),
+      });
+
+      return c.json({
+        success: true,
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch platform stats";
+
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "FETCH_FAILED",
+            message,
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        500
+      );
+    }
+  }
+);
+
+/**
+ * Get admin audit log
+ * GET /api/admin/admin-audit-log
+ */
+app.get("/admin-audit-log", async (c) => {
+  const adminId = c.get("userId") as Id<"users">;
+  const adminOnly = c.req.query("adminOnly") === "true";
+  const limit = parseInt(c.req.query("limit") ?? "100");
+  const offset = parseInt(c.req.query("offset") ?? "0");
+
+  try {
+    const result = await convex.query(api.admin.getAdminAuditLog, {
+      adminOnly,
+      limit,
+      offset,
+    });
+
+    return c.json({
+      success: true,
+      data: result.logs,
+      summary: {
+        byAction: result.byAction,
+      },
+      pagination: {
+        page: result.page,
+        pageSize: limit,
+        totalItems: result.total,
+        totalPages: result.totalPages,
+        hasNextPage: result.hasMore,
+        hasPreviousPage: offset > 0,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch admin audit log";
+
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message,
+        },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
+});
+
+// ============================================================================
+// SYSTEM HEALTH
+// ============================================================================
+
 /**
  * Check status of all external services
  * GET /api/admin/health/services

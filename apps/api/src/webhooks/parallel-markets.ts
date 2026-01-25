@@ -6,8 +6,10 @@
 import { Hono } from "hono";
 import { Client } from "@temporalio/client";
 import { ParallelMarketsClient, type WebhookEvent } from "@pull/core/services/parallel-markets";
+import { getLogger } from "@pull/core/services";
 
 const parallelMarkets = new Hono();
+const logger = getLogger().child({ service: "parallel-markets-webhook" });
 
 // ==========================================================================
 // HELPERS
@@ -30,7 +32,7 @@ function getTemporalClient(): Client {
 
 async function storeWebhookEvent(event: WebhookEvent, rawPayload: string): Promise<void> {
   // TODO: Store in Convex webhookEvents table
-  console.log(`[Parallel Markets Webhook] Storing event: ${event.type}`);
+  logger.info("Storing webhook event", { eventType: event.type, eventId: event.id });
 }
 
 async function isEventProcessed(eventId: string): Promise<boolean> {
@@ -56,12 +58,17 @@ parallelMarkets.post("/", async (c) => {
     // Verify and parse webhook
     const event = client.verifyAndParseWebhook(rawBody, signature);
 
-    console.log(`[Parallel Markets Webhook] Received: ${event.type}`);
+    logger.info("Webhook received", {
+      eventType: event.type,
+      eventId: event.id,
+      requestId: event.data?.request_id,
+      investorId: event.data?.investor_id,
+    });
 
     // Check idempotency
     const alreadyProcessed = await isEventProcessed(event.id);
     if (alreadyProcessed) {
-      console.log(`[Parallel Markets Webhook] Event already processed, skipping`);
+      logger.debug("Event already processed, skipping", { eventId: event.id });
       return c.json({ success: true, message: "Already processed" });
     }
 
@@ -83,32 +90,32 @@ parallelMarkets.post("/", async (c) => {
         break;
 
       case "accreditation.pending":
-        console.log(`[Parallel Markets Webhook] Accreditation pending: ${event.data.request_id}`);
+        logger.info("Accreditation pending", { requestId: event.data.request_id });
         break;
 
       case "accreditation.document_requested":
-        console.log(`[Parallel Markets Webhook] Documents requested: ${event.data.request_id}`);
+        logger.info("Documents requested", { requestId: event.data.request_id });
         break;
 
       case "accreditation.document_received":
-        console.log(`[Parallel Markets Webhook] Documents received: ${event.data.request_id}`);
+        logger.info("Documents received", { requestId: event.data.request_id });
         break;
 
       case "identity.verified":
-        console.log(`[Parallel Markets Webhook] Identity verified: ${event.data.investor_id}`);
+        logger.info("Identity verified", { investorId: event.data.investor_id });
         break;
 
       case "identity.failed":
-        console.log(`[Parallel Markets Webhook] Identity failed: ${event.data.investor_id}`);
+        logger.warn("Identity verification failed", { investorId: event.data.investor_id });
         break;
 
       default:
-        console.log(`[Parallel Markets Webhook] Unhandled event type: ${event.type}`);
+        logger.info("Unhandled event type", { eventType: event.type });
     }
 
     return c.json({ success: true });
   } catch (error) {
-    console.error("[Parallel Markets Webhook] Error:", error);
+    logger.error("Webhook processing error", { error });
 
     if (error instanceof Error && error.message.includes("signature")) {
       return c.json({ success: false, error: "Invalid signature" }, 200);
@@ -125,14 +132,17 @@ parallelMarkets.post("/", async (c) => {
 async function handleAccreditationApproved(event: WebhookEvent): Promise<void> {
   const requestId = event.data.request_id!;
 
-  console.log(`[Parallel Markets Webhook] Accreditation approved: ${requestId}`);
+  logger.info("Accreditation approved", { requestId });
 
   // Get full accreditation details
   const client = getParallelMarketsClient();
   const accreditation = await client.getAccreditationStatus(requestId);
 
-  console.log(`[Parallel Markets Webhook] Method: ${accreditation.method}`);
-  console.log(`[Parallel Markets Webhook] Expires: ${accreditation.expires_at}`);
+  logger.info("Accreditation details", {
+    requestId,
+    method: accreditation.method,
+    expiresAt: accreditation.expires_at,
+  });
 
   const temporalClient = getTemporalClient();
 
@@ -157,7 +167,7 @@ async function handleAccreditationApproved(event: WebhookEvent): Promise<void> {
       }
 
       if (workflowStatus.parallelRequestId === requestId) {
-        console.log(`[Parallel Markets Webhook] Signaling workflow: ${workflow.workflowId}`);
+        logger.info("Signaling workflow", { workflowId: workflow.workflowId, requestId });
 
         await handle.signal("accreditationCompleted", {
           requestId,
@@ -171,19 +181,18 @@ async function handleAccreditationApproved(event: WebhookEvent): Promise<void> {
         return;
       }
     } catch (error) {
-      console.error(`[Parallel Markets Webhook] Error querying workflow: ${error}`);
+      logger.error("Error querying workflow", { error, workflowId: workflow.workflowId });
     }
   }
 
-  console.warn(`[Parallel Markets Webhook] No matching workflow found for request: ${requestId}`);
+  logger.warn("No matching workflow found for request", { requestId });
 }
 
 async function handleAccreditationRejected(event: WebhookEvent): Promise<void> {
   const requestId = event.data.request_id!;
   const reason = event.data.reason;
 
-  console.log(`[Parallel Markets Webhook] Accreditation rejected: ${requestId}`);
-  console.log(`[Parallel Markets Webhook] Reason: ${reason}`);
+  logger.warn("Accreditation rejected", { requestId, reason });
 
   const temporalClient = getTemporalClient();
 
@@ -207,7 +216,7 @@ async function handleAccreditationRejected(event: WebhookEvent): Promise<void> {
       }
 
       if (workflowStatus.parallelRequestId === requestId) {
-        console.log(`[Parallel Markets Webhook] Signaling workflow: ${workflow.workflowId}`);
+        logger.info("Signaling workflow", { workflowId: workflow.workflowId, requestId });
 
         await handle.signal("accreditationCompleted", {
           requestId,
@@ -218,7 +227,7 @@ async function handleAccreditationRejected(event: WebhookEvent): Promise<void> {
         return;
       }
     } catch (error) {
-      console.error(`[Parallel Markets Webhook] Error querying workflow: ${error}`);
+      logger.error("Error querying workflow", { error, workflowId: workflow.workflowId });
     }
   }
 }
@@ -226,7 +235,7 @@ async function handleAccreditationRejected(event: WebhookEvent): Promise<void> {
 async function handleAccreditationExpired(event: WebhookEvent): Promise<void> {
   const requestId = event.data.request_id!;
 
-  console.log(`[Parallel Markets Webhook] Accreditation expired: ${requestId}`);
+  logger.warn("Accreditation expired", { requestId });
 
   // TODO: Notify user that their accreditation has expired
   // TODO: Update database status

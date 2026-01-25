@@ -545,3 +545,302 @@ function generateReferralCode(): string {
 
   return code;
 }
+
+// ============================================================================
+// EXPLICIT NAMING EXPORTS (aliases for common operations)
+// ============================================================================
+
+/**
+ * Create user - explicit alias for create
+ */
+export const createUser = mutation({
+  args: {
+    email: v.string(),
+    authProvider: v.union(
+      v.literal("email"),
+      v.literal("google"),
+      v.literal("apple"),
+      v.literal("wallet")
+    ),
+    displayName: v.optional(v.string()),
+    walletAddress: v.optional(v.string()),
+    referredBy: v.optional(v.string()),
+    passwordHash: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(args.email)) {
+      throw new Error("Invalid email format");
+    }
+
+    // Check if user already exists
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .unique();
+
+    if (existing) {
+      throw new Error("User with this email already exists");
+    }
+
+    // Generate unique referral code
+    const referralCode = generateReferralCode();
+
+    // Look up referrer if provided
+    let referrerId: Id<"users"> | undefined;
+    if (args.referredBy) {
+      const referrer = await ctx.db
+        .query("users")
+        .withIndex("by_referral_code", (q) =>
+          q.eq("referralCode", args.referredBy!.toUpperCase())
+        )
+        .unique();
+      referrerId = referrer?._id;
+    }
+
+    const userId = await ctx.db.insert("users", {
+      email: args.email.toLowerCase(),
+      emailVerified: false,
+      phoneVerified: false,
+      displayName: args.displayName,
+      status: "active",
+      kycStatus: "pending",
+      kycTier: "none",
+      authProvider: args.authProvider,
+      walletAddress: args.walletAddress?.toLowerCase(),
+      passwordHash: args.passwordHash,
+      referralCode,
+      referredBy: referrerId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Initialize USD balance
+    await ctx.db.insert("balances", {
+      userId,
+      assetType: "usd",
+      assetId: "USD",
+      symbol: "USD",
+      available: 0,
+      held: 0,
+      pending: 0,
+      updatedAt: now,
+    });
+
+    // Initialize points balance
+    await ctx.db.insert("balances", {
+      userId,
+      assetType: "points",
+      assetId: "PULL_POINTS",
+      symbol: "PTS",
+      available: 0,
+      held: 0,
+      pending: 0,
+      updatedAt: now,
+    });
+
+    // Log audit
+    await ctx.db.insert("auditLog", {
+      userId,
+      action: "user.created",
+      resourceType: "users",
+      resourceId: userId,
+      timestamp: now,
+    });
+
+    return {
+      userId,
+      email: args.email.toLowerCase(),
+      referralCode,
+      status: "active",
+    };
+  },
+});
+
+/**
+ * Get user by email - explicit alias for getByEmail
+ */
+export const getUserByEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    if (!args.email || args.email.trim() === "") {
+      throw new Error("Email is required");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .unique();
+
+    if (!user) {
+      return null;
+    }
+
+    // Return user without sensitive fields
+    const { passwordHash, ...safeUser } = user;
+    return safeUser;
+  },
+});
+
+/**
+ * Get user by ID - explicit alias (system level, for internal use)
+ */
+export const getUserById = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return null;
+    }
+
+    // Return user without sensitive fields
+    const { passwordHash, ...safeUser } = user;
+    return safeUser;
+  },
+});
+
+/**
+ * Update user - authenticated user updates their own profile
+ */
+export const updateUser = authenticatedMutation({
+  args: {
+    displayName: v.optional(v.string()),
+    username: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    dateOfBirth: v.optional(v.string()),
+    country: v.optional(v.string()),
+    state: v.optional(v.string()),
+    city: v.optional(v.string()),
+    postalCode: v.optional(v.string()),
+    addressLine1: v.optional(v.string()),
+    addressLine2: v.optional(v.string()),
+    phone: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const id = ctx.userId as Id<"users">;
+    const now = Date.now();
+
+    const user = await ctx.db.get(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Don't include undefined values
+    const updates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(args)) {
+      if (value !== undefined) {
+        updates[key] = value;
+      }
+    }
+
+    // Check username uniqueness if being updated
+    if (updates.username) {
+      const existing = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q) =>
+          q.eq("username", (updates.username as string).toLowerCase())
+        )
+        .unique();
+
+      if (existing && existing._id !== id) {
+        throw new Error("Username already taken");
+      }
+      updates.username = (updates.username as string).toLowerCase();
+    }
+
+    // Validate phone format if provided
+    if (updates.phone) {
+      const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+      if (!phoneRegex.test(updates.phone as string)) {
+        throw new Error("Invalid phone number format");
+      }
+    }
+
+    updates.updatedAt = now;
+
+    await ctx.db.patch(id, updates);
+
+    await ctx.db.insert("auditLog", {
+      userId: id,
+      action: "user.updated",
+      resourceType: "users",
+      resourceId: id,
+      changes: updates,
+      timestamp: now,
+    });
+
+    // Get updated user
+    const updatedUser = await ctx.db.get(id);
+    if (!updatedUser) {
+      throw new Error("User not found after update");
+    }
+
+    const { passwordHash, ...safeUser } = updatedUser;
+    return safeUser;
+  },
+});
+
+/**
+ * Get authenticated user's full profile with all related data
+ */
+export const getMyProfile = authenticatedQuery({
+  args: {},
+  handler: async (ctx) => {
+    const userId = ctx.userId as Id<"users">;
+    const user = await ctx.db.get(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Get referral count
+    const referrals = await ctx.db
+      .query("users")
+      .withIndex("by_referrer", (q) => q.eq("referredBy", userId))
+      .take(1000);
+    const referralCount = referrals.length;
+
+    // Get points balance
+    const pointsBalance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q.eq("userId", userId).eq("assetType", "points").eq("assetId", "PULL_POINTS")
+      )
+      .unique();
+
+    // Get USD balance
+    const usdBalance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q.eq("userId", userId).eq("assetType", "usd").eq("assetId", "USD")
+      )
+      .unique();
+
+    // Get position count
+    const positions = await ctx.db
+      .query("positions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const activePositions = positions.filter((p) => p.quantity > 0);
+
+    // Remove sensitive fields
+    const { passwordHash, ...safeUser } = user;
+
+    return {
+      ...safeUser,
+      referralCount,
+      pointsBalance: pointsBalance?.available ?? 0,
+      usdBalance: usdBalance?.available ?? 0,
+      usdHeld: usdBalance?.held ?? 0,
+      positionCount: activePositions.length,
+      portfolioValue: activePositions.reduce(
+        (sum, p) => sum + p.quantity * p.currentPrice,
+        0
+      ),
+    };
+  },
+});

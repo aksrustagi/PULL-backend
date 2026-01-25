@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { authenticatedQuery, systemMutation } from "./lib/auth";
+import { authenticatedQuery, authenticatedMutation, systemMutation } from "./lib/auth";
 
 /**
  * Position queries and mutations for PULL
@@ -317,5 +317,315 @@ export const adjustPosition = systemMutation({
     });
 
     return args.id;
+  },
+});
+
+/**
+ * Open a new position - authenticated user
+ * This is typically called when buying an asset directly without going through order flow
+ */
+export const openPosition = authenticatedMutation({
+  args: {
+    assetClass: v.union(
+      v.literal("crypto"),
+      v.literal("prediction"),
+      v.literal("rwa")
+    ),
+    symbol: v.string(),
+    side: v.union(v.literal("long"), v.literal("short")),
+    quantity: v.number(),
+    entryPrice: v.number(),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+    const now = Date.now();
+
+    // Validate inputs
+    if (args.quantity <= 0) {
+      throw new Error("Quantity must be positive");
+    }
+    if (args.entryPrice <= 0) {
+      throw new Error("Entry price must be positive");
+    }
+
+    const costBasis = args.quantity * args.entryPrice;
+
+    // Check if user has sufficient funds for long positions
+    if (args.side === "long") {
+      const balance = await ctx.db
+        .query("balances")
+        .withIndex("by_user_asset", (q) =>
+          q.eq("userId", userId).eq("assetType", "usd").eq("assetId", "USD")
+        )
+        .unique();
+
+      if (!balance || balance.available < costBasis) {
+        throw new Error(
+          `Insufficient funds. Required: $${costBasis.toFixed(2)}, Available: $${(balance?.available ?? 0).toFixed(2)}`
+        );
+      }
+
+      // Debit funds
+      await ctx.db.patch(balance._id, {
+        available: balance.available - costBasis,
+        updatedAt: now,
+      });
+    }
+
+    // Check if position already exists
+    const existingPosition = await ctx.db
+      .query("positions")
+      .withIndex("by_user_asset", (q) =>
+        q
+          .eq("userId", userId)
+          .eq("assetClass", args.assetClass)
+          .eq("symbol", args.symbol)
+      )
+      .unique();
+
+    let positionId;
+
+    if (existingPosition) {
+      // Cannot have a long and short position simultaneously
+      if (existingPosition.side !== args.side) {
+        throw new Error(
+          `Cannot open ${args.side} position while holding ${existingPosition.side} position. Close existing position first.`
+        );
+      }
+
+      // Add to existing position
+      const newQuantity = existingPosition.quantity + args.quantity;
+      const newCostBasis = existingPosition.costBasis + costBasis;
+      const newAvgEntry = newCostBasis / newQuantity;
+
+      await ctx.db.patch(existingPosition._id, {
+        quantity: newQuantity,
+        averageEntryPrice: newAvgEntry,
+        costBasis: newCostBasis,
+        currentPrice: args.entryPrice,
+        unrealizedPnL: newQuantity * args.entryPrice - newCostBasis,
+        updatedAt: now,
+      });
+
+      positionId = existingPosition._id;
+    } else {
+      // Create new position
+      positionId = await ctx.db.insert("positions", {
+        userId,
+        assetClass: args.assetClass,
+        symbol: args.symbol,
+        side: args.side,
+        quantity: args.quantity,
+        averageEntryPrice: args.entryPrice,
+        currentPrice: args.entryPrice,
+        costBasis,
+        unrealizedPnL: 0,
+        realizedPnL: 0,
+        openedAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // Log audit
+    await ctx.db.insert("auditLog", {
+      userId,
+      action: existingPosition ? "position.increased" : "position.opened",
+      resourceType: "positions",
+      resourceId: positionId,
+      metadata: {
+        symbol: args.symbol,
+        assetClass: args.assetClass,
+        side: args.side,
+        quantity: args.quantity,
+        entryPrice: args.entryPrice,
+        costBasis,
+        ...args.metadata,
+      },
+      timestamp: now,
+    });
+
+    return {
+      positionId,
+      symbol: args.symbol,
+      side: args.side,
+      quantity: existingPosition
+        ? existingPosition.quantity + args.quantity
+        : args.quantity,
+      averageEntryPrice: existingPosition
+        ? (existingPosition.costBasis + costBasis) /
+          (existingPosition.quantity + args.quantity)
+        : args.entryPrice,
+      costBasis: existingPosition
+        ? existingPosition.costBasis + costBasis
+        : costBasis,
+    };
+  },
+});
+
+/**
+ * Get all positions for the authenticated user - alias with more explicit naming
+ */
+export const getPositions = authenticatedQuery({
+  args: {
+    assetClass: v.optional(
+      v.union(v.literal("crypto"), v.literal("prediction"), v.literal("rwa"))
+    ),
+    includeZeroQuantity: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+
+    let positions = await ctx.db
+      .query("positions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    // Filter by asset class if specified
+    if (args.assetClass) {
+      positions = positions.filter((p) => p.assetClass === args.assetClass);
+    }
+
+    // Exclude zero-quantity positions unless explicitly requested
+    if (!args.includeZeroQuantity) {
+      positions = positions.filter((p) => p.quantity > 0);
+    }
+
+    // Calculate totals
+    const totalValue = positions.reduce(
+      (sum, p) => sum + p.quantity * p.currentPrice,
+      0
+    );
+    const totalCost = positions.reduce((sum, p) => sum + p.costBasis, 0);
+    const totalUnrealizedPnL = positions.reduce(
+      (sum, p) => sum + p.unrealizedPnL,
+      0
+    );
+    const totalRealizedPnL = positions.reduce(
+      (sum, p) => sum + p.realizedPnL,
+      0
+    );
+
+    return {
+      positions: positions.map((p) => ({
+        ...p,
+        marketValue: p.quantity * p.currentPrice,
+        pnlPercent: p.costBasis > 0 ? (p.unrealizedPnL / p.costBasis) * 100 : 0,
+        allocation:
+          totalValue > 0 ? (p.quantity * p.currentPrice) / totalValue : 0,
+      })),
+      summary: {
+        totalValue,
+        totalCost,
+        totalUnrealizedPnL,
+        totalRealizedPnL,
+        totalPnLPercent: totalCost > 0 ? (totalUnrealizedPnL / totalCost) * 100 : 0,
+        positionCount: positions.length,
+      },
+    };
+  },
+});
+
+/**
+ * Partially close a position - authenticated user
+ */
+export const reducePosition = authenticatedMutation({
+  args: {
+    positionId: v.id("positions"),
+    quantity: v.number(),
+    exitPrice: v.number(),
+    fee: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+    const now = Date.now();
+
+    // Validate inputs
+    if (args.quantity <= 0) {
+      throw new Error("Quantity must be positive");
+    }
+    if (args.exitPrice <= 0) {
+      throw new Error("Exit price must be positive");
+    }
+
+    const position = await ctx.db.get(args.positionId);
+    if (!position) {
+      throw new Error("Position not found");
+    }
+
+    if (position.userId !== userId) {
+      throw new Error("Not authorized to modify this position");
+    }
+
+    if (args.quantity > position.quantity) {
+      throw new Error(
+        `Cannot reduce by more than current quantity. Current: ${position.quantity}, Requested: ${args.quantity}`
+      );
+    }
+
+    const fee = args.fee ?? 0;
+    const proceeds = args.quantity * args.exitPrice - fee;
+    const soldCostBasis = (args.quantity / position.quantity) * position.costBasis;
+    const realizedPnL = proceeds - soldCostBasis;
+
+    const newQuantity = position.quantity - args.quantity;
+    const newCostBasis = position.costBasis - soldCostBasis;
+
+    // Credit proceeds to balance
+    const balance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q.eq("userId", userId).eq("assetType", "usd").eq("assetId", "USD")
+      )
+      .unique();
+
+    if (balance) {
+      await ctx.db.patch(balance._id, {
+        available: balance.available + proceeds,
+        updatedAt: now,
+      });
+    }
+
+    if (newQuantity <= 0) {
+      // Fully closed - delete position
+      await ctx.db.delete(args.positionId);
+    } else {
+      // Partially closed - update position
+      await ctx.db.patch(args.positionId, {
+        quantity: newQuantity,
+        costBasis: newCostBasis,
+        currentPrice: args.exitPrice,
+        unrealizedPnL: newQuantity * args.exitPrice - newCostBasis,
+        realizedPnL: position.realizedPnL + realizedPnL,
+        updatedAt: now,
+      });
+    }
+
+    // Log audit
+    await ctx.db.insert("auditLog", {
+      userId,
+      action: newQuantity <= 0 ? "position.closed" : "position.reduced",
+      resourceType: "positions",
+      resourceId: args.positionId,
+      metadata: {
+        symbol: position.symbol,
+        quantitySold: args.quantity,
+        exitPrice: args.exitPrice,
+        proceeds,
+        realizedPnL,
+        fee,
+        remainingQuantity: newQuantity,
+      },
+      timestamp: now,
+    });
+
+    return {
+      positionId: args.positionId,
+      quantitySold: args.quantity,
+      proceeds,
+      realizedPnL,
+      remainingQuantity: newQuantity,
+      status: newQuantity <= 0 ? "closed" : "reduced",
+    };
   },
 });

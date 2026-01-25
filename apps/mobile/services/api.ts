@@ -291,6 +291,119 @@ class ApiClient {
       method: "POST",
     });
   }
+
+  async getMyPositions(marketId: string) {
+    return this.request<any>(`/api/v1/fantasy/markets/${marketId}/positions`);
+  }
+
+  // ==========================================================================
+  // USER
+  // ==========================================================================
+
+  async getCurrentUser() {
+    return this.request<any>("/api/auth/me");
+  }
+
+  async updateProfile(data: { displayName?: string; avatarUrl?: string }) {
+    return this.request<any>("/api/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getWalletBalance() {
+    return this.request<any>("/api/v1/wallet/balance");
+  }
+
+  async getWalletHistory(params?: { limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.append("limit", params.limit.toString());
+    if (params?.offset) searchParams.append("offset", params.offset.toString());
+    return this.request<any>(`/api/v1/wallet/history?${searchParams.toString()}`);
+  }
+
+  // ==========================================================================
+  // EVENTS
+  // ==========================================================================
+
+  async getEvents(params?: {
+    sport?: string;
+    status?: string;
+    date?: string;
+    limit?: number;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.sport) searchParams.append("sport", params.sport);
+    if (params?.status) searchParams.append("status", params.status);
+    if (params?.date) searchParams.append("date", params.date);
+    if (params?.limit) searchParams.append("limit", params.limit.toString());
+    return this.request<any[]>(`/api/v1/events?${searchParams.toString()}`);
+  }
+
+  async getEvent(eventId: string) {
+    return this.request<any>(`/api/v1/events/${eventId}`);
+  }
+
+  async getEventMarkets(eventId: string) {
+    return this.request<any[]>(`/api/v1/events/${eventId}/markets`);
+  }
+
+  // ==========================================================================
+  // PRICE HISTORY
+  // ==========================================================================
+
+  async getMarketPriceHistory(marketId: string, outcomeId?: string, params?: {
+    from?: number;
+    to?: number;
+    resolution?: string;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (outcomeId) searchParams.append("outcomeId", outcomeId);
+    if (params?.from) searchParams.append("from", params.from.toString());
+    if (params?.to) searchParams.append("to", params.to.toString());
+    if (params?.resolution) searchParams.append("resolution", params.resolution);
+    return this.request<any[]>(`/api/v1/fantasy/markets/${marketId}/history?${searchParams.toString()}`);
+  }
+
+  // ==========================================================================
+  // NOTIFICATIONS
+  // ==========================================================================
+
+  async getNotifications(params?: { limit?: number; unreadOnly?: boolean }) {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.append("limit", params.limit.toString());
+    if (params?.unreadOnly) searchParams.append("unreadOnly", "true");
+    return this.request<any[]>(`/api/v1/notifications?${searchParams.toString()}`);
+  }
+
+  async markNotificationRead(notificationId: string) {
+    return this.request<any>(`/api/v1/notifications/${notificationId}/read`, {
+      method: "PUT",
+    });
+  }
+
+  async markAllNotificationsRead() {
+    return this.request<any>("/api/v1/notifications/read-all", {
+      method: "PUT",
+    });
+  }
+
+  // ==========================================================================
+  // LEADERBOARDS
+  // ==========================================================================
+
+  async getLeaderboard(type: string, params?: {
+    leagueId?: string;
+    period?: string;
+    limit?: number;
+  }) {
+    const searchParams = new URLSearchParams();
+    searchParams.append("type", type);
+    if (params?.leagueId) searchParams.append("leagueId", params.leagueId);
+    if (params?.period) searchParams.append("period", params.period);
+    if (params?.limit) searchParams.append("limit", params.limit.toString());
+    return this.request<any[]>(`/api/v1/leaderboard?${searchParams.toString()}`);
+  }
 }
 
 export class ApiError extends Error {
