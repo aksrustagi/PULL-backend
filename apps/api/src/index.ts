@@ -81,6 +81,7 @@ import { ncaaRoutes } from "./routes/ncaa";
 import { golfRoutes } from "./routes/golf";
 import { nbaRoutes } from "./routes/nba";
 import { mlbRoutes } from "./routes/mlb";
+import { viralGrowthRoutes } from "./routes/viral-growth";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
