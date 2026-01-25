@@ -2,8 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all insurance routes - feature is not production-ready
+app.use("*", requireFeature("insurance", "Insurance"));
 
 // ============================================================================
 // Validation Schemas

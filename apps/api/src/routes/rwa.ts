@@ -5,8 +5,12 @@ import type { Env } from "../index";
 import { parseIntSafe } from "../utils/validation";
 import { convex, api } from "../lib/convex";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all RWA routes - feature is not production-ready
+app.use("*", requireFeature("real_estate", "Real Estate"));
 
 /**
  * Get RWA assets
