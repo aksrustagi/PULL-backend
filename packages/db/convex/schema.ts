@@ -5877,4 +5877,998 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_tier", ["vipTier"]),
+
+  // ============================================================================
+  // PULL STORIES TABLES
+  // ============================================================================
+
+  /**
+   * Stories - 15-second video stories with referral tracking
+   */
+  stories: defineTable({
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("bet_placed"),
+      v.literal("win_celebration"),
+      v.literal("parlay_hit"),
+      v.literal("streak_milestone"),
+      v.literal("squad_victory"),
+      v.literal("battle_win"),
+      v.literal("custom")
+    ),
+    status: v.union(
+      v.literal("processing"),
+      v.literal("active"),
+      v.literal("expired"),
+      v.literal("deleted")
+    ),
+    visibility: v.union(
+      v.literal("public"),
+      v.literal("followers"),
+      v.literal("friends"),
+      v.literal("private")
+    ),
+
+    // Content
+    videoUrl: v.optional(v.string()),
+    thumbnailUrl: v.optional(v.string()),
+    duration: v.number(),
+    caption: v.optional(v.string()),
+    hashtags: v.array(v.string()),
+    mentions: v.array(v.id("users")),
+
+    // Bet context (if applicable)
+    betContext: v.optional(v.object({
+      betId: v.string(),
+      eventName: v.string(),
+      outcome: v.string(),
+      odds: v.number(),
+      stake: v.number(),
+      potentialWin: v.number(),
+      actualWin: v.optional(v.number()),
+    })),
+
+    // Engagement
+    viewCount: v.number(),
+    reactionCount: v.number(),
+    shareCount: v.number(),
+    commentCount: v.number(),
+
+    // Referral tracking
+    referralCode: v.string(),
+    referralClicks: v.number(),
+    referralSignups: v.number(),
+
+    // Audio
+    audioTrackId: v.optional(v.string()),
+    audioTrackName: v.optional(v.string()),
+
+    // Timestamps
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_status", ["status", "createdAt"])
+    .index("by_visibility", ["visibility", "status", "createdAt"])
+    .index("by_referral_code", ["referralCode"])
+    .index("by_expires", ["expiresAt"]),
+
+  /**
+   * Story Views - Track who viewed stories
+   */
+  storyViews: defineTable({
+    storyId: v.id("stories"),
+    viewerId: v.id("users"),
+    watchDuration: v.number(),
+    completedView: v.boolean(),
+    referralCode: v.optional(v.string()),
+    source: v.optional(v.string()),
+    viewedAt: v.number(),
+  })
+    .index("by_story", ["storyId", "viewedAt"])
+    .index("by_viewer", ["viewerId", "viewedAt"])
+    .index("by_story_viewer", ["storyId", "viewerId"]),
+
+  /**
+   * Story Reactions - Emoji reactions on stories
+   */
+  storyReactions: defineTable({
+    storyId: v.id("stories"),
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("fire"),
+      v.literal("money"),
+      v.literal("clap"),
+      v.literal("mindblown"),
+      v.literal("cry"),
+      v.literal("laugh"),
+      v.literal("heart")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_story", ["storyId"])
+    .index("by_user", ["userId"])
+    .index("by_story_user", ["storyId", "userId"]),
+
+  /**
+   * Story Shares - Social platform sharing records
+   */
+  storyShares: defineTable({
+    storyId: v.id("stories"),
+    userId: v.id("users"),
+    platform: v.union(
+      v.literal("twitter"),
+      v.literal("instagram"),
+      v.literal("tiktok"),
+      v.literal("facebook"),
+      v.literal("snapchat"),
+      v.literal("whatsapp"),
+      v.literal("telegram"),
+      v.literal("discord"),
+      v.literal("copy_link"),
+      v.literal("sms")
+    ),
+    referralCode: v.string(),
+    shareUrl: v.string(),
+    clicks: v.number(),
+    conversions: v.number(),
+    sharedAt: v.number(),
+  })
+    .index("by_story", ["storyId"])
+    .index("by_user", ["userId"])
+    .index("by_referral", ["referralCode"]),
+
+  // ============================================================================
+  // CASH BATTLES TABLES
+  // ============================================================================
+
+  /**
+   * Cash Battles - 1v1 head-to-head prediction duels
+   */
+  cashBattles: defineTable({
+    creatorId: v.id("users"),
+    opponentId: v.optional(v.id("users")),
+    winnerId: v.optional(v.id("users")),
+
+    status: v.union(
+      v.literal("pending"),
+      v.literal("matching"),
+      v.literal("active"),
+      v.literal("predicting"),
+      v.literal("locked"),
+      v.literal("resolving"),
+      v.literal("completed"),
+      v.literal("disputed"),
+      v.literal("cancelled"),
+      v.literal("expired")
+    ),
+    type: v.union(
+      v.literal("single"),
+      v.literal("best_of_3"),
+      v.literal("best_of_5"),
+      v.literal("marathon")
+    ),
+    matchType: v.union(
+      v.literal("friend"),
+      v.literal("random"),
+      v.literal("rematch"),
+      v.literal("tournament")
+    ),
+    category: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("nhl"),
+      v.literal("soccer"),
+      v.literal("mma"),
+      v.literal("esports"),
+      v.literal("crypto"),
+      v.literal("mixed")
+    ),
+
+    // Stakes
+    stake: v.number(),
+    currency: v.union(v.literal("usd"), v.literal("crypto"), v.literal("points")),
+    totalPot: v.number(),
+    platformFee: v.number(),
+    winnerPayout: v.number(),
+
+    // Market info
+    marketId: v.optional(v.string()),
+    marketName: v.optional(v.string()),
+    eventId: v.optional(v.string()),
+    eventName: v.optional(v.string()),
+
+    // Scoring
+    currentRound: v.number(),
+    totalRounds: v.number(),
+    creatorScore: v.number(),
+    opponentScore: v.number(),
+    isTie: v.boolean(),
+
+    // Settings
+    chatEnabled: v.boolean(),
+    isPrivate: v.boolean(),
+    spectatorCount: v.number(),
+
+    // Timestamps
+    acceptedAt: v.optional(v.number()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_creator", ["creatorId", "status"])
+    .index("by_opponent", ["opponentId", "status"])
+    .index("by_status", ["status", "createdAt"])
+    .index("by_category", ["category", "status"])
+    .index("by_match_type", ["matchType", "status"]),
+
+  /**
+   * Battle Predictions - Individual predictions within a battle
+   */
+  battlePredictions: defineTable({
+    battleId: v.id("cashBattles"),
+    userId: v.id("users"),
+    roundNumber: v.number(),
+    marketId: v.string(),
+    outcome: v.string(),
+    confidence: v.optional(v.number()),
+    isCorrect: v.optional(v.boolean()),
+    pointsEarned: v.number(),
+    lockedAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+  })
+    .index("by_battle", ["battleId", "roundNumber"])
+    .index("by_user", ["userId", "lockedAt"])
+    .index("by_battle_user", ["battleId", "userId"]),
+
+  /**
+   * Battle Matchmaking Queue - Random matchmaking queue
+   */
+  battleMatchmakingQueue: defineTable({
+    userId: v.id("users"),
+    battleType: v.union(
+      v.literal("single"),
+      v.literal("best_of_3"),
+      v.literal("best_of_5"),
+      v.literal("marathon")
+    ),
+    category: v.optional(v.string()),
+    stakeMin: v.number(),
+    stakeMax: v.number(),
+    skillRating: v.number(),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("matching"),
+      v.literal("matched"),
+      v.literal("expired"),
+      v.literal("cancelled")
+    ),
+    matchedWithUserId: v.optional(v.id("users")),
+    matchedBattleId: v.optional(v.id("cashBattles")),
+    queuedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status", "queuedAt"])
+    .index("by_matching", ["status", "battleType", "category", "skillRating"]),
+
+  /**
+   * Battle Player Stats - Player battle statistics
+   */
+  battlePlayerStats: defineTable({
+    userId: v.id("users"),
+    totalBattles: v.number(),
+    wins: v.number(),
+    losses: v.number(),
+    ties: v.number(),
+    winRate: v.number(),
+    winStreak: v.number(),
+    longestWinStreak: v.number(),
+    totalWagered: v.number(),
+    totalWon: v.number(),
+    netProfit: v.number(),
+    roi: v.number(),
+    skillRating: v.number(),
+    rank: v.union(
+      v.literal("bronze"),
+      v.literal("silver"),
+      v.literal("gold"),
+      v.literal("platinum"),
+      v.literal("diamond"),
+      v.literal("master"),
+      v.literal("grandmaster")
+    ),
+    peakRating: v.number(),
+    peakRank: v.string(),
+    categoryStats: v.string(), // JSON-serialized category-specific stats
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_skill_rating", ["skillRating"])
+    .index("by_rank", ["rank", "skillRating"])
+    .index("by_win_rate", ["winRate"]),
+
+  /**
+   * Battle Disputes - Dispute resolution records
+   */
+  battleDisputes: defineTable({
+    battleId: v.id("cashBattles"),
+    disputerId: v.id("users"),
+    reason: v.union(
+      v.literal("wrong_result"),
+      v.literal("technical_issue"),
+      v.literal("opponent_cheating"),
+      v.literal("market_error"),
+      v.literal("other")
+    ),
+    description: v.string(),
+    evidence: v.array(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("under_review"),
+      v.literal("resolved"),
+      v.literal("rejected")
+    ),
+    resolution: v.optional(v.string()),
+    resolvedBy: v.optional(v.id("users")),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_battle", ["battleId"])
+    .index("by_disputer", ["disputerId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Battle Chat Messages - In-battle chat
+   */
+  battleChatMessages: defineTable({
+    battleId: v.id("cashBattles"),
+    userId: v.optional(v.id("users")),
+    message: v.string(),
+    isSystem: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_battle", ["battleId", "createdAt"]),
+
+  // ============================================================================
+  // SQUAD MODE TABLES
+  // ============================================================================
+
+  /**
+   * Squads - Teams of 3-5 friends
+   */
+  squads: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    captainId: v.id("users"),
+    inviteCode: v.string(),
+
+    status: v.union(
+      v.literal("active"),
+      v.literal("inactive"),
+      v.literal("disbanded")
+    ),
+    visibility: v.union(
+      v.literal("public"),
+      v.literal("private"),
+      v.literal("invite_only")
+    ),
+    tier: v.union(
+      v.literal("bronze"),
+      v.literal("silver"),
+      v.literal("gold"),
+      v.literal("platinum"),
+      v.literal("diamond")
+    ),
+
+    // Member counts
+    memberCount: v.number(),
+    minMembers: v.number(),
+    maxMembers: v.number(),
+
+    // Pool settings
+    poolEnabled: v.boolean(),
+    totalPoolBalance: v.number(),
+    poolCurrency: v.union(v.literal("usd"), v.literal("crypto"), v.literal("points")),
+    minContribution: v.number(),
+
+    // Stats
+    totalWins: v.number(),
+    totalLosses: v.number(),
+    winRate: v.number(),
+    totalEarnings: v.number(),
+    warsWon: v.number(),
+    warsLost: v.number(),
+    warStreak: v.number(),
+    longestStreak: v.number(),
+    skillRating: v.number(),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_captain", ["captainId"])
+    .index("by_invite_code", ["inviteCode"])
+    .index("by_status", ["status"])
+    .index("by_tier", ["tier", "skillRating"])
+    .searchIndex("search_squads", {
+      searchField: "name",
+      filterFields: ["status", "visibility"],
+    }),
+
+  /**
+   * Squad Members - Membership records
+   */
+  squadMembers: defineTable({
+    squadId: v.id("squads"),
+    userId: v.id("users"),
+    role: v.union(
+      v.literal("captain"),
+      v.literal("co_captain"),
+      v.literal("member")
+    ),
+    status: v.union(
+      v.literal("active"),
+      v.literal("inactive"),
+      v.literal("suspended"),
+      v.literal("left")
+    ),
+
+    // Pool contribution
+    poolContribution: v.number(),
+    poolSharePercent: v.number(),
+    totalContributed: v.number(),
+    totalEarned: v.number(),
+
+    // Stats
+    betsPlaced: v.number(),
+    betsWon: v.number(),
+    winRate: v.number(),
+    profitLoss: v.number(),
+
+    // Voting
+    votingWeight: v.number(),
+    votesParticipated: v.number(),
+
+    joinedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_squad", ["squadId", "status"])
+    .index("by_user", ["userId", "status"])
+    .index("by_squad_user", ["squadId", "userId"])
+    .index("by_role", ["squadId", "role"]),
+
+  /**
+   * Squad Wars - Squad vs Squad battles
+   */
+  squadWars: defineTable({
+    squadAId: v.id("squads"),
+    squadBId: v.id("squads"),
+    winnerId: v.optional(v.id("squads")),
+
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("active"),
+      v.literal("voting"),
+      v.literal("locked"),
+      v.literal("resolving"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    ),
+    type: v.union(
+      v.literal("friendly"),
+      v.literal("ranked"),
+      v.literal("tournament")
+    ),
+    category: v.string(),
+
+    // Stakes
+    stake: v.number(),
+    currency: v.union(v.literal("usd"), v.literal("crypto"), v.literal("points")),
+    totalPot: v.number(),
+    winnerPayout: v.number(),
+
+    // Scoring
+    currentRound: v.number(),
+    totalRounds: v.number(),
+    squadAScore: v.number(),
+    squadBScore: v.number(),
+    isTie: v.boolean(),
+
+    // Market info
+    marketId: v.optional(v.string()),
+    marketName: v.optional(v.string()),
+    eventId: v.optional(v.string()),
+    eventName: v.optional(v.string()),
+
+    // MVP
+    mvpUserId: v.optional(v.id("users")),
+    mvpBonus: v.optional(v.number()),
+
+    // Timestamps
+    acceptedAt: v.optional(v.number()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_squad_a", ["squadAId", "status"])
+    .index("by_squad_b", ["squadBId", "status"])
+    .index("by_status", ["status", "createdAt"])
+    .index("by_type", ["type", "status"]),
+
+  /**
+   * Squad War Rounds - Individual rounds in a squad war
+   */
+  squadWarRounds: defineTable({
+    warId: v.id("squadWars"),
+    roundNumber: v.number(),
+    marketId: v.string(),
+    marketName: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("voting"),
+      v.literal("locked"),
+      v.literal("resolved")
+    ),
+    squadAPrediction: v.optional(v.string()),
+    squadBPrediction: v.optional(v.string()),
+    actualOutcome: v.optional(v.string()),
+    winningSquadId: v.optional(v.id("squads")),
+    votingDeadline: v.number(),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_war", ["warId", "roundNumber"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Squad Prediction Votes - Member votes on predictions
+   */
+  squadPredictionVotes: defineTable({
+    warId: v.id("squadWars"),
+    roundNumber: v.number(),
+    squadId: v.id("squads"),
+    userId: v.id("users"),
+    vote: v.string(),
+    weight: v.number(),
+    votedAt: v.number(),
+  })
+    .index("by_war_round", ["warId", "roundNumber"])
+    .index("by_squad", ["squadId", "warId"])
+    .index("by_user", ["userId"]),
+
+  /**
+   * Squad Pool Contributions - Pool funding records
+   */
+  squadPoolContributions: defineTable({
+    squadId: v.id("squads"),
+    userId: v.id("users"),
+    amount: v.number(),
+    currency: v.union(v.literal("usd"), v.literal("crypto"), v.literal("points")),
+    type: v.union(
+      v.literal("deposit"),
+      v.literal("withdrawal"),
+      v.literal("winnings"),
+      v.literal("loss")
+    ),
+    description: v.optional(v.string()),
+    balanceAfter: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_squad", ["squadId", "createdAt"])
+    .index("by_user", ["userId", "createdAt"]),
+
+  // ============================================================================
+  // AI COPILOT TABLES
+  // ============================================================================
+
+  /**
+   * Copilot Profiles - AI assistant configuration
+   */
+  copilotProfiles: defineTable({
+    userId: v.id("users"),
+    tier: v.union(
+      v.literal("free"),
+      v.literal("basic"),
+      v.literal("pro"),
+      v.literal("elite")
+    ),
+    isActive: v.boolean(),
+
+    // Preferences
+    preferences: v.object({
+      enableAlerts: v.boolean(),
+      alertTypes: v.array(v.string()),
+      minConfidence: v.string(),
+      minEVPercent: v.number(),
+      preferredSports: v.array(v.string()),
+      preferredMarkets: v.array(v.string()),
+      excludedMarkets: v.array(v.string()),
+      riskTolerance: v.string(),
+      maxSingleBet: v.number(),
+      maxDailyExposure: v.number(),
+      bankrollManagement: v.boolean(),
+      pushEnabled: v.boolean(),
+      emailDigest: v.string(),
+    }),
+
+    // Usage stats
+    insightsGenerated: v.number(),
+    insightsActedOn: v.number(),
+    successfulInsights: v.number(),
+    accuracyRate: v.number(),
+
+    // Limits
+    dailyQueriesUsed: v.number(),
+    dailyQueryLimit: v.number(),
+    dailyQueryResetAt: v.number(),
+
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_tier", ["tier"]),
+
+  /**
+   * Copilot Insights - AI-generated betting insights
+   */
+  copilotInsights: defineTable({
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("ev_opportunity"),
+      v.literal("risk_warning"),
+      v.literal("pattern_detected"),
+      v.literal("streak_alert"),
+      v.literal("bankroll_advice"),
+      v.literal("arbitrage"),
+      v.literal("line_movement"),
+      v.literal("injury_impact"),
+      v.literal("weather_impact"),
+      v.literal("matchup_analysis"),
+      v.literal("trend"),
+      v.literal("contrarian")
+    ),
+    confidence: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("very_high")
+    ),
+    priority: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("urgent")
+    ),
+    status: v.union(
+      v.literal("active"),
+      v.literal("acted_on"),
+      v.literal("dismissed"),
+      v.literal("expired")
+    ),
+
+    // Content
+    title: v.string(),
+    summary: v.string(),
+    fullAnalysis: v.optional(v.string()),
+    actionableAdvice: v.optional(v.string()),
+
+    // Context
+    eventId: v.optional(v.string()),
+    marketId: v.optional(v.string()),
+    category: v.optional(v.string()),
+
+    // EV analysis if applicable
+    evAnalysis: v.optional(v.object({
+      expectedValue: v.number(),
+      evPercent: v.number(),
+      impliedProbability: v.number(),
+      trueProbability: v.number(),
+      edgePercent: v.number(),
+      kellyStake: v.number(),
+    })),
+
+    // Outcome tracking
+    wasActedOn: v.boolean(),
+    outcome: v.optional(v.union(
+      v.literal("success"),
+      v.literal("failure"),
+      v.literal("unknown")
+    )),
+    outcomeValue: v.optional(v.number()),
+
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "status", "createdAt"])
+    .index("by_type", ["type", "status"])
+    .index("by_confidence", ["confidence", "status"])
+    .index("by_expires", ["expiresAt"]),
+
+  /**
+   * Copilot Conversations - Chat history with AI
+   */
+  copilotConversations: defineTable({
+    userId: v.id("users"),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+    context: v.optional(v.object({
+      eventId: v.optional(v.string()),
+      marketId: v.optional(v.string()),
+      betId: v.optional(v.string()),
+    })),
+    insightIds: v.array(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"]),
+
+  /**
+   * EV Opportunities - Positive expected value bets
+   */
+  evOpportunities: defineTable({
+    eventId: v.string(),
+    marketId: v.string(),
+    category: v.string(),
+
+    // EV calculation
+    expectedValue: v.number(),
+    evPercent: v.number(),
+    impliedProbability: v.number(),
+    trueProbability: v.number(),
+    edgePercent: v.number(),
+
+    // Kelly staking
+    kellyStake: v.number(),
+    halfKellyStake: v.number(),
+
+    // Market info
+    eventName: v.string(),
+    marketName: v.string(),
+    outcome: v.string(),
+    odds: v.number(),
+    bookmaker: v.string(),
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("stale"),
+      v.literal("expired")
+    ),
+    confidence: v.string(),
+
+    // Timing
+    expiresAt: v.number(),
+    detectedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_category", ["category", "status", "evPercent"])
+    .index("by_status", ["status", "evPercent"])
+    .index("by_expires", ["expiresAt"]),
+
+  /**
+   * Betting Profiles - User betting pattern analysis
+   */
+  bettingProfiles: defineTable({
+    userId: v.id("users"),
+
+    // Overall stats
+    totalBets: v.number(),
+    totalWon: v.number(),
+    totalLost: v.number(),
+    winRate: v.number(),
+    roi: v.number(),
+    profitLoss: v.number(),
+
+    // Averages
+    avgBetSize: v.number(),
+    avgOdds: v.number(),
+
+    // Patterns
+    bettingFrequency: v.union(
+      v.literal("very_low"),
+      v.literal("low"),
+      v.literal("moderate"),
+      v.literal("high"),
+      v.literal("very_high"),
+      v.literal("casual")
+    ),
+    preferredCategories: v.array(v.string()),
+    preferredMarkets: v.array(v.string()),
+    peakBettingHours: v.array(v.number()),
+
+    // Risk indicators
+    tiltRisk: v.union(
+      v.literal("low"),
+      v.literal("moderate"),
+      v.literal("high"),
+      v.literal("very_high")
+    ),
+    chasingLosses: v.boolean(),
+    overbetting: v.boolean(),
+
+    // Streaks
+    currentStreak: v.number(),
+    currentStreakType: v.union(v.literal("win"), v.literal("loss")),
+    longestWinStreak: v.number(),
+    longestLossStreak: v.number(),
+
+    // Category performance (JSON-serialized)
+    categoryPerformance: v.string(),
+    detectedPatterns: v.string(),
+
+    analyzedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  /**
+   * Copilot Alerts - Push notifications for insights
+   */
+  copilotAlerts: defineTable({
+    userId: v.id("users"),
+    insightId: v.optional(v.id("copilotInsights")),
+    type: v.string(),
+    title: v.string(),
+    body: v.string(),
+    priority: v.string(),
+    isRead: v.boolean(),
+    isActioned: v.boolean(),
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "isRead", "createdAt"])
+    .index("by_insight", ["insightId"]),
+
+  // ============================================================================
+  // STREAK MULTIPLIERS TABLES
+  // ============================================================================
+
+  /**
+   * User Streaks - Consecutive win/loss tracking
+   */
+  userStreaks: defineTable({
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("win"),
+      v.literal("parlay"),
+      v.literal("category"),
+      v.literal("daily"),
+      v.literal("weekly")
+    ),
+    status: v.union(
+      v.literal("active"),
+      v.literal("broken"),
+      v.literal("frozen")
+    ),
+    category: v.optional(v.string()),
+
+    // Streak counts
+    currentStreak: v.number(),
+    longestStreak: v.number(),
+
+    // Multiplier info
+    currentMultiplier: v.number(),
+    currentTier: v.string(),
+    nextTierAt: v.number(),
+
+    // Bet tracking
+    streakBetIds: v.array(v.string()),
+    totalStreakWinnings: v.number(),
+    totalMultiplierBonus: v.number(),
+
+    // Protection
+    isProtected: v.boolean(),
+    protectionId: v.optional(v.id("streakProtections")),
+
+    // Timestamps
+    startedAt: v.number(),
+    brokenAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId", "type"])
+    .index("by_user_status", ["userId", "status"])
+    .index("by_category", ["category", "status"])
+    .index("by_current_streak", ["currentStreak"]),
+
+  /**
+   * Streak Protections - Insurance against streak breaks
+   */
+  streakProtections: defineTable({
+    streakId: v.id("userStreaks"),
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("single"),
+      v.literal("two_loss"),
+      v.literal("insurance")
+    ),
+
+    // Usage
+    usesRemaining: v.number(),
+    maxUses: v.number(),
+    usedCount: v.number(),
+    savedStreaks: v.number(),
+    refundPercent: v.optional(v.number()),
+
+    // Purchase info
+    purchasePrice: v.number(),
+    purchasedAt: v.number(),
+
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("used"),
+      v.literal("expired")
+    ),
+    expiresAt: v.optional(v.number()),
+    usedAt: v.optional(v.number()),
+  })
+    .index("by_streak", ["streakId"])
+    .index("by_user", ["userId", "status"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Streak Milestones - Achievement milestones for streaks
+   */
+  streakMilestones: defineTable({
+    userId: v.id("users"),
+    streakId: v.id("userStreaks"),
+    streakLength: v.number(),
+    tier: v.string(),
+    multiplier: v.number(),
+
+    // Rewards
+    rewards: v.array(v.object({
+      type: v.string(),
+      value: v.number(),
+      description: v.string(),
+    })),
+    totalRewardValue: v.number(),
+
+    // Status
+    claimed: v.boolean(),
+    claimedAt: v.optional(v.number()),
+
+    achievedAt: v.number(),
+  })
+    .index("by_user", ["userId", "claimed"])
+    .index("by_streak", ["streakId"])
+    .index("by_tier", ["tier"]),
+
+  /**
+   * Streak Leaderboard Entries - Periodic leaderboard snapshots
+   */
+  streakLeaderboardEntries: defineTable({
+    userId: v.id("users"),
+    streakId: v.id("userStreaks"),
+    streakType: v.string(),
+    period: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly"),
+      v.literal("all_time")
+    ),
+    periodStart: v.number(),
+    periodEnd: v.number(),
+
+    // Stats
+    streakLength: v.number(),
+    multiplier: v.number(),
+    totalBonusEarned: v.number(),
+    rank: v.number(),
+
+    // User info for display
+    username: v.optional(v.string()),
+    displayName: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+
+    createdAt: v.number(),
+  })
+    .index("by_period", ["period", "periodStart", "rank"])
+    .index("by_user", ["userId", "period"])
+    .index("by_type", ["streakType", "period", "rank"]),
 });
