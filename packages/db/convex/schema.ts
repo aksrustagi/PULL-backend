@@ -6871,4 +6871,486 @@ export default defineSchema({
     .index("by_period", ["period", "periodStart", "rank"])
     .index("by_user", ["userId", "period"])
     .index("by_type", ["streakType", "period", "rank"]),
+
+  // ============================================================================
+  // MARKET MAKER MODE TABLES (Feature 11)
+  // ============================================================================
+
+  /**
+   * Market Maker Positions - User liquidity positions for providing market liquidity
+   */
+  marketMakerPositions: defineTable({
+    userId: v.string(),
+    marketId: v.string(),
+    side: v.union(v.literal("buy"), v.literal("sell"), v.literal("both")),
+    size: v.number(),
+    spread: v.number(),
+    minSpread: v.number(),
+    maxSpread: v.number(),
+    status: v.union(
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("closed")
+    ),
+    autoRebalance: v.boolean(),
+    maxExposure: v.number(),
+    currentExposure: v.number(),
+    totalEarnings: v.number(),
+    totalVolume: v.number(),
+    fillCount: v.number(),
+    avgFillSize: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    closedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_market", ["marketId"])
+    .index("by_user_market", ["userId", "marketId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Market Maker Orders - Active orders from market makers
+   */
+  marketMakerOrders: defineTable({
+    positionId: v.string(),
+    userId: v.string(),
+    marketId: v.string(),
+    side: v.union(v.literal("buy"), v.literal("sell")),
+    price: v.number(),
+    size: v.number(),
+    filledSize: v.number(),
+    remainingSize: v.number(),
+    status: v.union(
+      v.literal("open"),
+      v.literal("partially_filled"),
+      v.literal("filled"),
+      v.literal("cancelled")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.optional(v.number()),
+  })
+    .index("by_position", ["positionId"])
+    .index("by_user", ["userId"])
+    .index("by_market", ["marketId"])
+    .index("by_status", ["status"])
+    .index("by_market_side_price", ["marketId", "side", "price"]),
+
+  /**
+   * Market Maker Fills - Completed fills for market makers earning spread
+   */
+  marketMakerFills: defineTable({
+    orderId: v.string(),
+    positionId: v.string(),
+    userId: v.string(),
+    marketId: v.string(),
+    side: v.union(v.literal("buy"), v.literal("sell")),
+    price: v.number(),
+    size: v.number(),
+    earnings: v.number(),
+    counterpartyUserId: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_order", ["orderId"])
+    .index("by_position", ["positionId"])
+    .index("by_user", ["userId"])
+    .index("by_market", ["marketId"])
+    .index("by_timestamp", ["timestamp"]),
+
+  /**
+   * Liquidity Pools - Shared liquidity pools for collective market making
+   */
+  liquidityPools: defineTable({
+    name: v.string(),
+    description: v.string(),
+    marketId: v.string(),
+    totalLiquidity: v.number(),
+    availableLiquidity: v.number(),
+    contributorCount: v.number(),
+    feeRate: v.number(),
+    minContribution: v.number(),
+    maxContribution: v.optional(v.number()),
+    totalEarnings: v.number(),
+    totalDistributed: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused"), v.literal("closed")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_market", ["marketId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Pool Contributions - User contributions to shared liquidity pools
+   */
+  poolContributions: defineTable({
+    poolId: v.string(),
+    userId: v.string(),
+    amount: v.number(),
+    sharePercentage: v.number(),
+    earnings: v.number(),
+    withdrawnEarnings: v.number(),
+    status: v.union(v.literal("active"), v.literal("withdrawn")),
+    contributedAt: v.number(),
+    withdrawnAt: v.optional(v.number()),
+  })
+    .index("by_pool", ["poolId"])
+    .index("by_user", ["userId"])
+    .index("by_pool_user", ["poolId", "userId"]),
+
+  // ============================================================================
+  // BRACKET POOLS TABLES (Feature 12 - Enhanced)
+  // ============================================================================
+
+  /**
+   * Bracket Pools - Competition pools for bracket tournaments with entry fees
+   */
+  bracketPools: defineTable({
+    name: v.string(),
+    description: v.string(),
+    tournamentType: v.string(),
+    season: v.string(),
+    creatorId: v.string(),
+    entryFee: v.number(),
+    maxEntries: v.optional(v.number()),
+    currentEntries: v.number(),
+    prizePool: v.number(),
+    prizeDistribution: v.array(v.object({
+      rank: v.number(),
+      percentage: v.number(),
+      minAmount: v.optional(v.number()),
+    })),
+    scoringConfig: v.object({
+      pointsPerRound: v.array(v.number()),
+      upsetBonus: v.boolean(),
+      upsetMultiplier: v.number(),
+      perfectBracketBonus: v.number(),
+    }),
+    visibility: v.union(v.literal("public"), v.literal("private"), v.literal("invite_only")),
+    inviteCode: v.optional(v.string()),
+    status: v.union(
+      v.literal("open"),
+      v.literal("locked"),
+      v.literal("in_progress"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lockedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_tournament", ["tournamentType", "season"])
+    .index("by_creator", ["creatorId"])
+    .index("by_status", ["status"])
+    .index("by_invite_code", ["inviteCode"]),
+
+  /**
+   * Bracket Pool Entries - User entries in bracket competition pools
+   */
+  bracketPoolEntries: defineTable({
+    poolId: v.string(),
+    userId: v.string(),
+    bracketId: v.string(),
+    entryNumber: v.number(),
+    paymentStatus: v.union(v.literal("pending"), v.literal("paid"), v.literal("refunded")),
+    score: v.number(),
+    rank: v.optional(v.number()),
+    prizeWon: v.number(),
+    prizeClaimedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_pool", ["poolId"])
+    .index("by_user", ["userId"])
+    .index("by_bracket", ["bracketId"])
+    .index("by_pool_score", ["poolId", "score"]),
+
+  // ============================================================================
+  // COPY TRADING TABLES (Feature 14)
+  // ============================================================================
+
+  /**
+   * Copy Trading Profiles - Traders who allow others to copy their bets
+   */
+  copyTradingProfiles: defineTable({
+    userId: v.string(),
+    displayName: v.string(),
+    bio: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    isPublic: v.boolean(),
+    allowCopying: v.boolean(),
+    minCopyAmount: v.number(),
+    maxCopiers: v.number(),
+    currentCopiers: v.number(),
+    commissionRate: v.number(),
+    totalBets: v.number(),
+    winningBets: v.number(),
+    winRate: v.number(),
+    totalProfit: v.number(),
+    roi: v.number(),
+    avgOdds: v.number(),
+    profitStreak: v.number(),
+    maxDrawdown: v.number(),
+    sharpeRatio: v.optional(v.number()),
+    totalCopiers: v.number(),
+    totalCopiedVolume: v.number(),
+    totalCommissionEarned: v.number(),
+    avgCopierProfit: v.number(),
+    rating: v.number(),
+    reviewCount: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused"), v.literal("suspended")),
+    verifiedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_win_rate", ["winRate"])
+    .index("by_roi", ["roi"])
+    .index("by_copiers", ["currentCopiers"])
+    .searchIndex("search_copy_profiles", {
+      searchField: "displayName",
+      filterFields: ["status", "isPublic"],
+    }),
+
+  /**
+   * Copy Subscriptions - Users following and copying traders
+   */
+  copySubscriptions: defineTable({
+    followerId: v.string(),
+    traderId: v.string(),
+    copyMode: v.union(
+      v.literal("fixed_amount"),
+      v.literal("percentage_portfolio"),
+      v.literal("proportional"),
+      v.literal("fixed_ratio")
+    ),
+    copyAmount: v.number(),
+    maxBetSize: v.number(),
+    minOdds: v.optional(v.number()),
+    maxOdds: v.optional(v.number()),
+    allowedSports: v.optional(v.array(v.string())),
+    allowedBetTypes: v.optional(v.array(v.string())),
+    stopLossAmount: v.optional(v.number()),
+    takeProfitAmount: v.optional(v.number()),
+    dailyLimit: v.optional(v.number()),
+    totalCopied: v.number(),
+    totalProfit: v.number(),
+    totalLoss: v.number(),
+    copiedBetCount: v.number(),
+    winCount: v.number(),
+    lossCount: v.number(),
+    commissionPaid: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused"), v.literal("stopped")),
+    pausedReason: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    stoppedAt: v.optional(v.number()),
+  })
+    .index("by_follower", ["followerId"])
+    .index("by_trader", ["traderId"])
+    .index("by_follower_trader", ["followerId", "traderId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Copy Trades - Individual copied trades/bets
+   */
+  copyTrades: defineTable({
+    subscriptionId: v.string(),
+    followerId: v.string(),
+    traderId: v.string(),
+    originalBetId: v.string(),
+    copiedBetId: v.string(),
+    originalAmount: v.number(),
+    copiedAmount: v.number(),
+    odds: v.number(),
+    sport: v.optional(v.string()),
+    betType: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("placed"),
+      v.literal("won"),
+      v.literal("lost"),
+      v.literal("cancelled"),
+      v.literal("failed")
+    ),
+    result: v.optional(v.union(v.literal("win"), v.literal("loss"), v.literal("push"))),
+    profit: v.number(),
+    commission: v.number(),
+    commissionPaid: v.boolean(),
+    failureReason: v.optional(v.string()),
+    placedAt: v.number(),
+    settledAt: v.optional(v.number()),
+  })
+    .index("by_subscription", ["subscriptionId"])
+    .index("by_follower", ["followerId"])
+    .index("by_trader", ["traderId"])
+    .index("by_original_bet", ["originalBetId"])
+    .index("by_status", ["status"])
+    .index("by_placed_at", ["placedAt"]),
+
+  /**
+   * Trader Reviews - Reviews and ratings for copy traders
+   */
+  traderReviews: defineTable({
+    traderId: v.string(),
+    reviewerId: v.string(),
+    rating: v.number(),
+    title: v.optional(v.string()),
+    comment: v.optional(v.string()),
+    profitWithTrader: v.number(),
+    copyDuration: v.number(),
+    wouldRecommend: v.boolean(),
+    helpfulCount: v.number(),
+    reportCount: v.number(),
+    status: v.union(v.literal("active"), v.literal("hidden"), v.literal("removed")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_trader", ["traderId"])
+    .index("by_reviewer", ["reviewerId"])
+    .index("by_trader_rating", ["traderId", "rating"])
+    .index("by_status", ["status"]),
+
+  // ============================================================================
+  // DAILY CHALLENGES TABLES (Feature 15)
+  // ============================================================================
+
+  /**
+   * Challenge Definitions - Available daily, weekly, and special challenges
+   */
+  challengeDefinitions: defineTable({
+    challengeId: v.string(),
+    name: v.string(),
+    description: v.string(),
+    type: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("monthly"),
+      v.literal("special"),
+      v.literal("seasonal")
+    ),
+    category: v.union(
+      v.literal("betting"),
+      v.literal("trading"),
+      v.literal("social"),
+      v.literal("engagement"),
+      v.literal("special")
+    ),
+    difficulty: v.union(
+      v.literal("easy"),
+      v.literal("medium"),
+      v.literal("hard"),
+      v.literal("extreme")
+    ),
+    requirements: v.array(v.object({
+      type: v.string(),
+      target: v.number(),
+      description: v.string(),
+      metadata: v.optional(v.any()),
+    })),
+    requirementLogic: v.union(v.literal("all"), v.literal("any")),
+    rewards: v.array(v.object({
+      type: v.string(),
+      value: v.any(),
+      description: v.string(),
+    })),
+    bonusRewards: v.optional(v.array(v.object({
+      type: v.string(),
+      value: v.any(),
+      description: v.string(),
+    }))),
+    duration: v.number(),
+    cooldown: v.optional(v.number()),
+    maxAttempts: v.optional(v.number()),
+    prerequisites: v.optional(v.array(v.string())),
+    iconUrl: v.optional(v.string()),
+    isActive: v.boolean(),
+    startsAt: v.optional(v.number()),
+    endsAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_challenge_id", ["challengeId"])
+    .index("by_type", ["type"])
+    .index("by_category", ["category"])
+    .index("by_difficulty", ["difficulty"])
+    .index("by_active", ["isActive"]),
+
+  /**
+   * User Challenges - User's active and completed challenge progress
+   */
+  userChallengesProgress: defineTable({
+    userId: v.string(),
+    challengeId: v.string(),
+    status: v.union(
+      v.literal("available"),
+      v.literal("locked"),
+      v.literal("active"),
+      v.literal("completed"),
+      v.literal("claimed"),
+      v.literal("expired"),
+      v.literal("failed")
+    ),
+    progress: v.array(v.object({
+      requirementIndex: v.number(),
+      current: v.number(),
+      target: v.number(),
+      isComplete: v.boolean(),
+      lastUpdatedAt: v.number(),
+    })),
+    overallProgress: v.number(),
+    isComplete: v.boolean(),
+    bonusEarned: v.boolean(),
+    rewardsClaimed: v.boolean(),
+    attemptNumber: v.number(),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    claimedAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_challenge", ["challengeId"])
+    .index("by_user_challenge", ["userId", "challengeId"])
+    .index("by_status", ["status"])
+    .index("by_expires_at", ["expiresAt"]),
+
+  /**
+   * Challenge Rewards Claimed - Track claimed challenge rewards
+   */
+  challengeRewardsClaimed: defineTable({
+    userId: v.string(),
+    userChallengeId: v.string(),
+    challengeId: v.string(),
+    rewardType: v.string(),
+    rewardValue: v.any(),
+    description: v.string(),
+    appliedAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    usedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_challenge", ["userChallengeId"])
+    .index("by_reward_type", ["rewardType"]),
+
+  /**
+   * Challenge Streaks - Track user challenge completion streaks
+   */
+  challengeStreaks: defineTable({
+    userId: v.string(),
+    streakType: v.union(
+      v.literal("daily_completion"),
+      v.literal("weekly_completion"),
+      v.literal("perfect_week")
+    ),
+    currentStreak: v.number(),
+    longestStreak: v.number(),
+    lastCompletedAt: v.number(),
+    streakStartedAt: v.number(),
+    totalCompleted: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_type", ["userId", "streakType"])
+    .index("by_current_streak", ["currentStreak"]),
 });
