@@ -406,6 +406,7 @@ app.post("/persona", async (c) => {
 
 /**
  * Checkr webhook (Background checks)
+ * Status: NOT IMPLEMENTED - Events are acknowledged but not processed
  */
 app.post("/checkr", async (c) => {
   const signature = c.req.header("X-Checkr-Signature");
@@ -423,14 +424,36 @@ app.post("/checkr", async (c) => {
   }
 
   const body = JSON.parse(rawBody);
-  // TODO: Process background check webhook
-  logger.info("Checkr webhook verified:", body.type);
 
-  return c.json({ received: true });
+  // Store webhook for later processing / audit trail
+  const convex = getConvexClient();
+  try {
+    await convex.mutation(api.kyc.storeWebhookEvent, {
+      source: "checkr" as any,
+      eventType: body.type || "unknown",
+      eventId: `checkr-${body.id || Date.now()}`,
+      payload: rawBody,
+    });
+  } catch (error) {
+    logger.error("Failed to store Checkr webhook event", { error });
+  }
+
+  logger.warn("Checkr webhook received but handler not implemented", {
+    eventType: body.type,
+    eventId: body.id,
+  });
+
+  // Return 202 Accepted - we've received it but not fully processed
+  return c.json({
+    received: true,
+    processed: false,
+    message: "Event acknowledged but processing not yet implemented",
+  }, 202);
 });
 
 /**
  * Nylas webhook (Email sync)
+ * Status: NOT IMPLEMENTED - Events are acknowledged but not processed
  */
 app.post("/nylas", async (c) => {
   const rawBody = await c.req.text();
@@ -456,14 +479,23 @@ app.post("/nylas", async (c) => {
     return c.json({ error: "Invalid signature" }, 401);
   }
 
-  // TODO: Process email sync notifications
-  logger.info("Nylas webhook verified:", body.trigger);
+  logger.warn("Nylas webhook received but handler not implemented", {
+    trigger: body.trigger,
+    deltas: body.deltas?.length || 0,
+  });
 
-  return c.json({ received: true });
+  // Return 202 Accepted - we've received it but not fully processed
+  return c.json({
+    received: true,
+    processed: false,
+    message: "Event acknowledged but processing not yet implemented",
+  }, 202);
 });
 
 /**
  * Massive webhook (Order execution)
+ * Status: NOT IMPLEMENTED - Events are acknowledged but not processed
+ * CRITICAL: This should be implemented before trading goes live
  */
 app.post("/massive", async (c) => {
   const signature = c.req.header("X-Massive-Signature");
@@ -481,10 +513,31 @@ app.post("/massive", async (c) => {
   }
 
   const body = JSON.parse(rawBody);
-  // TODO: Process order execution updates
-  logger.info("Massive webhook verified:", body.event);
 
-  return c.json({ received: true });
+  // Store webhook for audit trail - critical for financial reconciliation
+  const convex = getConvexClient();
+  try {
+    await convex.mutation(api.kyc.storeWebhookEvent, {
+      source: "massive" as any,
+      eventType: body.event || "unknown",
+      eventId: `massive-${body.orderId || body.id || Date.now()}`,
+      payload: rawBody,
+    });
+  } catch (error) {
+    logger.error("Failed to store Massive webhook event", { error });
+  }
+
+  logger.error("CRITICAL: Massive order webhook not implemented - trading events not being processed", {
+    event: body.event,
+    orderId: body.orderId,
+  });
+
+  // Return 202 but log as error since this is critical for trading
+  return c.json({
+    received: true,
+    processed: false,
+    message: "CRITICAL: Event acknowledged but processing not yet implemented",
+  }, 202);
 });
 
 /**
@@ -662,6 +715,7 @@ app.post("/stripe", async (c) => {
 
 /**
  * Polygon blockchain webhook (Token events)
+ * Status: NOT IMPLEMENTED - Events are acknowledged but not processed
  */
 app.post("/polygon", async (c) => {
   const signature = c.req.header("X-Polygon-Signature");
@@ -679,10 +733,31 @@ app.post("/polygon", async (c) => {
   }
 
   const body = JSON.parse(rawBody);
-  // TODO: Process blockchain events
-  logger.info("Polygon webhook verified:", body.event);
 
-  return c.json({ received: true });
+  // Store webhook for audit trail
+  const convex = getConvexClient();
+  try {
+    await convex.mutation(api.kyc.storeWebhookEvent, {
+      source: "polygon" as any,
+      eventType: body.event || "unknown",
+      eventId: `polygon-${body.transactionHash || body.id || Date.now()}`,
+      payload: rawBody,
+    });
+  } catch (error) {
+    logger.error("Failed to store Polygon webhook event", { error });
+  }
+
+  logger.warn("Polygon webhook received but handler not implemented", {
+    event: body.event,
+    transactionHash: body.transactionHash,
+  });
+
+  // Return 202 Accepted - we've received it but not fully processed
+  return c.json({
+    received: true,
+    processed: false,
+    message: "Event acknowledged but processing not yet implemented",
+  }, 202);
 });
 
 export { app as webhookRoutes };

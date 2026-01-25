@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Env } from "../index";
 import { getConvexClient } from "../lib/convex";
 import { api } from "@pull/db/convex/_generated/api";
+import { toUserId, toOrderId } from "../lib/convex-types";
 
 const app = new Hono<Env>();
 
@@ -50,7 +51,7 @@ app.post("/orders", zValidator("json", createOrderSchema), async (c) => {
 
     // Create order via Convex
     const result = await convex.mutation(api.orders.createOrder, {
-      userId: userId as any,
+      userId: toUserId(userId),
       assetClass: body.assetClass,
       symbol: body.symbol,
       side: body.side,
@@ -400,7 +401,7 @@ app.get("/buying-power", async (c) => {
     const convex = getConvexClient();
 
     const balances = await convex.query(api.balances.getByUser, {
-      userId: userId as any,
+      userId: toUserId(userId),
     });
 
     // Find USD balance

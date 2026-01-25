@@ -38,8 +38,8 @@ export default [
       "@typescript-eslint/strict-boolean-expressions": "off",
       "@typescript-eslint/no-confusing-void-expression": "off",
 
-      // General rules
-      "no-console": ["warn", { allow: ["warn", "error"] }],
+      // General rules - use structured logger instead of console
+      "no-console": ["error", { allow: [] }],
       "prefer-const": "error",
       "no-var": "error",
       eqeqeq: ["error", "always", { null: "ignore" }],

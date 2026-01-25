@@ -18,6 +18,9 @@ import {
   sendPasswordChangedEmail,
   sendWelcomeEmail,
 } from "../lib/email";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger();
 
 const app = new Hono();
 
@@ -107,7 +110,7 @@ app.post("/register", zValidator("json", registerSchema), async (c) => {
 
     // Send verification email (async, don't block response)
     sendVerificationEmail(body.email, verificationToken, body.displayName).catch(
-      (err) => console.error("[Auth] Failed to send verification email:", err)
+      (err) => logger.error("[Auth] Failed to send verification email:", err)
     );
 
     // Generate tokens
@@ -141,7 +144,7 @@ app.post("/register", zValidator("json", registerSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[Auth] Registration error:", error);
+    logger.error("[Auth] Registration error:", error);
 
     // Check for duplicate email error from Convex
     if (error instanceof Error && error.message.includes("already exists")) {
@@ -328,7 +331,7 @@ app.post("/login", zValidator("json", loginSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[Auth] Login error:", error);
+    logger.error("[Auth] Login error:", error);
     return c.json(
       {
         success: false,
@@ -466,7 +469,7 @@ app.post(
 
         // Send reset email (async, don't block response)
         sendPasswordResetEmail(email, resetToken, user.displayName).catch((err) =>
-          console.error("[Auth] Failed to send password reset email:", err)
+          logger.error("[Auth] Failed to send password reset email:", err)
         );
       }
 
@@ -479,7 +482,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("[Auth] Forgot password error:", error);
+      logger.error("[Auth] Forgot password error:", error);
       // Still return success to prevent enumeration
       return c.json({
         success: true,
@@ -530,7 +533,7 @@ app.post("/reset-password", zValidator("json", resetPasswordSchema), async (c) =
     // Send password changed confirmation email
     if (user) {
       sendPasswordChangedEmail(user.email, user.displayName).catch((err) =>
-        console.error("[Auth] Failed to send password changed email:", err)
+        logger.error("[Auth] Failed to send password changed email:", err)
       );
     }
 
@@ -542,7 +545,7 @@ app.post("/reset-password", zValidator("json", resetPasswordSchema), async (c) =
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[Auth] Reset password error:", error);
+    logger.error("[Auth] Reset password error:", error);
     return c.json(
       {
         success: false,
@@ -584,7 +587,7 @@ app.post(
       // Send welcome email
       if (result.email) {
         sendWelcomeEmail(result.email, result.displayName).catch((err) =>
-          console.error("[Auth] Failed to send welcome email:", err)
+          logger.error("[Auth] Failed to send welcome email:", err)
         );
       }
 
@@ -597,7 +600,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("[Auth] Email verification error:", error);
+      logger.error("[Auth] Email verification error:", error);
       return c.json(
         {
           success: false,
@@ -684,7 +687,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("[Auth] Resend verification error:", error);
+      logger.error("[Auth] Resend verification error:", error);
       return c.json(
         {
           success: false,
@@ -880,7 +883,7 @@ app.post(
 
       // Send password changed email
       sendPasswordChangedEmail(user.email, user.displayName).catch((err) =>
-        console.error("[Auth] Failed to send password changed email:", err)
+        logger.error("[Auth] Failed to send password changed email:", err)
       );
 
       // Blacklist current token to force re-login
@@ -894,7 +897,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("[Auth] Change password error:", error);
+      logger.error("[Auth] Change password error:", error);
       return c.json(
         {
           success: false,
