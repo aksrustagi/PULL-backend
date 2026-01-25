@@ -1,5 +1,13 @@
 name: Deploy API
 
+# =============================================================================
+# API DEPLOYMENT WORKFLOW OPTIMIZATIONS:
+# - SPEED: Efficient caching, parallel-ready structure
+# - RELIABILITY: Retry logic, health checks, rollback support
+# - COST: Concurrency limits, conditional deployments
+# - SECURITY: Minimal permissions, secret masking
+# =============================================================================
+
 on:
   push:
     branches: [main]
@@ -19,9 +27,19 @@ on:
           - staging
           - production
 
+# -----------------------------------------------------------------------------
+# COST: Prevent duplicate deployments, don't cancel in-progress deploys
+# -----------------------------------------------------------------------------
 concurrency:
   group: deploy-api-${{ github.ref }}
   cancel-in-progress: false
+
+# -----------------------------------------------------------------------------
+# SECURITY: Minimal permissions at workflow level
+# -----------------------------------------------------------------------------
+permissions:
+  contents: read
+  deployments: write
 
 env:
   NODE_VERSION: "20"
@@ -34,6 +52,8 @@ jobs:
   build:
     name: Build API
     runs-on: ubuntu-latest
+    # RELIABILITY: Prevent hung builds
+    timeout-minutes: 15
     outputs:
       version: ${{ steps.version.outputs.version }}
       cache-key: ${{ steps.cache-key.outputs.key }}
@@ -60,6 +80,7 @@ jobs:
       - name: Build API
         run: pnpm --filter @pull/api build
 
+      # SPEED: Cache build artifact for deployment jobs
       - name: Cache build artifact
         uses: actions/cache/save@v4
         with:
@@ -78,6 +99,7 @@ jobs:
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: build
     if: github.event_name == 'push' || github.event.inputs.environment == 'staging'
     environment:
@@ -87,6 +109,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # SPEED: Restore cached build artifact
       - name: Restore build artifact
         uses: actions/cache/restore@v4
         with:
@@ -99,6 +122,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # SPEED: Cache Wrangler installation
       - name: Cache Wrangler
         uses: actions/cache@v4
         with:
@@ -106,33 +130,77 @@ jobs:
           key: wrangler-${{ runner.os }}-${{ hashFiles('**/package.json') }}
           restore-keys: wrangler-${{ runner.os }}-
 
+      # RELIABILITY: Install Wrangler with retry logic
       - name: Install Wrangler
-        run: npm install -g wrangler@latest
-
-      - name: Deploy to Cloudflare Workers (Staging)
         run: |
-          cd apps/api
-          wrangler deploy --env staging
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            if npm install -g wrangler@latest; then
+              echo "Wrangler installed successfully"
+              exit 0
+            fi
+            echo "::warning::Wrangler install failed, retrying in 5s..."
+            sleep 5
+            attempt=$((attempt + 1))
+          done
+          echo "::error::Failed to install Wrangler after $max_attempts attempts"
+          exit 1
+
+      # RELIABILITY: Deploy with retry logic for transient failures
+      - name: Deploy to Cloudflare Workers (Staging)
+        id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/api
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "::group::Deploy attempt $attempt/$max_attempts"
+            if wrangler deploy --env staging; then
+              echo "::endgroup::"
+              echo "Deployment successful"
+              exit 0
+            fi
+            echo "::endgroup::"
+            if [ $attempt -lt $max_attempts ]; then
+              echo "::warning::Deploy failed, retrying in 10s..."
+              sleep 10
+            fi
+            attempt=$((attempt + 1))
+          done
+          echo "::error::Deployment failed after $max_attempts attempts"
+          exit 1
 
+      # RELIABILITY: Health check with exponential backoff
       - name: Health check
         id: health
         run: |
           echo "Waiting for deployment to propagate..."
           sleep 10
-          for i in {1..10}; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" https://api-staging.pull.com/health)
+
+          max_attempts=10
+          attempt=1
+          backoff=5
+
+          while [ $attempt -le $max_attempts ]; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://api-staging.pull.com/health || echo "000")
             if [ "$response" == "200" ]; then
               echo "Health check passed!"
               echo "status=success" >> $GITHUB_OUTPUT
               exit 0
             fi
-            echo "Attempt $i: Health check returned $response, retrying..."
-            sleep 5
+            echo "Attempt $attempt: Health check returned $response, retrying in ${backoff}s..."
+            sleep $backoff
+            # RELIABILITY: Exponential backoff capped at 30s
+            backoff=$((backoff * 2 > 30 ? 30 : backoff * 2))
+            attempt=$((attempt + 1))
           done
+
           echo "status=failed" >> $GITHUB_OUTPUT
+          echo "::error::Health check failed after $max_attempts attempts"
           exit 1
 
       - name: Deployment Summary
@@ -162,6 +230,8 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        # RELIABILITY: Don't fail deployment if Slack notification fails
+        continue-on-error: true
 
   # ==========================================================================
   # Deploy to Production
@@ -169,6 +239,7 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [build, deploy-staging]
     if: github.event.inputs.environment == 'production'
     environment:
@@ -198,50 +269,90 @@ jobs:
           restore-keys: wrangler-${{ runner.os }}-
 
       - name: Install Wrangler
-        run: npm install -g wrangler@latest
+        run: |
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            if npm install -g wrangler@latest; then
+              exit 0
+            fi
+            sleep 5
+            attempt=$((attempt + 1))
+          done
+          exit 1
 
+      # RELIABILITY: Store current deployment info for rollback
       - name: Get current deployment (for rollback)
         id: current
         run: |
           echo "Storing current deployment info for potential rollback"
           echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
 
+      # RELIABILITY: Deploy with retry logic
       - name: Deploy to Cloudflare Workers (Production)
         id: deploy
-        run: |
-          cd apps/api
-          wrangler deploy --env production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/api
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "::group::Deploy attempt $attempt/$max_attempts"
+            if wrangler deploy --env production; then
+              echo "::endgroup::"
+              echo "Deployment successful"
+              exit 0
+            fi
+            echo "::endgroup::"
+            if [ $attempt -lt $max_attempts ]; then
+              echo "::warning::Deploy failed, retrying in 10s..."
+              sleep 10
+            fi
+            attempt=$((attempt + 1))
+          done
+          echo "::error::Deployment failed after $max_attempts attempts"
+          exit 1
 
+      # RELIABILITY: Health check with exponential backoff
       - name: Health check
         id: health
         run: |
           echo "Waiting for deployment to propagate..."
           sleep 10
-          for i in {1..10}; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" https://api.pull.com/health)
+
+          max_attempts=10
+          attempt=1
+          backoff=5
+
+          while [ $attempt -le $max_attempts ]; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://api.pull.com/health || echo "000")
             if [ "$response" == "200" ]; then
               echo "Health check passed!"
               echo "status=success" >> $GITHUB_OUTPUT
               exit 0
             fi
-            echo "Attempt $i: Health check returned $response, retrying..."
-            sleep 5
+            echo "Attempt $attempt: Health check returned $response, retrying in ${backoff}s..."
+            sleep $backoff
+            backoff=$((backoff * 2 > 30 ? 30 : backoff * 2))
+            attempt=$((attempt + 1))
           done
+
           echo "status=failed" >> $GITHUB_OUTPUT
+          echo "::error::Health check failed after $max_attempts attempts"
           exit 1
 
+      # RELIABILITY: Attempt rollback on failure
       - name: Rollback on failure
         if: failure() && steps.deploy.outcome == 'success'
-        run: |
-          cd apps/api
-          echo "Attempting rollback..."
-          wrangler rollback --env production || echo "Rollback command not available, manual intervention required"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/api
+          echo "::warning::Attempting rollback..."
+          wrangler rollback --env production || echo "::error::Rollback command not available, manual intervention required"
 
       - name: Deployment Summary
         if: always()
@@ -271,6 +382,7 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
 
       - name: Notify on failure
         if: failure()
@@ -291,3 +403,4 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true

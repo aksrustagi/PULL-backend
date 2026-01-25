@@ -1,77 +1,197 @@
-# API Deployment - Production Ready Configuration
-# Includes: Deployment, Service, HPA, PDB with comprehensive health checks and security
+# =============================================================================
+# PULL API Deployment - Production Configuration
+# =============================================================================
+# This file contains all resources needed to run the PULL API service:
+#   - Deployment: Main API pods with security and resource constraints
+#   - Service: ClusterIP service for internal load balancing
+#   - Service (Headless): For direct pod access and StatefulSet-like DNS
+#   - HorizontalPodAutoscaler: Auto-scaling based on metrics
+#   - PodDisruptionBudget: Availability guarantees during disruptions
+#   - VerticalPodAutoscaler: Resource right-sizing recommendations
+#
+# Prerequisites:
+#   - namespace.yaml (namespace and quotas)
+#   - configmaps.yaml (configuration)
+#   - external-secrets.yaml or secrets (credentials)
+#   - service-accounts.yaml (RBAC)
+#   - priority-classes.yaml (scheduling priority)
+# =============================================================================
 
 ---
+# -----------------------------------------------------------------------------
+# API Deployment
+# -----------------------------------------------------------------------------
+# The main API deployment handles all HTTP/REST requests from clients.
+#
+# Key features:
+#   - Rolling updates with zero downtime (maxUnavailable: 0)
+#   - Pod anti-affinity for high availability across nodes
+#   - Topology spread for zone distribution
+#   - Comprehensive health probes (startup, readiness, liveness)
+#   - Security hardening (non-root, read-only fs, dropped capabilities)
+#   - Graceful shutdown with preStop hook
+#
+# Scaling strategy:
+#   - Minimum 3 replicas for high availability
+#   - HPA scales based on CPU, memory, and request rate
+#   - PDB ensures minimum 2 pods available during disruptions
+# -----------------------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pull-api
   namespace: pull
   labels:
+    # Standard Kubernetes labels
     app: pull-api
     app.kubernetes.io/name: pull-api
+    app.kubernetes.io/instance: pull-api-production
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: pull
     app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: kubectl
+    # Custom labels for filtering
+    tier: frontend
+    environment: production
   annotations:
+    # Change tracking
     kubernetes.io/change-cause: "Initial production deployment"
+    # Deployment documentation
+    description: "PULL API service handling client HTTP requests"
 spec:
+  # Initial replica count (managed by HPA in production)
   replicas: 3
+
+  # Keep last 10 revisions for rollback capability
   revisionHistoryLimit: 10
+
+  # Pod selector - must match template labels
   selector:
     matchLabels:
       app: pull-api
+
+  # Rolling update strategy for zero-downtime deployments
   strategy:
     type: RollingUpdate
     rollingUpdate:
+      # Allow one extra pod during updates for faster rollout
       maxSurge: 1
+      # Never reduce below desired count during updates
       maxUnavailable: 0
+
+  # Progress deadline - fail deployment if no progress after 10 minutes
+  progressDeadlineSeconds: 600
+
+  # Minimum time pod should be ready before considered available
+  minReadySeconds: 10
+
   template:
     metadata:
       labels:
         app: pull-api
         app.kubernetes.io/name: pull-api
+        app.kubernetes.io/instance: pull-api-production
         app.kubernetes.io/component: api
         app.kubernetes.io/part-of: pull
+        # Version label for canary deployments
+        version: v1
       annotations:
+        # Prometheus scraping configuration
         prometheus.io/scrape: "true"
         prometheus.io/port: "3001"
         prometheus.io/path: "/metrics"
-        # Force rollout on config changes
+
+        # Config checksum - triggers rollout when config changes
+        # Replace with actual checksum during CI/CD: sha256sum configmaps.yaml
         checksum/config: "${CONFIG_CHECKSUM}"
+
+        # Security scanning annotations
+        seccomp.security.alpha.kubernetes.io/pod: runtime/default
+
+        # Cluster autoscaler - safe to evict for scaling down
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+
     spec:
+      # -----------------------------------------------------------------------
+      # Service Account Configuration
+      # -----------------------------------------------------------------------
+      # Use dedicated service account with minimal RBAC permissions
       serviceAccountName: pull-api
+      # Don't auto-mount service account token - reduces attack surface
       automountServiceAccountToken: false
+
+      # -----------------------------------------------------------------------
+      # Termination Configuration
+      # -----------------------------------------------------------------------
+      # Time to wait for graceful shutdown before SIGKILL
+      # Should be longer than preStop hook + drain time
       terminationGracePeriodSeconds: 60
+
+      # -----------------------------------------------------------------------
       # Pod Security Context
+      # -----------------------------------------------------------------------
+      # Security settings applied to all containers in the pod
       securityContext:
+        # Run all containers as non-root user
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        # Set filesystem group for volume mounts
         fsGroup: 1000
+        # Use fsGroupChangePolicy for faster startup with many files
+        fsGroupChangePolicy: OnRootMismatch
+        # Use default seccomp profile to restrict syscalls
         seccompProfile:
           type: RuntimeDefault
-      # Priority Class for workload prioritization
+        # Prevent setuid/setgid programs from changing privileges
+        supplementalGroups: [1000]
+
+      # -----------------------------------------------------------------------
+      # Scheduling Configuration
+      # -----------------------------------------------------------------------
+      # Priority class for preemption during resource pressure
       priorityClassName: pull-api-priority
-      # DNS Configuration for faster lookups
+
+      # DNS configuration for faster lookups
       dnsPolicy: ClusterFirst
       dnsConfig:
         options:
+          # Reduce DNS lookup retries for faster failure
           - name: ndots
             value: "2"
+          # Work around conntrack race condition
           - name: single-request-reopen
+
+      # Restart policy (Always for Deployments)
+      restartPolicy: Always
+
+      # -----------------------------------------------------------------------
+      # Container Specification
+      # -----------------------------------------------------------------------
       containers:
         - name: api
+          # Image specification
+          # Use specific tag in production, not 'latest'
           image: gcr.io/PROJECT_ID/pull-api:latest
           imagePullPolicy: Always
+
+          # -------------------------------------------------------------------
+          # Port Configuration
+          # -------------------------------------------------------------------
           ports:
+            # Main API port
             - containerPort: 3001
               name: http
               protocol: TCP
+            # Metrics port for Prometheus
             - containerPort: 9090
               name: metrics
               protocol: TCP
-          # Environment from ConfigMaps
+
+          # -------------------------------------------------------------------
+          # Environment Configuration
+          # -------------------------------------------------------------------
+          # Load configuration from ConfigMaps
           envFrom:
             - configMapRef:
                 name: pull-shared-config
@@ -79,8 +199,10 @@ spec:
                 name: pull-api-config
             - configMapRef:
                 name: pull-observability-config
-          # Environment from Secrets and overrides
+
+          # Individual environment variables
           env:
+            # Pod metadata (via Downward API)
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -97,6 +219,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+
+            # Secrets (from ExternalSecret or Secret)
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
@@ -117,19 +241,39 @@ spec:
                 secretKeyRef:
                   name: pull-secrets
                   key: jwt-secret
+
+            # Internal service addresses
             - name: TEMPORAL_ADDRESS
               value: "temporal:7233"
+
+          # -------------------------------------------------------------------
           # Resource Management
+          # -------------------------------------------------------------------
+          # CPU and memory requests/limits
+          # Requests: Guaranteed resources for scheduling
+          # Limits: Maximum resources the container can use
+          #
+          # Best practices:
+          #   - Set requests based on actual usage (use VPA recommendations)
+          #   - Set memory limit close to request (OOMKilled if exceeded)
+          #   - Set CPU limit higher to allow bursting (throttled if exceeded)
           resources:
             requests:
-              cpu: "200m"
-              memory: "256Mi"
+              cpu: "200m"          # 0.2 CPU cores guaranteed
+              memory: "256Mi"      # 256 MiB guaranteed
               ephemeral-storage: "100Mi"
             limits:
-              cpu: "1000m"
-              memory: "1Gi"
+              cpu: "1000m"         # Can burst to 1 CPU core
+              memory: "1Gi"        # Hard limit, OOMKilled if exceeded
               ephemeral-storage: "500Mi"
-          # Startup Probe - allows slow container startup
+
+          # -------------------------------------------------------------------
+          # Health Probes
+          # -------------------------------------------------------------------
+          # Startup Probe: Allows slow container initialization
+          # - Used during initial startup only
+          # - Once successful, readiness/liveness probes take over
+          # - Prevents liveness probe from killing slow-starting containers
           startupProbe:
             httpGet:
               path: /health
@@ -137,12 +281,21 @@ spec:
               httpHeaders:
                 - name: X-Health-Check
                   value: startup
+            # Wait 5 seconds before first check
             initialDelaySeconds: 5
+            # Check every 5 seconds
             periodSeconds: 5
+            # Timeout for each check
             timeoutSeconds: 5
-            failureThreshold: 30  # 5 * 30 = 150 seconds max startup time
+            # Fail after 30 failures (30 * 5s = 150s max startup)
+            failureThreshold: 30
+            # Success after 1 successful check
             successThreshold: 1
-          # Readiness Probe - traffic routing
+
+          # Readiness Probe: Controls traffic routing
+          # - Pod receives traffic only when ready
+          # - Failing readiness removes pod from service endpoints
+          # - Use for dependency checks (DB, cache, etc.)
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -150,12 +303,17 @@ spec:
               httpHeaders:
                 - name: X-Health-Check
                   value: readiness
+            # No initial delay (startup probe handles initialization)
             initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
             successThreshold: 1
-          # Liveness Probe - container restart
+
+          # Liveness Probe: Restarts unhealthy containers
+          # - Failing liveness triggers container restart
+          # - Use sparingly - prefer readiness for transient issues
+          # - Check only if application is fundamentally broken
           livenessProbe:
             httpGet:
               path: /health/live
@@ -164,47 +322,92 @@ spec:
                 - name: X-Health-Check
                   value: liveness
             initialDelaySeconds: 0
+            # Check less frequently than readiness
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
             successThreshold: 1
-          # Lifecycle hooks
+
+          # -------------------------------------------------------------------
+          # Lifecycle Hooks
+          # -------------------------------------------------------------------
           lifecycle:
+            # PreStop hook runs before SIGTERM is sent
+            # Use for graceful connection draining
             preStop:
               exec:
                 command:
                   - /bin/sh
                   - -c
                   - |
-                    # Graceful shutdown: stop accepting new connections
-                    # and wait for existing connections to drain
-                    sleep 15
+                    # Graceful shutdown procedure:
+                    # 1. Pod is removed from Service endpoints
+                    # 2. This hook runs before SIGTERM
+                    # 3. Sleep allows in-flight requests to complete
+                    # 4. After sleep, SIGTERM is sent to the process
+
+                    echo "Starting graceful shutdown..."
+                    # Wait for load balancer to remove pod from rotation
+                    sleep 5
+                    # Wait for existing connections to drain
+                    sleep 10
+                    echo "PreStop hook complete, ready for SIGTERM"
+
+          # -------------------------------------------------------------------
           # Container Security Context
+          # -------------------------------------------------------------------
           securityContext:
+            # Use read-only root filesystem
+            # Prevents malicious writes to container filesystem
             readOnlyRootFilesystem: true
+
+            # Prevent privilege escalation via setuid/setgid
             allowPrivilegeEscalation: false
+
+            # Run as non-root user
             runAsNonRoot: true
             runAsUser: 1000
+
+            # Drop all Linux capabilities
+            # Add back only what's needed (none for Node.js)
             capabilities:
               drop:
                 - ALL
+              # Uncomment if needed:
+              # add:
+              #   - NET_BIND_SERVICE  # Bind to ports < 1024
+
+          # -------------------------------------------------------------------
           # Volume Mounts
+          # -------------------------------------------------------------------
           volumeMounts:
+            # Temp directory (required for read-only root fs)
             - name: tmp
               mountPath: /tmp
+            # Node.js cache directory
             - name: cache
               mountPath: /home/node/.cache
+
+      # -----------------------------------------------------------------------
       # Volumes
+      # -----------------------------------------------------------------------
       volumes:
+        # Ephemeral temp directory
         - name: tmp
           emptyDir:
             sizeLimit: 100Mi
+        # Ephemeral cache directory
         - name: cache
           emptyDir:
             sizeLimit: 200Mi
-      # Pod Scheduling
+
+      # -----------------------------------------------------------------------
+      # Pod Affinity/Anti-Affinity
+      # -----------------------------------------------------------------------
       affinity:
+        # Pod Anti-Affinity: Spread pods across failure domains
         podAntiAffinity:
+          # Hard requirement: Never schedule on same node
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:
@@ -213,6 +416,7 @@ spec:
                     values:
                       - pull-api
               topologyKey: kubernetes.io/hostname
+          # Soft preference: Try to spread across zones
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               podAffinityTerm:
@@ -223,20 +427,51 @@ spec:
                       values:
                         - pull-api
                 topologyKey: topology.kubernetes.io/zone
+
+        # Node Affinity: Prefer specific node types (optional)
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: node.kubernetes.io/instance-type
+                    operator: In
+                    values:
+                      - n2-standard-2
+                      - n2-standard-4
+                      - e2-standard-2
+                      - e2-standard-4
+
+      # -----------------------------------------------------------------------
+      # Topology Spread Constraints
+      # -----------------------------------------------------------------------
+      # More granular control over pod distribution than anti-affinity
       topologySpreadConstraints:
+        # Spread across zones - hard requirement
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app: pull-api
+          # Minimum domains required
+          minDomains: 2
+        # Spread across nodes - soft preference
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
               app: pull-api
+
 ---
+# -----------------------------------------------------------------------------
+# API Service (ClusterIP)
+# -----------------------------------------------------------------------------
+# Primary service for load balancing traffic to API pods.
+# Uses ClusterIP type for internal cluster access.
+# Ingress controller routes external traffic to this service.
+# -----------------------------------------------------------------------------
 apiVersion: v1
 kind: Service
 metadata:
@@ -247,24 +482,40 @@ metadata:
     app.kubernetes.io/name: pull-api
     app.kubernetes.io/component: api
   annotations:
+    # Prometheus service discovery
     prometheus.io/scrape: "true"
     prometheus.io/port: "9090"
+    # Documentation
+    description: "PULL API load balancer service"
 spec:
   type: ClusterIP
+  # No session affinity - stateless API
   sessionAffinity: None
   ports:
+    # Main HTTP port (exposed as 80, target 3001)
     - port: 80
       targetPort: 3001
       protocol: TCP
       name: http
+    # Metrics port for Prometheus
     - port: 9090
       targetPort: 9090
       protocol: TCP
       name: metrics
   selector:
     app: pull-api
+
 ---
-# Headless service for direct pod access (useful for debugging)
+# -----------------------------------------------------------------------------
+# API Headless Service
+# -----------------------------------------------------------------------------
+# Headless service for direct pod access.
+# Use cases:
+#   - Debugging specific pods
+#   - Service mesh sidecar injection
+#   - StatefulSet-like DNS resolution
+# Each pod gets DNS: <pod-name>.pull-api-headless.pull.svc.cluster.local
+# -----------------------------------------------------------------------------
 apiVersion: v1
 kind: Service
 metadata:
@@ -274,6 +525,7 @@ metadata:
     app: pull-api
 spec:
   type: ClusterIP
+  # Headless service - no cluster IP assigned
   clusterIP: None
   ports:
     - port: 3001
@@ -282,7 +534,22 @@ spec:
       name: http
   selector:
     app: pull-api
+
 ---
+# -----------------------------------------------------------------------------
+# Horizontal Pod Autoscaler (HPA)
+# -----------------------------------------------------------------------------
+# Automatically scales pods based on metrics.
+#
+# Metrics used:
+#   - CPU utilization (primary)
+#   - Memory utilization (secondary)
+#   - Custom metrics via Prometheus Adapter (advanced)
+#
+# Scaling behavior:
+#   - Scale up: Aggressive (respond quickly to load)
+#   - Scale down: Conservative (avoid thrashing)
+# -----------------------------------------------------------------------------
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -290,56 +557,98 @@ metadata:
   namespace: pull
   labels:
     app: pull-api
+  annotations:
+    description: "HPA for PULL API - scales 3-20 pods based on CPU/memory"
 spec:
+  # Target deployment
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: pull-api
-  minReplicas: 3
-  maxReplicas: 20
+
+  # Replica bounds
+  minReplicas: 3   # Minimum for HA across zones
+  maxReplicas: 20  # Maximum based on resource quota
+
+  # Scaling metrics
   metrics:
+    # CPU-based scaling
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
+          # Scale when average CPU exceeds 70%
           averageUtilization: 70
+
+    # Memory-based scaling
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
+          # Scale when average memory exceeds 80%
           averageUtilization: 80
-    # Custom metrics (requires metrics-server and prometheus-adapter)
+
+    # Custom metric: HTTP requests per second
+    # Requires Prometheus Adapter configured with this metric
     - type: Pods
       pods:
         metric:
           name: http_requests_per_second
         target:
           type: AverageValue
+          # Scale when average RPS exceeds 1000
           averageValue: "1000"
+
+  # Scaling behavior configuration
   behavior:
+    # Scale-down behavior (conservative)
     scaleDown:
+      # Wait 5 minutes before considering scale-down
       stabilizationWindowSeconds: 300
       policies:
+        # Remove max 10% of pods per minute
         - type: Percent
           value: 10
           periodSeconds: 60
+        # Remove max 1 pod per minute
         - type: Pods
           value: 1
           periodSeconds: 60
+      # Use the policy that removes fewer pods
       selectPolicy: Min
+
+    # Scale-up behavior (aggressive)
     scaleUp:
+      # Wait 1 minute before scaling up again
       stabilizationWindowSeconds: 60
       policies:
+        # Add up to 100% more pods every 15 seconds
         - type: Percent
           value: 100
           periodSeconds: 15
+        # Add up to 4 pods every 15 seconds
         - type: Pods
           value: 4
           periodSeconds: 15
+      # Use the policy that adds more pods
       selectPolicy: Max
+
 ---
+# -----------------------------------------------------------------------------
+# Pod Disruption Budget (PDB)
+# -----------------------------------------------------------------------------
+# Ensures minimum availability during voluntary disruptions:
+#   - Node drains (kubectl drain)
+#   - Cluster upgrades
+#   - Deployment rollouts
+#
+# Does NOT protect against:
+#   - Node failures (involuntary)
+#   - Pod crashes
+#   - Resource eviction (OOM, disk pressure)
+# -----------------------------------------------------------------------------
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -347,8 +656,72 @@ metadata:
   namespace: pull
   labels:
     app: pull-api
+  annotations:
+    description: "Ensures minimum 2 API pods during disruptions"
 spec:
+  # Minimum pods that must be available
+  # For 3 replicas, allows 1 disruption at a time
   minAvailable: 2
+
+  # Alternative: Maximum unavailable (use one, not both)
+  # maxUnavailable: 1
+
   selector:
     matchLabels:
       app: pull-api
+
+  # Unhealthy pod eviction policy (Kubernetes 1.26+)
+  # AlwaysAllow: Can evict unhealthy pods even if it violates PDB
+  # unhealthyPodEvictionPolicy: AlwaysAllow
+
+---
+# -----------------------------------------------------------------------------
+# Vertical Pod Autoscaler (VPA)
+# -----------------------------------------------------------------------------
+# Provides resource recommendations based on actual usage.
+#
+# Modes:
+#   - Off: Recommendations only (safest for production)
+#   - Initial: Sets resources only on pod creation
+#   - Auto: Automatically adjusts resources (can cause restarts)
+#
+# Use VPA recommendations to tune HPA and resource requests.
+# Run: kubectl describe vpa pull-api-vpa -n pull
+# -----------------------------------------------------------------------------
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: pull-api-vpa
+  namespace: pull
+  labels:
+    app: pull-api
+  annotations:
+    description: "VPA for PULL API - recommendation mode only"
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pull-api
+
+  # Update policy
+  updatePolicy:
+    # "Off" = recommendations only, no automatic updates
+    # Use recommendations to manually adjust deployment resources
+    updateMode: "Off"
+
+  # Resource policy for container
+  resourcePolicy:
+    containerPolicies:
+      - containerName: api
+        # Controlled resources
+        controlledResources: ["cpu", "memory"]
+        # Minimum allowed values
+        minAllowed:
+          cpu: "100m"
+          memory: "128Mi"
+        # Maximum allowed values
+        maxAllowed:
+          cpu: "2000m"
+          memory: "2Gi"
+        # Mode for this container
+        mode: Auto

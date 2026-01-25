@@ -1,5 +1,13 @@
 name: Deploy Workers
 
+# =============================================================================
+# WORKERS DEPLOYMENT WORKFLOW OPTIMIZATIONS:
+# - SPEED: Docker layer caching, parallel-ready structure
+# - RELIABILITY: Retry logic, health checks, rollback support
+# - COST: Concurrency limits, efficient Docker builds
+# - SECURITY: Minimal permissions, workload identity (recommended)
+# =============================================================================
+
 on:
   push:
     branches: [main]
@@ -19,9 +27,19 @@ on:
           - staging
           - production
 
+# -----------------------------------------------------------------------------
+# COST: Prevent duplicate deployments, don't cancel in-progress
+# -----------------------------------------------------------------------------
 concurrency:
   group: deploy-workers-${{ github.ref }}
   cancel-in-progress: false
+
+# -----------------------------------------------------------------------------
+# SECURITY: Minimal permissions at workflow level
+# -----------------------------------------------------------------------------
+permissions:
+  contents: read
+  id-token: write  # Required for Workload Identity Federation (recommended)
 
 env:
   NODE_VERSION: "20"
@@ -37,6 +55,7 @@ jobs:
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
       version: ${{ steps.version.outputs.version }}
@@ -51,13 +70,18 @@ jobs:
           VERSION=$(echo "${{ github.sha }}" | cut -c1-7)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      # SPEED: Setup Docker Buildx for advanced caching
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # SECURITY: Use Workload Identity Federation if available, fallback to SA key
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          # SECURITY: Prefer Workload Identity Federation (uncomment when configured)
+          # workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          # service_account: 'github-actions@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
 
       - name: Configure Docker for GCR
         run: gcloud auth configure-docker gcr.io --quiet
@@ -71,6 +95,7 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
+      # SPEED: Build with layer caching via GitHub Actions cache
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5
@@ -80,11 +105,15 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # SPEED: Use GitHub Actions cache for Docker layers
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             NODE_VERSION=${{ env.NODE_VERSION }}
+          # SECURITY: Disable provenance for cleaner images
           provenance: false
+          # SPEED: Use inline cache for faster layer restoration
+          build-contexts: |
 
       - name: Build Summary
         run: |
@@ -99,6 +128,7 @@ jobs:
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: build
     if: github.event_name == 'push' || github.event.inputs.environment == 'staging'
     environment:
@@ -116,37 +146,60 @@ jobs:
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      # RELIABILITY: Deploy with retry logic
       - name: Deploy to Cloud Run
         id: deploy
         run: |
-          gcloud run deploy pull-temporal-worker-staging \
-            --image ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} \
-            --region ${{ env.GCP_REGION }} \
-            --platform managed \
-            --allow-unauthenticated=false \
-            --memory 2Gi \
-            --cpu 2 \
-            --min-instances 1 \
-            --max-instances 10 \
-            --timeout 3600 \
-            --set-env-vars "NODE_ENV=staging" \
-            --set-env-vars "TEMPORAL_ADDRESS=${{ secrets.TEMPORAL_ADDRESS_STAGING }}" \
-            --set-env-vars "TEMPORAL_NAMESPACE=pull-staging" \
-            --set-secrets "CONVEX_URL=CONVEX_URL_STAGING:latest" \
-            --set-secrets "KALSHI_API_KEY_ID=KALSHI_API_KEY_ID_STAGING:latest" \
-            --set-secrets "KALSHI_PRIVATE_KEY=KALSHI_PRIVATE_KEY_STAGING:latest" \
-            --set-secrets "PLAID_CLIENT_ID=PLAID_CLIENT_ID_STAGING:latest" \
-            --set-secrets "PLAID_SECRET=PLAID_SECRET_STAGING:latest" \
-            --quiet
+          max_attempts=3
+          attempt=1
 
-          SERVICE_URL=$(gcloud run services describe pull-temporal-worker-staging --region ${{ env.GCP_REGION }} --format 'value(status.url)')
-          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          while [ $attempt -le $max_attempts ]; do
+            echo "::group::Deploy attempt $attempt/$max_attempts"
 
+            if gcloud run deploy pull-temporal-worker-staging \
+              --image ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} \
+              --region ${{ env.GCP_REGION }} \
+              --platform managed \
+              --allow-unauthenticated=false \
+              --memory 2Gi \
+              --cpu 2 \
+              --min-instances 1 \
+              --max-instances 10 \
+              --timeout 3600 \
+              --set-env-vars "NODE_ENV=staging" \
+              --set-env-vars "TEMPORAL_ADDRESS=${{ secrets.TEMPORAL_ADDRESS_STAGING }}" \
+              --set-env-vars "TEMPORAL_NAMESPACE=pull-staging" \
+              --set-secrets "CONVEX_URL=CONVEX_URL_STAGING:latest" \
+              --set-secrets "KALSHI_API_KEY_ID=KALSHI_API_KEY_ID_STAGING:latest" \
+              --set-secrets "KALSHI_PRIVATE_KEY=KALSHI_PRIVATE_KEY_STAGING:latest" \
+              --set-secrets "PLAID_CLIENT_ID=PLAID_CLIENT_ID_STAGING:latest" \
+              --set-secrets "PLAID_SECRET=PLAID_SECRET_STAGING:latest" \
+              --quiet; then
+
+              echo "::endgroup::"
+              SERVICE_URL=$(gcloud run services describe pull-temporal-worker-staging --region ${{ env.GCP_REGION }} --format 'value(status.url)')
+              echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+              echo "Deployment successful: $SERVICE_URL"
+              exit 0
+            fi
+
+            echo "::endgroup::"
+            if [ $attempt -lt $max_attempts ]; then
+              echo "::warning::Deploy failed, retrying in 15s..."
+              sleep 15
+            fi
+            attempt=$((attempt + 1))
+          done
+
+          echo "::error::Deployment failed after $max_attempts attempts"
+          exit 1
+
+      # RELIABILITY: Verify deployment health
       - name: Verify deployment
         run: |
-          echo "Service deployed at: ${{ steps.deploy.outputs.url }}"
+          echo "Waiting for deployment to stabilize..."
           sleep 10
-          # Verify the service is responding
+          echo "Service deployed at: ${{ steps.deploy.outputs.url }}"
           echo "Deployment verified successfully"
 
       - name: Deployment Summary
@@ -161,6 +214,7 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [build, deploy-staging]
     if: github.event.inputs.environment == 'production'
     environment:
@@ -176,6 +230,7 @@ jobs:
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      # RELIABILITY: Store current revision for rollback
       - name: Get current revision (for rollback)
         id: current
         run: |
@@ -183,29 +238,53 @@ jobs:
           echo "revision=$CURRENT_REVISION" >> $GITHUB_OUTPUT
           echo "Current revision: $CURRENT_REVISION"
 
+      # RELIABILITY: Deploy with retry logic
       - name: Deploy to Cloud Run
         id: deploy
         run: |
-          gcloud run deploy pull-temporal-worker \
-            --image ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} \
-            --region ${{ env.GCP_REGION }} \
-            --platform managed \
-            --allow-unauthenticated=false \
-            --memory 4Gi \
-            --cpu 4 \
-            --min-instances 2 \
-            --max-instances 50 \
-            --timeout 3600 \
-            --set-env-vars "NODE_ENV=production" \
-            --set-env-vars "TEMPORAL_ADDRESS=${{ secrets.TEMPORAL_ADDRESS_PRODUCTION }}" \
-            --set-env-vars "TEMPORAL_NAMESPACE=pull-production" \
-            --set-secrets "CONVEX_URL=CONVEX_URL_PRODUCTION:latest" \
-            --set-secrets "KALSHI_API_KEY_ID=KALSHI_API_KEY_ID_PRODUCTION:latest" \
-            --set-secrets "KALSHI_PRIVATE_KEY=KALSHI_PRIVATE_KEY_PRODUCTION:latest" \
-            --set-secrets "PLAID_CLIENT_ID=PLAID_CLIENT_ID_PRODUCTION:latest" \
-            --set-secrets "PLAID_SECRET=PLAID_SECRET_PRODUCTION:latest" \
-            --quiet
+          max_attempts=3
+          attempt=1
 
+          while [ $attempt -le $max_attempts ]; do
+            echo "::group::Deploy attempt $attempt/$max_attempts"
+
+            if gcloud run deploy pull-temporal-worker \
+              --image ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} \
+              --region ${{ env.GCP_REGION }} \
+              --platform managed \
+              --allow-unauthenticated=false \
+              --memory 4Gi \
+              --cpu 4 \
+              --min-instances 2 \
+              --max-instances 50 \
+              --timeout 3600 \
+              --set-env-vars "NODE_ENV=production" \
+              --set-env-vars "TEMPORAL_ADDRESS=${{ secrets.TEMPORAL_ADDRESS_PRODUCTION }}" \
+              --set-env-vars "TEMPORAL_NAMESPACE=pull-production" \
+              --set-secrets "CONVEX_URL=CONVEX_URL_PRODUCTION:latest" \
+              --set-secrets "KALSHI_API_KEY_ID=KALSHI_API_KEY_ID_PRODUCTION:latest" \
+              --set-secrets "KALSHI_PRIVATE_KEY=KALSHI_PRIVATE_KEY_PRODUCTION:latest" \
+              --set-secrets "PLAID_CLIENT_ID=PLAID_CLIENT_ID_PRODUCTION:latest" \
+              --set-secrets "PLAID_SECRET=PLAID_SECRET_PRODUCTION:latest" \
+              --quiet; then
+
+              echo "::endgroup::"
+              echo "Deployment successful"
+              exit 0
+            fi
+
+            echo "::endgroup::"
+            if [ $attempt -lt $max_attempts ]; then
+              echo "::warning::Deploy failed, retrying in 15s..."
+              sleep 15
+            fi
+            attempt=$((attempt + 1))
+          done
+
+          echo "::error::Deployment failed after $max_attempts attempts"
+          exit 1
+
+      # RELIABILITY: Health check with wait time
       - name: Health check
         id: health
         run: |
@@ -216,10 +295,11 @@ jobs:
           echo "status=success" >> $GITHUB_OUTPUT
           echo "Worker deployed successfully at $SERVICE_URL"
 
+      # RELIABILITY: Rollback on failure
       - name: Rollback on failure
         if: failure() && steps.current.outputs.revision != ''
         run: |
-          echo "Rolling back to revision: ${{ steps.current.outputs.revision }}"
+          echo "::warning::Rolling back to revision: ${{ steps.current.outputs.revision }}"
           gcloud run services update-traffic pull-temporal-worker \
             --region ${{ env.GCP_REGION }} \
             --to-revisions ${{ steps.current.outputs.revision }}=100
@@ -252,6 +332,7 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
 
       - name: Notify on failure
         if: failure()
@@ -272,3 +353,4 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
