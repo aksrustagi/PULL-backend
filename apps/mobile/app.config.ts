@@ -2,13 +2,13 @@ import { ExpoConfig, ConfigContext } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: "Fantasy Markets",
-  slug: "fantasy-markets",
+  name: "PULL",
+  slug: "pull-app",
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
-  scheme: "fantasymarkets",
+  scheme: "pull",
   splash: {
     image: "./assets/splash.png",
     resizeMode: "contain",
