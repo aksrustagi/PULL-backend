@@ -74,6 +74,36 @@ function createPersonaSignature(payload: string, secret: string): string {
   return `t=${timestamp},v1=${signature}`;
 }
 
+// Helper function to create mock Stripe webhook handler with callbacks
+function createMockStripeHandler(callbacks: {
+  onDepositCompleted?: (event: any) => Promise<void>;
+  onPayoutPaid?: (event: any) => Promise<void>;
+  onPayoutFailed?: (event: any) => Promise<void>;
+  onAccountUpdated?: (event: any) => Promise<void>;
+}) {
+  return {
+    processWebhook: vi.fn().mockImplementation(async (body, sig) => {
+      // Simulate calling the appropriate callback
+      if (callbacks.onDepositCompleted) {
+        await callbacks.onDepositCompleted({
+          userId: 'user_123',
+          netAmount: 10000,
+          sessionId: 'cs_123',
+          paymentIntentId: 'pi_123',
+          customerId: 'cus_123',
+        });
+      }
+      
+      return {
+        success: true,
+        processed: true,
+        eventId: 'evt_123',
+        eventType: 'checkout.session.completed',
+      };
+    }),
+  };
+}
+
 describe('Webhooks Routes', () => {
   let app: Hono;
 

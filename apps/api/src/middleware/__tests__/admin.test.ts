@@ -203,7 +203,9 @@ describe('Admin Middleware', () => {
           c.set('requestId', 'req123');
           return next();
         });
-        testApp.use('/test', requireRole(testCase.requiredRole as any));
+        // Type assertion is safe here as we're testing all valid role combinations
+        type ValidRole = 'user' | 'moderator' | 'admin' | 'superadmin';
+        testApp.use('/test', requireRole(testCase.requiredRole as ValidRole));
         testApp.get('/test', (c) => c.json({ success: true }));
 
         const res = await testApp.request('/test', { method: 'GET' });

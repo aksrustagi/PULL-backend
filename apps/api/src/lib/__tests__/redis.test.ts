@@ -36,9 +36,19 @@ describe('Redis - Fail-Closed & Idempotency', () => {
   });
 
   afterEach(() => {
-    // Restore original env
-    process.env = { ...originalEnv };
+    // Restore environment using vi.unstubAllEnvs() if available, otherwise restore manually
     vi.resetModules();
+    // Restore critical env vars
+    Object.keys(process.env).forEach(key => {
+      if (key.startsWith('UPSTASH_REDIS_')) {
+        delete process.env[key];
+      }
+    });
+    Object.keys(originalEnv).forEach(key => {
+      if (originalEnv[key] !== undefined) {
+        process.env[key] = originalEnv[key];
+      }
+    });
   });
 
   describe('Fail-Closed Behavior (SECURITY CRITICAL)', () => {

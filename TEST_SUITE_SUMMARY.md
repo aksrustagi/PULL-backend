@@ -275,11 +275,75 @@ This affects:
 - `packages/core/tsconfig.json` has same issue
 - Tests are written and ready but cannot execute until resolved
 
-### Resolution Required
-To run tests, one of the following is needed:
-1. Create the missing `@pull/config` package with proper tsconfig files
-2. Update tsconfig files to use local extends instead of workspace references
-3. Configure Vitest to bypass TypeScript project references
+### Resolution Options
+
+To fix the TypeScript configuration issue, choose one of these approaches:
+
+#### Option 1: Create Missing Config Package (Recommended)
+```bash
+# Create the config package
+mkdir -p packages/config
+cd packages/config
+
+# Create package.json
+cat > package.json << 'EOF'
+{
+  "name": "@pull/config",
+  "version": "0.1.0",
+  "private": true
+}
+EOF
+
+# Create tsconfig files
+cat > tsconfig.base.json << 'EOF'
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  }
+}
+EOF
+
+cat > tsconfig.node.json << 'EOF'
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "types": ["node"]
+  }
+}
+EOF
+```
+
+#### Option 2: Update TSConfig to Use Local Extends
+```json
+// apps/api/tsconfig.json
+{
+  "extends": "../../tsconfig.json",  // Use root tsconfig
+  "compilerOptions": {
+    // ... rest of config
+  }
+}
+```
+
+#### Option 3: Configure Vitest to Bypass Project References
+```typescript
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    // ... other config
+    typecheck: {
+      enabled: false  // Disable typecheck during tests
+    }
+  }
+});
+```
 
 ## Running Tests
 
