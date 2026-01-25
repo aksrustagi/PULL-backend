@@ -1018,4 +1018,209 @@ describe('Rewards Routes', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  // =========================================================================
+  // Type Converter Tests - toUserId() and toRewardId()
+  // =========================================================================
+
+  describe('Type Converters', () => {
+    it('should call toUserId() when fetching balance', async () => {
+      const app = createTestApp();
+      const customUserId = 'custom-user-456';
+
+      mockConvexQuery.mockResolvedValueOnce(mockBalance);
+
+      await app.request('/rewards/balance', {
+        headers: { 'x-user-id': customUserId },
+      });
+
+      // Verify toUserId was called via the Convex query
+      expect(mockConvexQuery).toHaveBeenCalledWith(
+        'rewards:getBalance',
+        expect.objectContaining({
+          userId: expect.any(String),
+        })
+      );
+    });
+
+    it('should call toUserId() when fetching history', async () => {
+      const app = createTestApp();
+
+      mockConvexQuery.mockResolvedValueOnce({
+        transactions: [],
+        total: 0,
+        hasMore: false,
+      });
+
+      await app.request('/rewards/history');
+
+      expect(mockConvexQuery).toHaveBeenCalledWith(
+        'rewards:getHistory',
+        expect.objectContaining({
+          userId: expect.any(String),
+        })
+      );
+    });
+
+    it('should call toUserId() and toRewardId() when redeeming', async () => {
+      const app = createTestApp();
+
+      mockConvexMutation.mockResolvedValueOnce({
+        redemptionId: 'redemption-001',
+        status: 'pending',
+      });
+
+      await app.request('/rewards/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rewardId: mockRewardId,
+          quantity: 1,
+        }),
+      });
+
+      // Verify both toUserId and toRewardId were called
+      expect(mockConvexMutation).toHaveBeenCalledWith(
+        'rewards:redeem',
+        expect.objectContaining({
+          userId: expect.any(String),
+          rewardId: expect.any(String),
+        })
+      );
+    });
+
+    it('should call toUserId() when claiming daily streak', async () => {
+      const app = createTestApp();
+
+      mockConvexMutation.mockResolvedValueOnce({
+        bonusAmount: 10,
+        streakDays: 1,
+      });
+
+      await app.request('/rewards/daily-streak', {
+        method: 'POST',
+      });
+
+      expect(mockConvexMutation).toHaveBeenCalledWith(
+        'rewards:claimDailyStreak',
+        expect.objectContaining({
+          userId: expect.any(String),
+        })
+      );
+    });
+  });
+
+  // =========================================================================
+  // Response Format Tests - Timestamps and Error Structure
+  // =========================================================================
+
+  describe('Response Format', () => {
+    it('should include timestamp in balance response', async () => {
+      const app = createTestApp();
+
+      mockConvexQuery.mockResolvedValueOnce(mockBalance);
+
+      const res = await app.request('/rewards/balance');
+      const body = await res.json();
+
+      expect(body.timestamp).toBeDefined();
+      expect(typeof body.timestamp).toBe('string');
+      expect(new Date(body.timestamp).toString()).not.toBe('Invalid Date');
+    });
+
+    it('should include timestamp in history response', async () => {
+      const app = createTestApp();
+
+      mockConvexQuery.mockResolvedValueOnce({
+        transactions: [mockTransaction],
+        total: 1,
+        hasMore: false,
+      });
+
+      const res = await app.request('/rewards/history');
+      const body = await res.json();
+
+      expect(body.timestamp).toBeDefined();
+      expect(typeof body.timestamp).toBe('string');
+    });
+
+    it('should include timestamp in catalog response', async () => {
+      const app = createTestApp();
+
+      mockConvexQuery.mockResolvedValueOnce([mockReward]);
+
+      const res = await app.request('/rewards/catalog');
+      const body = await res.json();
+
+      expect(body.timestamp).toBeDefined();
+      expect(typeof body.timestamp).toBe('string');
+    });
+
+    it('should include timestamp in redeem response', async () => {
+      const app = createTestApp();
+
+      mockConvexMutation.mockResolvedValueOnce({
+        redemptionId: 'redemption-001',
+        status: 'pending',
+      });
+
+      const res = await app.request('/rewards/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rewardId: mockRewardId,
+          quantity: 1,
+        }),
+      });
+      const body = await res.json();
+
+      expect(body.timestamp).toBeDefined();
+      expect(typeof body.timestamp).toBe('string');
+    });
+
+    it('should include timestamp in error responses', async () => {
+      const app = createTestApp();
+
+      mockConvexQuery.mockRejectedValueOnce(new Error('Database error'));
+
+      const res = await app.request('/rewards/balance');
+      const body = await res.json();
+
+      expect(body.timestamp).toBeDefined();
+      expect(typeof body.timestamp).toBe('string');
+    });
+
+    it('should have proper error format with requestId and timestamp', async () => {
+      const app = createTestApp();
+
+      mockConvexMutation.mockRejectedValueOnce(new Error('Insufficient points'));
+
+      const res = await app.request('/rewards/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rewardId: mockRewardId,
+          quantity: 1,
+        }),
+      });
+      const body = await res.json();
+
+      expect(body.success).toBe(false);
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBeDefined();
+      expect(body.error.message).toBeDefined();
+      expect(body.requestId).toBe('test-request-id');
+      expect(body.timestamp).toBeDefined();
+    });
+
+    it('should include requestId in all error responses', async () => {
+      const app = createTestApp({ authenticated: false });
+
+      const res = await app.request('/rewards/balance');
+      const body = await res.json();
+
+      expect(body.success).toBe(false);
+      expect(body.requestId).toBe('test-request-id');
+    });
+  });
 });

@@ -945,6 +945,382 @@ describe('KYC Routes', () => {
       expect(body.data).toEqual([]);
     });
   });
+
+  // =========================================================================
+  // Get Documents Tests
+  // =========================================================================
+
+  describe('GET /kyc/documents', () => {
+    it('should reject without authentication', async () => {
+      const app = createTestApp({ authenticated: false });
+
+      const res = await app.request('/kyc/documents');
+
+      expect(res.status).toBe(401);
+    });
+
+    it('should return documents for latest inquiry', async () => {
+      const app = createTestApp();
+
+      const mockDocuments = {
+        documents: [
+          {
+            id: 'doc-001',
+            attributes: {
+              kind: 'government_id',
+              status: 'processed',
+              created_at: '2024-01-01T10:00:00Z',
+              processed_at: '2024-01-01T10:05:00Z',
+              files: [
+                {
+                  id: 'file-001',
+                  filename: 'id_front.jpg',
+                  page: 0,
+                  url: 'https://example.com/file-001',
+                  byte_size: 102400,
+                },
+              ],
+            },
+          },
+        ],
+        selfies: [
+          {
+            id: 'selfie-001',
+            attributes: {
+              status: 'processed',
+              capture_method: 'video',
+              created_at: '2024-01-01T10:10:00Z',
+              processed_at: '2024-01-01T10:15:00Z',
+              center_photo_url: 'https://example.com/selfie-center',
+              left_photo_url: 'https://example.com/selfie-left',
+              right_photo_url: 'https://example.com/selfie-right',
+            },
+          },
+        ],
+      };
+
+      mockPersonaClient.getLatestInquiryByReferenceId.mockResolvedValueOnce(mockPersonaInquiry);
+      mockPersonaClient.getInquiryFiles.mockResolvedValueOnce(mockDocuments);
+      mockPersonaClient.getVerifications.mockResolvedValueOnce([]);
+
+      const res = await app.request('/kyc/documents');
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.documents).toHaveLength(1);
+      expect(body.data.selfies).toHaveLength(1);
+      expect(body.data.documents[0].kind).toBe('government_id');
+    });
+
+    it('should return empty documents for new user', async () => {
+      const app = createTestApp();
+
+      mockPersonaClient.getLatestInquiryByReferenceId.mockResolvedValueOnce(null);
+
+      const res = await app.request('/kyc/documents');
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.documents).toEqual([]);
+      expect(body.data.selfies).toEqual([]);
+    });
+
+    it('should return documents for specific inquiry ID', async () => {
+      const app = createTestApp();
+
+      const mockDocuments = {
+        documents: [],
+        selfies: [],
+      };
+
+      mockPersonaClient.getInquiryFiles.mockResolvedValueOnce(mockDocuments);
+      mockPersonaClient.getVerifications.mockResolvedValueOnce([]);
+
+      const res = await app.request('/kyc/documents?inquiryId=inq_123');
+
+      expect(res.status).toBe(200);
+      expect(mockPersonaClient.getInquiryFiles).toHaveBeenCalledWith('inq_123');
+    });
+
+    it('should handle document fetch errors gracefully', async () => {
+      const app = createTestApp();
+
+      mockPersonaClient.getLatestInquiryByReferenceId.mockRejectedValueOnce(
+        new Error('API error')
+      );
+
+      const res = await app.request('/kyc/documents');
+
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('DOCUMENTS_FETCH_FAILED');
+    });
+  });
+
+  // =========================================================================
+  // Cancel KYC Tests
+  // =========================================================================
+
+  describe('POST /kyc/cancel', () => {
+    it('should reject without authentication', async () => {
+      const app = createTestApp({ authenticated: false });
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('should cancel active KYC workflow', async () => {
+      const app = createTestApp();
+
+      const mockWorkflowHandle = {
+        signal: vi.fn().mockResolvedValueOnce(undefined),
+      };
+
+      const mockWorkflows = (async function* () {
+        yield { workflowId: 'kyc-test-user-123-123456' };
+      })();
+
+      const mockTemporalClient = {
+        workflow: {
+          list: vi.fn().mockReturnValueOnce(mockWorkflows),
+          getHandle: vi.fn().mockReturnValueOnce(mockWorkflowHandle),
+        },
+      };
+
+      // Mock the temporal client getter
+      vi.doMock('@temporalio/client', () => ({
+        Client: vi.fn().mockImplementation(() => mockTemporalClient),
+      }));
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.message).toContain('cancelled');
+    });
+
+    it('should return 404 when no active workflow exists', async () => {
+      const app = createTestApp();
+
+      const mockWorkflows = (async function* () {
+        // Empty generator - no workflows
+      })();
+
+      const mockTemporalClient = {
+        workflow: {
+          list: vi.fn().mockReturnValueOnce(mockWorkflows),
+        },
+      };
+
+      vi.doMock('@temporalio/client', () => ({
+        Client: vi.fn().mockImplementation(() => mockTemporalClient),
+      }));
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(404);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('NO_ACTIVE_KYC');
+    });
+
+    it('should handle Temporal errors gracefully', async () => {
+      const app = createTestApp();
+
+      const mockWorkflows = (async function* () {
+        throw new Error('Temporal connection failed');
+      })();
+
+      const mockTemporalClient = {
+        workflow: {
+          list: vi.fn().mockReturnValueOnce(mockWorkflows),
+        },
+      };
+
+      vi.doMock('@temporalio/client', () => ({
+        Client: vi.fn().mockImplementation(() => mockTemporalClient),
+      }));
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('KYC_CANCEL_FAILED');
+    });
+  });
+
+  // =========================================================================
+  // Upgrade KYC Tests
+  // =========================================================================
+
+  describe('POST /kyc/upgrade', () => {
+    it('should reject without authentication', async () => {
+      const app = createTestApp({ authenticated: false });
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'enhanced' }),
+      });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('should start upgrade workflow to enhanced tier', async () => {
+      const app = createTestApp();
+
+      const mockWorkflowHandle = {
+        query: vi.fn().mockResolvedValueOnce({
+          status: 'in_progress',
+          currentStep: 'persona_verification',
+          progress: 25,
+        }),
+      };
+
+      const mockTemporalClient = {
+        workflow: {
+          start: vi.fn().mockResolvedValueOnce(mockWorkflowHandle),
+        },
+      };
+
+      vi.doMock('@temporalio/client', () => ({
+        Client: vi.fn().mockImplementation(() => mockTemporalClient),
+      }));
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetTier: 'enhanced',
+          requireBankLink: true,
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('in_progress');
+      expect(body.data.workflowId).toContain('kyc-upgrade');
+    });
+
+    it('should start upgrade workflow to accredited tier', async () => {
+      const app = createTestApp();
+
+      const mockWorkflowHandle = {
+        query: vi.fn().mockResolvedValueOnce({
+          status: 'in_progress',
+          currentStep: 'accreditation_verification',
+          progress: 10,
+        }),
+      };
+
+      const mockTemporalClient = {
+        workflow: {
+          start: vi.fn().mockResolvedValueOnce(mockWorkflowHandle),
+        },
+      };
+
+      vi.doMock('@temporalio/client', () => ({
+        Client: vi.fn().mockImplementation(() => mockTemporalClient),
+      }));
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'accredited' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+    });
+
+    it('should reject invalid target tier', async () => {
+      const app = createTestApp();
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'basic' }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+    });
+
+    it('should handle workflow start errors gracefully', async () => {
+      const app = createTestApp();
+
+      const mockTemporalClient = {
+        workflow: {
+          start: vi.fn().mockRejectedValueOnce(new Error('Workflow already exists')),
+        },
+      };
+
+      vi.doMock('@temporalio/client', () => ({
+        Client: vi.fn().mockImplementation(() => mockTemporalClient),
+      }));
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'enhanced' }),
+      });
+
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('UPGRADE_START_FAILED');
+    });
+
+    it('should include timestamp in response', async () => {
+      const app = createTestApp();
+
+      const mockWorkflowHandle = {
+        query: vi.fn().mockResolvedValueOnce({
+          status: 'in_progress',
+          currentStep: 'persona_verification',
+          progress: 25,
+        }),
+      };
+
+      const mockTemporalClient = {
+        workflow: {
+          start: vi.fn().mockResolvedValueOnce(mockWorkflowHandle),
+        },
+      };
+
+      vi.doMock('@temporalio/client', () => ({
+        Client: vi.fn().mockImplementation(() => mockTemporalClient),
+      }));
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'enhanced' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.timestamp).toBeDefined();
+      expect(typeof body.timestamp).toBe('string');
+    });
+  });
 });
 
 // ===========================================================================
