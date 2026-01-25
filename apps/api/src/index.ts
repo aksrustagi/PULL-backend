@@ -45,6 +45,20 @@ import { ncaaRoutes } from "./routes/ncaa";
 import { golfRoutes } from "./routes/golf";
 import { nbaRoutes } from "./routes/nba";
 import { mlbRoutes } from "./routes/mlb";
+
+// 10x Feature Enhancement Routes
+import presenceRoutes from "./routes/presence";
+import tradeAdvisorRoutes from "./routes/trade-advisor";
+import voiceRoutes from "./routes/voice";
+import visionRoutes from "./routes/vision";
+import injuriesRoutes from "./routes/injuries";
+import socialGraphRoutes from "./routes/social-graph";
+import financeRoutes from "./routes/finance";
+import analyticsEnhancedRoutes from "./routes/analytics";
+import engagementRoutes from "./routes/engagement";
+import complianceRoutes from "./routes/compliance";
+import widgetsRoutes from "./routes/widgets";
+
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -139,6 +153,19 @@ app.route("/api/v1/ncaa", ncaaRoutes);
 app.route("/api/v1/golf", golfRoutes);
 app.route("/api/v1/nba", nbaRoutes);
 app.route("/api/v1/mlb", mlbRoutes);
+
+// 10x Feature Enhancement Routes
+app.route("/api/v1/presence", presenceRoutes);
+app.route("/api/v1/trade-advisor", tradeAdvisorRoutes);
+app.route("/api/v1/voice", voiceRoutes);
+app.route("/api/v1/vision", visionRoutes);
+app.route("/api/v1/injuries", injuriesRoutes);
+app.route("/api/v1/social", socialGraphRoutes); // Note: overwrites existing social route
+app.route("/api/v1/finance", financeRoutes);
+app.route("/api/v1/analytics", analyticsEnhancedRoutes);
+app.route("/api/v1/engagement", engagementRoutes);
+app.route("/api/v1/compliance", complianceRoutes);
+app.route("/api/v1/widgets", widgetsRoutes);
 
 // Admin routes (require auth + admin role)
 // TODO: Add admin role check middleware
