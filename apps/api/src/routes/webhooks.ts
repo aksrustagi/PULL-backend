@@ -487,63 +487,175 @@ app.post("/massive", async (c) => {
 
 /**
  * Stripe webhook (Payments)
+ * Handles checkout.session.completed, payment_intent.succeeded, payout.paid, etc.
  */
 app.post("/stripe", async (c) => {
   const signature = c.req.header("Stripe-Signature");
   const rawBody = await c.req.text();
-
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) {
-    console.error("STRIPE_WEBHOOK_SECRET not configured");
-    return c.json({ error: "Webhook not configured" }, 500);
-  }
 
   if (!signature) {
     console.warn("Stripe webhook: missing signature");
     return c.json({ error: "Missing signature" }, 401);
   }
 
-  // Stripe uses t=timestamp,v1=signature format
-  const parts = signature.split(",");
-  const timestampPart = parts.find((p) => p.startsWith("t="));
-  const signaturePart = parts.find((p) => p.startsWith("v1="));
-
-  if (!timestampPart || !signaturePart) {
-    console.warn("Stripe webhook: malformed signature");
-    return c.json({ error: "Invalid signature format" }, 401);
-  }
-
-  const timestamp = timestampPart.slice(2);
-  const signedPayload = `${timestamp}.${rawBody}`;
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
-    .update(signedPayload)
-    .digest("hex");
-
-  const receivedSig = signaturePart.slice(3);
   try {
-    if (
-      !crypto.timingSafeEqual(
-        Buffer.from(receivedSig),
-        Buffer.from(expectedSignature)
-      )
-    ) {
-      return c.json({ error: "Invalid signature" }, 401);
+    // Import webhook handler
+    const { initializeWebhookHandler } = await import("@pull/core/services/stripe");
+
+    // Initialize Convex client for webhook processing
+    const convex = getConvexClient();
+
+    // Initialize webhook handler with callbacks
+    const webhookHandler = initializeWebhookHandler({
+      // Handle successful deposit
+      onDepositCompleted: async (event) => {
+        console.log("Processing deposit completed", {
+          userId: event.userId,
+          netAmount: event.netAmount,
+          sessionId: event.sessionId,
+        });
+
+        try {
+          // Find the deposit by external ID (session ID or payment intent ID)
+          const externalId = event.sessionId || event.paymentIntentId;
+
+          // Complete the deposit (idempotent - won't double-credit)
+          await convex.mutation(api.payments.completeDepositByExternalId, {
+            externalId,
+            stripePaymentIntentId: event.paymentIntentId,
+            stripeCustomerId: event.customerId,
+          });
+
+          console.log("Deposit completed successfully", {
+            userId: event.userId,
+            netAmount: event.netAmount,
+          });
+        } catch (error) {
+          console.error("Failed to complete deposit", {
+            error,
+            userId: event.userId,
+            sessionId: event.sessionId,
+          });
+          throw error;
+        }
+      },
+
+      // Handle failed deposit
+      onDepositFailed: async (event) => {
+        console.warn("Deposit payment failed", {
+          paymentIntentId: event.paymentIntentId,
+          failureCode: event.failureCode,
+          failureMessage: event.failureMessage,
+        });
+
+        try {
+          await convex.mutation(api.payments.failDepositByExternalId, {
+            externalId: event.paymentIntentId,
+            failureReason: event.failureMessage ?? event.failureCode ?? "Payment failed",
+          });
+        } catch (error) {
+          console.error("Failed to mark deposit as failed", { error });
+        }
+      },
+
+      // Handle successful payout
+      onPayoutPaid: async (event) => {
+        console.log("Payout paid", {
+          payoutId: event.payoutId,
+          amount: event.amount,
+        });
+
+        try {
+          await convex.mutation(api.payments.completeWithdrawalByPayoutId, {
+            stripePayoutId: event.payoutId,
+          });
+        } catch (error) {
+          console.error("Failed to complete withdrawal", { error });
+        }
+      },
+
+      // Handle failed payout
+      onPayoutFailed: async (event) => {
+        console.warn("Payout failed", {
+          payoutId: event.payoutId,
+          failureCode: event.failureCode,
+          failureMessage: event.failureMessage,
+        });
+
+        try {
+          await convex.mutation(api.payments.failWithdrawalByPayoutId, {
+            stripePayoutId: event.payoutId,
+            failureReason: event.failureMessage ?? event.failureCode ?? "Payout failed",
+          });
+        } catch (error) {
+          console.error("Failed to mark withdrawal as failed", { error });
+        }
+      },
+
+      // Handle payment method attached
+      onPaymentMethodAttached: async (event) => {
+        console.log("Payment method attached", {
+          paymentMethodId: event.paymentMethodId,
+          customerId: event.customerId,
+          type: event.type,
+        });
+        // Payment methods are managed via Stripe - no database action needed
+      },
+
+      // Handle connected account updates
+      onAccountUpdated: async (event) => {
+        console.log("Connected account updated", {
+          accountId: event.accountId,
+          payoutsEnabled: event.payoutsEnabled,
+          detailsSubmitted: event.detailsSubmitted,
+        });
+
+        // Update user's connected account status if needed
+        if (event.payoutsEnabled && event.detailsSubmitted) {
+          try {
+            await convex.mutation(api.payments.markConnectedAccountReady, {
+              stripeConnectedAccountId: event.accountId,
+            });
+          } catch (error) {
+            console.error("Failed to update connected account status", { error });
+          }
+        }
+      },
+    });
+
+    // Process the webhook
+    const result = await webhookHandler.processWebhook(rawBody, signature);
+
+    if (!result.success) {
+      console.warn("Webhook processing failed", {
+        eventId: result.eventId,
+        eventType: result.eventType,
+        error: result.error,
+      });
+
+      // Return 400 for verification failures, 200 for processing failures
+      if (result.error?.includes("signature") || result.error?.includes("verification")) {
+        return c.json({ error: result.error }, 401);
+      }
+
+      // For other errors, acknowledge receipt but log the failure
+      return c.json({ received: true, processed: false, error: result.error });
     }
-  } catch {
-    return c.json({ error: "Invalid signature" }, 401);
+
+    console.log("Stripe webhook processed", {
+      eventId: result.eventId,
+      eventType: result.eventType,
+      processed: result.processed,
+    });
+
+    return c.json({ received: true, processed: result.processed });
+  } catch (error) {
+    console.error("Stripe webhook error:", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Internal error" },
+      500
+    );
   }
-
-  // Verify timestamp is within tolerance (5 minutes)
-  const webhookTimestamp = parseInt(timestamp, 10) * 1000;
-  if (Math.abs(Date.now() - webhookTimestamp) > 5 * 60 * 1000) {
-    return c.json({ error: "Webhook timestamp too old" }, 401);
-  }
-
-  // TODO: Process payment events
-  console.log("Stripe webhook verified");
-
-  return c.json({ received: true });
 });
 
 /**
