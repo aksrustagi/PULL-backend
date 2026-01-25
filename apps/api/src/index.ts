@@ -315,6 +315,7 @@ log.info("PULL API server starting", {
 process.on("SIGTERM", async () => {
   log.info("Received SIGTERM, initiating graceful shutdown");
   stopUptime();
+  await wsServer.stop();
   // Allow time for final metrics/traces to be exported
   await new Promise((resolve) => setTimeout(resolve, 1000));
   process.exit(0);
@@ -323,6 +324,7 @@ process.on("SIGTERM", async () => {
 process.on("SIGINT", async () => {
   log.info("Received SIGINT, initiating graceful shutdown");
   stopUptime();
+  await wsServer.stop();
   await new Promise((resolve) => setTimeout(resolve, 1000));
   process.exit(0);
 });
@@ -330,4 +332,5 @@ process.on("SIGINT", async () => {
 export default {
   port,
   fetch: app.fetch,
+  websocket: wsServer.getHandler(),
 };

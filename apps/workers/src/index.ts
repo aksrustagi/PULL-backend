@@ -14,6 +14,7 @@ import * as messagingActivities from "./activities/messaging";
 import * as rwaActivities from "./activities/rwa";
 import * as signalsActivities from "./activities/signals";
 import * as portfolioActivities from "./activities/portfolio";
+import * as dataFeedsActivities from "./activities/dataFeeds";
 
 // Initialize Sentry for error tracking
 initSentry();
@@ -41,6 +42,7 @@ export const TASK_QUEUES = {
   MESSAGING: "pull-messaging",
   SIGNALS: "pull-signals",
   PORTFOLIO: "pull-portfolio",
+  DATAFEEDS: "pull-datafeeds",
 } as const;
 
 interface WorkerConfig {
@@ -101,6 +103,7 @@ async function run() {
     ...rwaActivities,
     ...signalsActivities,
     ...portfolioActivities,
+    ...dataFeedsActivities,
   };
 
   // Create workers based on environment configuration
