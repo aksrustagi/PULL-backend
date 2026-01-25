@@ -42,6 +42,9 @@ const mockPersonaClient = {
   approveInquiry: vi.fn(),
   declineInquiry: vi.fn(),
   verifyWebhook: vi.fn(),
+  getLatestInquiryByReferenceId: vi.fn(),
+  getInquiryFiles: vi.fn(),
+  getVerifications: vi.fn(),
 };
 
 vi.mock('@pull/core/services/persona', () => ({
