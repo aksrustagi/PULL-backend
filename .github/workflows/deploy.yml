@@ -5,153 +5,40 @@ on:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       environment:
-        description: "Environment to deploy to"
+        description: 'Deployment environment'
         required: true
-        default: "staging"
+        default: 'staging'
         type: choice
         options:
           - staging
           - production
 
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: false
-
-env:
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-
 jobs:
-  deploy-convex:
-    name: Deploy Convex
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'production' }}
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'release' || github.event.workflow_run.conclusion == 'success' }}
     environment: ${{ github.event.inputs.environment || 'staging' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
         with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          version: 8
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
 
       - name: Deploy Convex
-        run: pnpm db:push
+        run: npx convex deploy
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
-  deploy-api:
-    name: Deploy API
-    runs-on: ubuntu-latest
-    needs: [deploy-convex]
-    environment: ${{ github.event.inputs.environment || 'staging' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build API
-        run: pnpm --filter @pull/api build
-
-      # Deploy to your preferred platform (Railway, Fly.io, etc.)
-      - name: Deploy to Railway
-        if: false # Enable when Railway is configured
-        uses: railwayapp/railway-action@v1
-        with:
-          project-id: ${{ secrets.RAILWAY_PROJECT_ID }}
-          token: ${{ secrets.RAILWAY_TOKEN }}
-          service: api
-
-  deploy-web:
-    name: Deploy Web
-    runs-on: ubuntu-latest
-    needs: [deploy-convex]
-    environment: ${{ github.event.inputs.environment || 'staging' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Web
-        run: pnpm --filter @pull/web build
-        env:
-          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
-
-      # Deploy to Vercel
-      - name: Deploy to Vercel
-        if: false # Enable when Vercel is configured
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: ${{ github.event.inputs.environment == 'production' && '--prod' || '' }}
-
-  deploy-workers:
-    name: Deploy Workers
-    runs-on: ubuntu-latest
-    needs: [deploy-convex]
-    environment: ${{ github.event.inputs.environment || 'staging' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Workers
-        run: pnpm --filter @pull/workers build
-
-      # Deploy to your preferred platform
-      - name: Deploy Workers
-        run: echo "Deploy workers to your platform (Railway, Fly.io, etc.)"
+      # Add more deployment steps as needed (Vercel, Railway, etc.)

@@ -90,12 +90,13 @@ export const getProfile = authenticatedQuery({
     const user = await ctx.db.get(userId);
     if (!user) return null;
 
-    // Get referral count
-    const referrals = await ctx.db
+    // Get referral count using the filter (limit to 1000 for efficiency)
+    const referralCount = (await ctx.db
       .query("users")
       .withIndex("by_status")
       .filter((q) => q.eq(q.field("referredBy"), userId))
-      .collect();
+      .take(1000)
+    ).length;
 
     // Get points balance
     const pointsBalance = await ctx.db
@@ -107,7 +108,7 @@ export const getProfile = authenticatedQuery({
 
     return {
       ...user,
-      referralCount: referrals.length,
+      referralCount,
       pointsBalance: pointsBalance?.available ?? 0,
     };
   },

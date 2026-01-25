@@ -3,43 +3,76 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import type { Env } from "../index";
 
-// Initialize Upstash Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL ?? "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN ?? "",
-});
+const isProduction = process.env.NODE_ENV === "production";
+const isDevelopment = process.env.NODE_ENV === "development";
 
-// Create rate limiters for different tiers
-const rateLimiters = {
-  // Anonymous users: 30 requests per minute
-  anonymous: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(30, "1 m"),
-    prefix: "ratelimit:anon",
-  }),
-  // Authenticated users: 100 requests per minute
-  authenticated: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(100, "1 m"),
-    prefix: "ratelimit:auth",
-  }),
-  // Premium users: 300 requests per minute
-  premium: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(300, "1 m"),
-    prefix: "ratelimit:premium",
-  }),
-};
+// Check Redis configuration in production
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const isRedisConfigured = redisUrl && redisToken;
+
+// In production, Redis must be configured
+if (isProduction && !isRedisConfigured) {
+  console.error("CRITICAL: Redis is not configured in production. Rate limiting will reject all requests.");
+}
+
+// Initialize Upstash Redis client (only if configured)
+const redis = isRedisConfigured
+  ? new Redis({
+      url: redisUrl,
+      token: redisToken,
+    })
+  : null;
+
+// Create rate limiters for different tiers (only if Redis is available)
+const rateLimiters = redis
+  ? {
+      // Anonymous users: 30 requests per minute
+      anonymous: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(30, "1 m"),
+        prefix: "ratelimit:anon",
+      }),
+      // Authenticated users: 100 requests per minute
+      authenticated: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(100, "1 m"),
+        prefix: "ratelimit:auth",
+      }),
+      // Premium users: 300 requests per minute
+      premium: new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(300, "1 m"),
+        prefix: "ratelimit:premium",
+      }),
+    }
+  : null;
 
 export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
   // Skip rate limiting in development
-  if (process.env.NODE_ENV === "development") {
+  if (isDevelopment) {
     await next();
     return;
   }
 
-  // Skip if Redis is not configured
-  if (!process.env.UPSTASH_REDIS_REST_URL) {
+  // In production, if Redis is not configured, return 503
+  if (isProduction && !rateLimiters) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "SERVICE_UNAVAILABLE",
+          message: "Rate limiting service is unavailable. Please try again later.",
+        },
+        requestId: c.get("requestId"),
+        timestamp: new Date().toISOString(),
+      },
+      503
+    );
+  }
+
+  // In non-production/non-development (e.g., test), skip if not configured
+  if (!rateLimiters) {
     await next();
     return;
   }
@@ -94,18 +127,24 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
     // Fail CLOSED for sensitive endpoints - deny on rate limit failure
     const path = c.req.path;
     const isSensitive = path.includes("/auth") || path.includes("/trading") || path.includes("/orders");
-    if (isSensitive) {
+
+    if (isSensitive || isProduction) {
       console.error("Rate limit error on sensitive endpoint, blocking:", error);
       return c.json(
         {
           success: false,
-          error: { code: "SERVICE_UNAVAILABLE", message: "Service temporarily unavailable" },
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "Rate limiting service error. Please try again later.",
+          },
           requestId: c.get("requestId"),
           timestamp: new Date().toISOString(),
         },
         503
       );
     }
+
+    // In non-production, non-sensitive endpoints, log and allow through
     console.error("Rate limit error, allowing through:", error);
     await next();
   }

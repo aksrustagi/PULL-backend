@@ -143,6 +143,49 @@ export const getPortfolioSummary = authenticatedQuery({
 // ============================================================================
 
 /**
+ * Deposit funds (simplified credit)
+ */
+export const deposit = mutation({
+  args: {
+    userId: v.id("users"),
+    assetType: v.string(),
+    assetId: v.string(),
+    amount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    const balance = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("assetType", args.assetType as "usd")
+          .eq("assetId", args.assetId)
+      )
+      .unique();
+
+    if (balance) {
+      await ctx.db.patch(balance._id, {
+        available: balance.available + args.amount,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("balances", {
+        userId: args.userId,
+        assetType: args.assetType as "usd",
+        assetId: args.assetId,
+        symbol: args.assetId,
+        available: args.amount,
+        held: 0,
+        pending: 0,
+        updatedAt: now,
+      });
+    }
+  },
+});
+
+/**
  * Credit balance (add funds) - system only
  */
 export const credit = systemMutation({

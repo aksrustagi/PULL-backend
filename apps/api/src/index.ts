@@ -15,36 +15,76 @@ if (missing.length > 0) {
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { secureHeaders } from "hono/secure-headers";
-import { timing } from "hono/timing";
 import { trpcServer } from "@hono/trpc-server";
 
+import { initSentry, captureException } from "./lib/sentry";
 import { authMiddleware } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import {
+  securityHeaders,
+  csrfProtection,
+  requestId,
+  requestTiming,
+} from "./middleware/security";
+import { errorHandler } from "./middleware/error-handler";
+import { sentryMiddleware } from "./middleware/sentry";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { tradingRoutes } from "./routes/trading";
 import { predictionsRoutes } from "./routes/predictions";
+import { realEstateRoutes } from "./routes/realEstate";
 import { rwaRoutes } from "./routes/rwa";
 import { rewardsRoutes } from "./routes/rewards";
+import { signalsRoutes } from "./routes/signals";
+import { socialRoutes } from "./routes/social";
+import { kycRoutes } from "./routes/kyc";
+import { gamificationRoutes } from "./routes/gamification";
 import { webhookRoutes } from "./routes/webhooks";
+import { dataFlywheelRoutes } from "./routes/dataFlywheel";
+import { analyticsRoutes, experimentsRoutes } from "./routes/admin";
+import { adminRoutes } from "./routes/admin";
+import { portfolioAgentRoutes } from "./routes/portfolio-agent";
+import { docsRoutes } from "./routes/docs";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
+
+// Initialize Sentry for error tracking
+initSentry();
 
 // Types
 export type Env = {
   Variables: {
     userId?: string;
     requestId: string;
+    sanitizedBody?: unknown;
   };
 };
 
 const app = new Hono<Env>();
 
-// Global middleware
-app.use("*", timing());
+// Global middleware - order matters!
+// 1. Request ID first for tracking
+app.use("*", requestId);
+
+// 2. Request timing for performance monitoring
+app.use("*", requestTiming);
+
+// 3. Security headers for all responses
+app.use("*", securityHeaders);
+
+// 4. CSRF protection for state-changing requests
+app.use("*", csrfProtection);
+
+// 5. Sentry middleware for error tracking
+app.use("*", sentryMiddleware);
+
+// 6. Error handler wraps entire app
+app.use("*", errorHandler);
+
+// 7. Logging
 app.use("*", logger());
-app.use("*", secureHeaders());
+
+// 8. CORS configuration
 app.use(
   "*",
   cors({
@@ -59,8 +99,8 @@ app.use(
       return undefined;
     },
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID"],
-    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-API-Key"],
+    exposeHeaders: ["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-Response-Time"],
     credentials: true,
     maxAge: 86400,
   })
@@ -91,6 +131,9 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+// Rate limiting for non-webhook routes
+app.use("/api/*", rateLimitMiddleware);
+
 // Public routes (no auth required)
 app.route("/health", healthRoutes);
 app.route("/api/auth", authRoutes);
@@ -98,14 +141,31 @@ app.route("/api/auth", authRoutes);
 // Webhook routes (with rate limiting and their own signature-based auth)
 app.use("/webhooks/*", rateLimitMiddleware);
 app.route("/webhooks", webhookRoutes);
+app.route("/docs", docsRoutes);
 
 // Protected routes - auth first, then rate limit (so userId is available)
 app.use("/api/v1/*", authMiddleware);
 app.use("/api/v1/*", rateLimitMiddleware);
 app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
+app.route("/api/v1/real-estate", realEstateRoutes);
 app.route("/api/v1/rwa", rwaRoutes);
 app.route("/api/v1/rewards", rewardsRoutes);
+app.route("/api/v1/signals", signalsRoutes);
+app.route("/api/v1/data", dataFlywheelRoutes);
+app.route("/api/v1/social", socialRoutes);
+app.route("/api/v1/kyc", kycRoutes);
+app.route("/api/v1/portfolio-agent", portfolioAgentRoutes);
+app.route("/api/v1/gamification", gamificationRoutes);
+
+// Admin routes (require auth + admin role)
+// TODO: Add admin role check middleware
+app.use("/admin/*", authMiddleware);
+app.route("/admin/analytics", analyticsRoutes);
+app.route("/admin/experiments", experimentsRoutes);
+
+app.use("/api/admin/*", authMiddleware);
+app.route("/api/admin", adminRoutes);
 
 // tRPC endpoint (uses its own auth via context)
 app.use(
@@ -134,7 +194,15 @@ app.notFound((c) => {
 
 // Error handler - never leak internal details
 app.onError((err, c) => {
-  console.error(`[${c.get("requestId")}] Error:`, err);
+  const requestId = c.get("requestId");
+  console.error(`[${requestId}] Error:`, err);
+
+  // Capture error with Sentry
+  captureException(err, {
+    requestId,
+    path: c.req.path,
+    method: c.req.method,
+  });
 
   const status = "status" in err ? (err.status as number) : 500;
 
@@ -145,7 +213,7 @@ app.onError((err, c) => {
         code: status === 500 ? "INTERNAL_SERVER_ERROR" : "ERROR",
         message: "An unexpected error occurred",
       },
-      requestId: c.get("requestId"),
+      requestId,
       timestamp: new Date().toISOString(),
     },
     status
