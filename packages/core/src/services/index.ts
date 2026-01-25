@@ -179,6 +179,55 @@ export * as plaidTypes from "./plaid/types";
 export { FireblocksClient, type FireblocksClientConfig } from "./fireblocks/client";
 export * as fireblocksTypes from "./fireblocks/types";
 
+// Payment Services
+export {
+  StripeClient,
+  createStripeClient,
+  getStripeClient,
+  CheckoutService,
+  createCheckoutService,
+  getCheckoutService,
+  createDepositSession,
+  getCheckoutSession,
+  calculateDepositFee,
+  StripeWebhookHandler,
+  createWebhookHandler,
+  getWebhookHandler,
+  initializeWebhookHandler,
+  PayoutService,
+  createPayoutService,
+  getPayoutService,
+  createConnectedAccount,
+  processWithdrawal,
+  createOnboardingLink,
+  StripeServiceError,
+} from "./stripe";
+
+export * as stripeTypes from "./stripe/types";
+
+export type {
+  StripeClientConfig,
+  PaymentMethod,
+  CreateCheckoutSessionParams,
+  CheckoutSession,
+  PaymentIntent,
+  StripeCustomer,
+  StripePaymentMethod,
+  SetupIntent,
+  Payout,
+  ConnectedAccount,
+  AccountLink,
+  Transfer,
+  FeeStructure,
+  FeeCalculation,
+  DepositCompletedEvent,
+  DepositFailedEvent,
+  PayoutPaidEvent,
+  PayoutFailedEvent,
+  WithdrawalRequest,
+  WithdrawalResult,
+} from "./stripe";
+
 // Re-export individual services for convenient access
 export * as kalshi from "./kalshi";
 export * as massive from "./massive";
@@ -187,6 +236,7 @@ export * as nylas from "./nylas";
 export * as persona from "./persona";
 export * as plaid from "./plaid";
 export * as fireblocks from "./fireblocks";
+export * as stripe from "./stripe";
 
 // Feature Flags
 export * as featureFlags from "./feature-flags";

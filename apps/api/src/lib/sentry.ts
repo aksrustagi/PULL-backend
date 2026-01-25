@@ -1,11 +1,14 @@
 import * as Sentry from "@sentry/node";
+import { getLogger } from "@pull/core/services";
 
 const SENTRY_DSN = process.env.SENTRY_DSN;
 const ENVIRONMENT = process.env.NODE_ENV || "development";
 
 export function initSentry() {
+  const logger = getLogger();
+
   if (!SENTRY_DSN) {
-    console.warn("Sentry DSN not configured, error tracking disabled");
+    logger.warn("Sentry DSN not configured, error tracking disabled");
     return;
   }
 
@@ -25,11 +28,15 @@ export function initSentry() {
       return event;
     },
   });
+
+  logger.info("Sentry initialized", { environment: ENVIRONMENT });
 }
 
 export function captureException(error: Error, context?: Record<string, any>) {
+  const logger = getLogger();
+
   if (!SENTRY_DSN) {
-    console.error("Error:", error, context);
+    logger.error("Error captured (Sentry disabled)", { error, ...context });
     return;
   }
 
@@ -42,8 +49,11 @@ export function captureException(error: Error, context?: Record<string, any>) {
 }
 
 export function captureMessage(message: string, level: "info" | "warning" | "error" = "info") {
+  const logger = getLogger();
+
   if (!SENTRY_DSN) {
-    console.log(`[${level}] ${message}`);
+    const logLevel = level === "warning" ? "warn" : level;
+    logger[logLevel](message, { source: "sentry-fallback" });
     return;
   }
 

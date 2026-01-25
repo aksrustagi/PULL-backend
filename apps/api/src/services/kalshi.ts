@@ -4,6 +4,9 @@
  */
 
 import { webcrypto } from "crypto";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger().child({ service: "kalshi" });
 
 // Configuration
 const KALSHI_BASE_URL =

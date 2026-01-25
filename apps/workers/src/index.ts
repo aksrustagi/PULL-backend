@@ -223,6 +223,17 @@ async function run() {
     console.log(`📋 Portfolio worker registered on queue: ${TASK_QUEUES.PORTFOLIO}`);
   }
 
+  if (workerType === "all" || workerType === "datafeeds") {
+    const datafeedsWorker = await createWorker(connection, {
+      taskQueue: TASK_QUEUES.DATAFEEDS,
+      workflowsPath,
+      activities: { ...dataFeedsActivities },
+      maxConcurrentActivityTaskExecutions: 50,
+    });
+    workers.push(datafeedsWorker);
+    console.log(`📋 DataFeeds worker registered on queue: ${TASK_QUEUES.DATAFEEDS}`);
+  }
+
   if (workers.length === 0) {
     throw new Error(`Invalid WORKER_TYPE: ${workerType}`);
   }
