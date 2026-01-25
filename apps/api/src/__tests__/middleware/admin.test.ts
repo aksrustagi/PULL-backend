@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
-import { adminMiddleware, requireRole, moderatorMiddleware, superadminMiddleware } from "../admin";
+import { adminMiddleware, requireRole, moderatorMiddleware, superadminMiddleware } from "../../middleware/admin";
 
 // Mock dependencies
 vi.mock("../../lib/convex", () => ({

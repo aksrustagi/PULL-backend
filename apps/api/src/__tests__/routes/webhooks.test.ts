@@ -74,36 +74,6 @@ function createPersonaSignature(payload: string, secret: string): string {
   return `t=${timestamp},v1=${signature}`;
 }
 
-// Helper function to create mock Stripe webhook handler with callbacks
-function createMockStripeHandler(callbacks: {
-  onDepositCompleted?: (event: any) => Promise<void>;
-  onPayoutPaid?: (event: any) => Promise<void>;
-  onPayoutFailed?: (event: any) => Promise<void>;
-  onAccountUpdated?: (event: any) => Promise<void>;
-}) {
-  return {
-    processWebhook: vi.fn().mockImplementation(async (body, sig) => {
-      // Simulate calling the appropriate callback
-      if (callbacks.onDepositCompleted) {
-        await callbacks.onDepositCompleted({
-          userId: 'user_123',
-          netAmount: 10000,
-          sessionId: 'cs_123',
-          paymentIntentId: 'pi_123',
-          customerId: 'cus_123',
-        });
-      }
-      
-      return {
-        success: true,
-        processed: true,
-        eventId: 'evt_123',
-        eventType: 'checkout.session.completed',
-      };
-    }),
-  };
-}
-
 describe('Webhooks Routes', () => {
   let app: Hono;
 
@@ -190,7 +160,7 @@ describe('Webhooks Routes', () => {
     describe('checkout.session.completed', () => {
       it('should process deposit completion', async () => {
         mockConvexMutation.mockResolvedValue('deposit_123');
-        mockStripeWebhookHandler.processWebhook.mockImplementation(async (body, sig) => {
+        mockStripeWebhookHandler.processWebhook.mockImplementation(async () => {
           // Simulate calling onDepositCompleted
           const handler = vi.mocked(await import('@pull/core/services/stripe')).initializeWebhookHandler.mock.calls[0][0];
           await handler.onDepositCompleted({
@@ -200,7 +170,7 @@ describe('Webhooks Routes', () => {
             paymentIntentId: 'pi_123',
             customerId: 'cus_123',
           });
-          
+
           return {
             success: true,
             processed: true,
@@ -231,13 +201,13 @@ describe('Webhooks Routes', () => {
     describe('payout.paid', () => {
       it('should mark withdrawal as complete', async () => {
         mockConvexMutation.mockResolvedValue(undefined);
-        mockStripeWebhookHandler.processWebhook.mockImplementation(async (body, sig) => {
+        mockStripeWebhookHandler.processWebhook.mockImplementation(async () => {
           const handler = vi.mocked(await import('@pull/core/services/stripe')).initializeWebhookHandler.mock.calls[0][0];
           await handler.onPayoutPaid({
             payoutId: 'po_123',
             amount: 5000,
           });
-          
+
           return {
             success: true,
             processed: true,
@@ -267,14 +237,14 @@ describe('Webhooks Routes', () => {
     describe('payout.failed', () => {
       it('should handle withdrawal failure', async () => {
         mockConvexMutation.mockResolvedValue(undefined);
-        mockStripeWebhookHandler.processWebhook.mockImplementation(async (body, sig) => {
+        mockStripeWebhookHandler.processWebhook.mockImplementation(async () => {
           const handler = vi.mocked(await import('@pull/core/services/stripe')).initializeWebhookHandler.mock.calls[0][0];
           await handler.onPayoutFailed({
             payoutId: 'po_123',
             failureCode: 'insufficient_funds',
             failureMessage: 'Insufficient funds in account',
           });
-          
+
           return {
             success: true,
             processed: true,
@@ -304,14 +274,14 @@ describe('Webhooks Routes', () => {
     describe('account.updated', () => {
       it('should update connected account status', async () => {
         mockConvexMutation.mockResolvedValue(undefined);
-        mockStripeWebhookHandler.processWebhook.mockImplementation(async (body, sig) => {
+        mockStripeWebhookHandler.processWebhook.mockImplementation(async () => {
           const handler = vi.mocked(await import('@pull/core/services/stripe')).initializeWebhookHandler.mock.calls[0][0];
           await handler.onAccountUpdated({
             accountId: 'acct_123',
             payoutsEnabled: true,
             detailsSubmitted: true,
           });
-          
+
           return {
             success: true,
             processed: true,
