@@ -1603,10 +1603,14 @@ export class FraudDetectionClient {
         const cycleTimeHours = cycleTimeMs / 3600000;
 
         // Get betting activity between deposit and withdrawal
+        // Note: 'bet' type is included in TransactionType for gaming activity
         const bettingActivity = transactions
           .filter(
             (t) =>
-              (t.type === 'bet' || t.type === 'trade') &&
+              t.type !== 'deposit' &&
+              t.type !== 'withdrawal' &&
+              t.type !== 'refund' &&
+              t.type !== 'fee' &&
               t.timestamp > deposit.timestamp &&
               t.timestamp < matchingWithdrawal.timestamp
           )
