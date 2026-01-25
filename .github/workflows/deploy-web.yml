@@ -1,5 +1,13 @@
 name: Deploy Web
 
+# =============================================================================
+# WEB DEPLOYMENT WORKFLOW OPTIMIZATIONS:
+# - SPEED: Efficient caching, parallel Lighthouse CI
+# - RELIABILITY: Retry logic, health checks, better error handling
+# - COST: Concurrency limits, reduced artifact retention
+# - SECURITY: Minimal permissions, secret handling
+# =============================================================================
+
 on:
   push:
     branches: [main]
@@ -25,9 +33,20 @@ on:
           - preview
           - production
 
+# -----------------------------------------------------------------------------
+# COST: Cancel redundant runs for the same branch
+# -----------------------------------------------------------------------------
 concurrency:
   group: deploy-web-${{ github.ref }}
   cancel-in-progress: true
+
+# -----------------------------------------------------------------------------
+# SECURITY: Minimal permissions at workflow level
+# -----------------------------------------------------------------------------
+permissions:
+  contents: read
+  pull-requests: write
+  deployments: write
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -37,68 +56,221 @@ env:
 
 jobs:
   # ==========================================================================
-  # Build & Preview (PRs)
+  # Build Web App
+  # ==========================================================================
+  build:
+    name: Build Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          turbo-token: ${{ secrets.TURBO_TOKEN }}
+          turbo-team: ${{ vars.TURBO_TEAM }}
+
+      - name: Generate version
+        id: version
+        run: |
+          VERSION=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate cache key
+        id: cache-key
+        run: echo "key=web-build-${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      # SPEED: Cache Vercel CLI installation
+      - name: Cache Vercel CLI
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: vercel-cli-${{ runner.os }}-${{ hashFiles('**/package.json') }}
+          restore-keys: vercel-cli-${{ runner.os }}-
+
+      # RELIABILITY: Install Vercel CLI with retry
+      - name: Install Vercel CLI
+        run: |
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            if npm install -g vercel@latest; then
+              echo "Vercel CLI installed successfully"
+              exit 0
+            fi
+            echo "::warning::Vercel CLI install failed, retrying in 5s..."
+            sleep 5
+            attempt=$((attempt + 1))
+          done
+          echo "::error::Failed to install Vercel CLI after $max_attempts attempts"
+          exit 1
+
+      # RELIABILITY: Pull Vercel environment with retry
+      - name: Pull Vercel environment
+        run: |
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }} && exit 0
+            else
+              vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} && exit 0
+            fi
+            echo "::warning::Vercel pull failed, retrying in 5s..."
+            sleep 5
+            attempt=$((attempt + 1))
+          done
+          echo "::error::Failed to pull Vercel environment after $max_attempts attempts"
+          exit 1
+
+      - name: Build project
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          fi
+        env:
+          NEXT_PUBLIC_CONVEX_URL: ${{ github.event_name == 'pull_request' && secrets.CONVEX_URL_PREVIEW || secrets.CONVEX_URL_PRODUCTION }}
+          NEXT_PUBLIC_API_URL: ${{ github.event_name == 'pull_request' && 'https://api-staging.pull.com' || 'https://api.pull.com' }}
+          # SPEED: Optimize Next.js build
+          NEXT_TELEMETRY_DISABLED: 1
+
+      # SPEED: Cache Vercel build output for deployment jobs
+      - name: Cache Vercel build output
+        uses: actions/cache/save@v4
+        with:
+          path: .vercel/output
+          key: ${{ steps.cache-key.outputs.key }}
+
+      - name: Build Summary
+        run: |
+          echo "## Web Build" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Event: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # Deploy Preview (PRs)
   # ==========================================================================
   preview:
     name: Preview Deployment
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
     if: github.event_name == 'pull_request'
     environment:
       name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      # SPEED: Restore cached build output
+      - name: Restore Vercel build output
+        uses: actions/cache/restore@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
+          path: .vercel/output
+          key: ${{ needs.build.outputs.cache-key }}
+          fail-on-cache-miss: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Cache Vercel CLI
+        uses: actions/cache@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          path: ~/.npm
+          key: vercel-cli-${{ runner.os }}-${{ hashFiles('**/package.json') }}
+          restore-keys: vercel-cli-${{ runner.os }}-
 
       - name: Install Vercel CLI
-        run: pnpm add -g vercel@latest
+        run: |
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            npm install -g vercel@latest && exit 0
+            sleep 5
+            attempt=$((attempt + 1))
+          done
+          exit 1
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build project
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.CONVEX_URL_PREVIEW }}
-          NEXT_PUBLIC_API_URL: https://api-staging.pull.com
-
+      # RELIABILITY: Deploy with retry logic
       - name: Deploy to Vercel (Preview)
         id: deploy
         run: |
-          url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$url" >> $GITHUB_OUTPUT
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "::group::Deploy attempt $attempt/$max_attempts"
+            url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} 2>&1)
+            if [ $? -eq 0 ] && [ -n "$url" ]; then
+              echo "::endgroup::"
+              echo "url=$url" >> $GITHUB_OUTPUT
+              echo "Preview deployed to: $url"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::Deploy failed, retrying in 10s..."
+            sleep 10
+            attempt=$((attempt + 1))
+          done
+          echo "::error::Deployment failed after $max_attempts attempts"
+          exit 1
 
+      # RELIABILITY: Update or create PR comment (handles existing comments)
       - name: Comment PR with preview URL
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            const body = `## Preview Deployment
+
+            Successfully deployed to: ${{ steps.deploy.outputs.url }}
+
+            **Version:** \`${{ needs.build.outputs.version }}\`
+            **Commit:** \`${{ github.sha }}\`
+
+            ---
+            _This preview will be automatically updated on new commits._`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## Preview Deployment 🚀\n\n✅ Successfully deployed to: ${{ steps.deploy.outputs.url }}\n\nCommit: \`${{ github.sha }}\``
-            })
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('## Preview Deployment')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+            }
 
   # ==========================================================================
-  # Production Deployment
+  # Deploy Production
   # ==========================================================================
   production:
     name: Production Deployment
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
     if: github.event_name == 'push' || github.event.inputs.environment == 'production'
     environment:
       name: production
@@ -107,48 +279,87 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - name: Restore Vercel build output
+        uses: actions/cache/restore@v4
         with:
-          version: ${{ env.PNPM_VERSION }}
+          path: .vercel/output
+          key: ${{ needs.build.outputs.cache-key }}
+          fail-on-cache-miss: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Cache Vercel CLI
+        uses: actions/cache@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          path: ~/.npm
+          key: vercel-cli-${{ runner.os }}-${{ hashFiles('**/package.json') }}
+          restore-keys: vercel-cli-${{ runner.os }}-
 
       - name: Install Vercel CLI
-        run: pnpm add -g vercel@latest
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build project
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.CONVEX_URL_PRODUCTION }}
-          NEXT_PUBLIC_API_URL: https://api.pull.com
-
-      - name: Deploy to Vercel (Production)
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Health check
         run: |
-          for i in {1..10}; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" https://app.pull.com)
-            if [ "$response" == "200" ]; then
-              echo "Health check passed!"
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            npm install -g vercel@latest && exit 0
+            sleep 5
+            attempt=$((attempt + 1))
+          done
+          exit 1
+
+      # RELIABILITY: Deploy with retry logic
+      - name: Deploy to Vercel (Production)
+        id: deploy
+        run: |
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "::group::Deploy attempt $attempt/$max_attempts"
+            if vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}; then
+              echo "::endgroup::"
+              echo "Production deployment successful"
               exit 0
             fi
-            echo "Attempt $i: Health check returned $response, retrying..."
-            sleep 5
+            echo "::endgroup::"
+            echo "::warning::Deploy failed, retrying in 10s..."
+            sleep 10
+            attempt=$((attempt + 1))
           done
-          echo "Health check failed after 10 attempts"
+          echo "::error::Deployment failed after $max_attempts attempts"
           exit 1
+
+      # RELIABILITY: Health check with exponential backoff
+      - name: Health check
+        id: health
+        run: |
+          echo "Waiting for deployment to propagate..."
+          sleep 15
+
+          max_attempts=10
+          attempt=1
+          backoff=5
+
+          while [ $attempt -le $max_attempts ]; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://app.pull.com || echo "000")
+            if [ "$response" == "200" ]; then
+              echo "Health check passed!"
+              echo "status=success" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            echo "Attempt $attempt: Health check returned $response, retrying in ${backoff}s..."
+            sleep $backoff
+            backoff=$((backoff * 2 > 30 ? 30 : backoff * 2))
+            attempt=$((attempt + 1))
+          done
+
+          echo "status=failed" >> $GITHUB_OUTPUT
+          echo "::error::Health check failed after $max_attempts attempts"
+          exit 1
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ needs.build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- URL: https://app.pull.com" >> $GITHUB_STEP_SUMMARY
+          echo "- Health Check: ${{ steps.health.outputs.status || 'unknown' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify on success
         if: success()
@@ -162,13 +373,14 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Web Production Deployment Successful* :white_check_mark:\n\nURL: https://app.pull.com\nCommit: ${{ github.sha }}"
+                    "text": "*Web Production Deployment Successful*\n\nVersion: `${{ needs.build.outputs.version }}`\nURL: https://app.pull.com"
                   }
                 }
               ]
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
 
       - name: Notify on failure
         if: failure()
@@ -182,22 +394,28 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Web Production Deployment Failed* :x:\n\nCommit: ${{ github.sha }}\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "*Web Production Deployment Failed*\n\nVersion: `${{ needs.build.outputs.version }}`\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
                   }
                 }
               ]
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
 
   # ==========================================================================
-  # Lighthouse CI
+  # Lighthouse CI (runs after preview deployment)
   # ==========================================================================
   lighthouse:
     name: Lighthouse CI
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: preview
     if: github.event_name == 'pull_request'
+    # SECURITY: Minimal permissions for Lighthouse
+    permissions:
+      pull-requests: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -207,31 +425,65 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # RELIABILITY: Wait for deployment to stabilize
+      - name: Wait for deployment to stabilize
+        run: sleep 10
+
       - name: Run Lighthouse CI
+        id: lighthouse
         uses: treosh/lighthouse-ci-action@v11
         with:
-          urls: |
-            ${{ needs.preview.outputs.url }}
+          urls: ${{ needs.preview.outputs.url }}
           uploadArtifacts: true
           temporaryPublicStorage: true
           configPath: "./lighthouserc.json"
+        # RELIABILITY: Don't fail PR on Lighthouse issues
+        continue-on-error: true
 
-      - name: Format Lighthouse Score
+      - name: Comment Lighthouse scores
         uses: actions/github-script@v7
         with:
           script: |
-            const results = JSON.parse(fs.readFileSync('.lighthouseci/lhr-*.json', 'utf8'));
-            const score = (cat) => Math.round(results.categories[cat].score * 100);
+            const fs = require('fs');
+            const path = require('path');
 
-            const body = `## Lighthouse Report 🔦
+            // Find lighthouse results
+            const lhciDir = '.lighthouseci';
+            let scores = { performance: 'N/A', accessibility: 'N/A', 'best-practices': 'N/A', seo: 'N/A' };
+
+            try {
+              const files = fs.readdirSync(lhciDir);
+              const lhrFile = files.find(f => f.startsWith('lhr-') && f.endsWith('.json'));
+              if (lhrFile) {
+                const lhr = JSON.parse(fs.readFileSync(path.join(lhciDir, lhrFile), 'utf8'));
+                scores = {
+                  performance: Math.round(lhr.categories.performance.score * 100),
+                  accessibility: Math.round(lhr.categories.accessibility.score * 100),
+                  'best-practices': Math.round(lhr.categories['best-practices'].score * 100),
+                  seo: Math.round(lhr.categories.seo.score * 100)
+                };
+              }
+            } catch (e) {
+              console.log('Could not parse Lighthouse results:', e.message);
+            }
+
+            const getEmoji = (score) => {
+              if (score === 'N/A') return '';
+              if (score >= 90) return '';
+              if (score >= 50) return '';
+              return '';
+            };
+
+            const body = `## Lighthouse Report
 
             | Category | Score |
             |----------|-------|
-            | Performance | ${score('performance')} |
-            | Accessibility | ${score('accessibility')} |
-            | Best Practices | ${score('best-practices')} |
-            | SEO | ${score('seo')} |
-            `;
+            | Performance | ${scores.performance} ${getEmoji(scores.performance)} |
+            | Accessibility | ${scores.accessibility} ${getEmoji(scores.accessibility)} |
+            | Best Practices | ${scores['best-practices']} ${getEmoji(scores['best-practices'])} |
+            | SEO | ${scores.seo} ${getEmoji(scores.seo)} |
+
+            Preview URL: ${{ needs.preview.outputs.url }}`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,

@@ -1,0 +1,158 @@
+# ConfigMaps for non-sensitive configuration
+# These provide environment-specific configuration that can be updated without redeployment
+
+---
+# Shared configuration across all services
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pull-shared-config
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: pull
+data:
+  # Environment
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+
+  # Temporal Configuration
+  TEMPORAL_NAMESPACE: "pull-production"
+  TEMPORAL_TASK_QUEUE: "pull-main-queue"
+  TEMPORAL_MAX_CONCURRENT_ACTIVITIES: "100"
+  TEMPORAL_MAX_CONCURRENT_WORKFLOWS: "200"
+
+  # Feature Flags (non-sensitive)
+  ENABLE_METRICS: "true"
+  ENABLE_TRACING: "true"
+  ENABLE_PROFILING: "false"
+
+  # Rate Limiting Defaults
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+
+  # Cache TTLs (seconds)
+  CACHE_TTL_DEFAULT: "300"
+  CACHE_TTL_USER_PROFILE: "600"
+  CACHE_TTL_MARKET_DATA: "60"
+---
+# API-specific configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pull-api-config
+  namespace: pull
+  labels:
+    app: pull-api
+    app.kubernetes.io/name: pull-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: pull
+data:
+  # Server Configuration
+  PORT: "3001"
+  HOST: "0.0.0.0"
+  REQUEST_TIMEOUT_MS: "30000"
+  BODY_LIMIT: "10mb"
+
+  # CORS Configuration
+  CORS_ORIGINS: "https://app.pull.com,https://admin.pull.com"
+  CORS_METHODS: "GET,POST,PUT,DELETE,PATCH,OPTIONS"
+  CORS_ALLOWED_HEADERS: "Content-Type,Authorization,X-Request-ID"
+  CORS_MAX_AGE: "86400"
+
+  # API Documentation
+  SWAGGER_ENABLED: "true"
+  SWAGGER_PATH: "/docs"
+
+  # Health Check Configuration
+  HEALTH_CHECK_PATH: "/health"
+  READY_CHECK_PATH: "/ready"
+
+  # Pagination Defaults
+  DEFAULT_PAGE_SIZE: "20"
+  MAX_PAGE_SIZE: "100"
+---
+# Worker-specific configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pull-worker-config
+  namespace: pull
+  labels:
+    app: pull-temporal-worker
+    app.kubernetes.io/name: pull-temporal-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: pull
+data:
+  # Worker Configuration
+  PORT: "3002"
+  WORKER_CONCURRENCY: "20"
+  WORKER_POLL_INTERVAL_MS: "1000"
+
+  # Temporal Worker Settings
+  TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_TIMEOUT: "30000"
+  TEMPORAL_ACTIVITY_HEARTBEAT_TIMEOUT: "30000"
+  TEMPORAL_ACTIVITY_START_TO_CLOSE_TIMEOUT: "300000"
+  TEMPORAL_WORKFLOW_EXECUTION_TIMEOUT: "3600000"
+
+  # Retry Configuration
+  MAX_RETRY_ATTEMPTS: "3"
+  RETRY_INITIAL_INTERVAL_MS: "1000"
+  RETRY_MAX_INTERVAL_MS: "60000"
+  RETRY_BACKOFF_COEFFICIENT: "2"
+
+  # External API Configuration (non-sensitive)
+  PLAID_ENV: "production"
+  KALSHI_API_BASE_URL: "https://api.kalshi.com"
+  POLYMARKET_API_BASE_URL: "https://gamma-api.polymarket.com"
+
+  # Market Data Settings
+  MARKET_SYNC_INTERVAL_MS: "60000"
+  PRICE_UPDATE_BATCH_SIZE: "100"
+---
+# Redis connection pool configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pull-redis-config
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: redis-config
+data:
+  # Connection Pool Settings
+  REDIS_MAX_RETRIES: "3"
+  REDIS_RETRY_DELAY_MS: "100"
+  REDIS_CONNECT_TIMEOUT_MS: "5000"
+  REDIS_COMMAND_TIMEOUT_MS: "5000"
+  REDIS_POOL_MIN: "5"
+  REDIS_POOL_MAX: "50"
+  REDIS_IDLE_TIMEOUT_MS: "30000"
+---
+# Observability configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pull-observability-config
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: observability
+data:
+  # Prometheus Metrics
+  METRICS_PORT: "9090"
+  METRICS_PATH: "/metrics"
+  METRICS_PREFIX: "pull_"
+
+  # OpenTelemetry Tracing
+  OTEL_SERVICE_NAME: "pull-backend"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability:4317"
+  OTEL_TRACES_SAMPLER: "parentbased_traceidratio"
+  OTEL_TRACES_SAMPLER_ARG: "0.1"
+
+  # Logging
+  LOG_INCLUDE_TIMESTAMP: "true"
+  LOG_INCLUDE_TRACE_ID: "true"
+  LOG_SENSITIVE_FIELDS: "password,token,apiKey,secret"

@@ -1,0 +1,870 @@
+{
+  "title": "PULL Workers & Queues - Temporal Dashboard",
+  "description": "Temporal workflow and worker metrics for order execution, KYC, rewards, and other background jobs",
+  "widgets": [
+    {
+      "id": 1,
+      "definition": {
+        "type": "note",
+        "content": "## Temporal Workflow Overview",
+        "background_color": "blue",
+        "font_size": "18",
+        "text_align": "center",
+        "vertical_align": "center",
+        "show_tick": false
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 1
+      }
+    },
+    {
+      "id": 2,
+      "definition": {
+        "title": "Active Workflows",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.active{service:pull-workers}"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 0,
+        "text_align": "center"
+      },
+      "layout": {
+        "x": 0,
+        "y": 1,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 3,
+      "definition": {
+        "title": "Workflow Success Rate",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "(a / (a + b)) * 100"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.completed{service:pull-workers}.as_count()"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.failed{service:pull-workers}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 1,
+        "custom_unit": "%",
+        "text_align": "center",
+        "conditional_formats": [
+          {
+            "comparator": ">=",
+            "value": 99,
+            "palette": "white_on_green"
+          },
+          {
+            "comparator": ">=",
+            "value": 95,
+            "palette": "white_on_yellow"
+          },
+          {
+            "comparator": "<",
+            "value": 95,
+            "palette": "white_on_red"
+          }
+        ]
+      },
+      "layout": {
+        "x": 2,
+        "y": 1,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 4,
+      "definition": {
+        "title": "Avg Workflow Duration",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a / 1000"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:temporal.workflow.duration.avg{service:pull-workers}"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 1,
+        "custom_unit": "s",
+        "text_align": "center"
+      },
+      "layout": {
+        "x": 4,
+        "y": 1,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 5,
+      "definition": {
+        "title": "Task Queue Backlog",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.task_queue.backlog{service:pull-workers}"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 0,
+        "text_align": "center",
+        "conditional_formats": [
+          {
+            "comparator": "<=",
+            "value": 100,
+            "palette": "white_on_green"
+          },
+          {
+            "comparator": "<=",
+            "value": 500,
+            "palette": "white_on_yellow"
+          },
+          {
+            "comparator": ">",
+            "value": 500,
+            "palette": "white_on_red"
+          }
+        ]
+      },
+      "layout": {
+        "x": 6,
+        "y": 1,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 6,
+      "definition": {
+        "title": "Worker Pollers",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.worker.pollers{service:pull-workers}"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 0,
+        "text_align": "center"
+      },
+      "layout": {
+        "x": 8,
+        "y": 1,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 7,
+      "definition": {
+        "title": "Schedule-to-Start Latency",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:temporal.activity.schedule_to_start.p95{service:pull-workers}"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 0,
+        "custom_unit": "ms",
+        "text_align": "center",
+        "conditional_formats": [
+          {
+            "comparator": "<=",
+            "value": 100,
+            "palette": "white_on_green"
+          },
+          {
+            "comparator": "<=",
+            "value": 1000,
+            "palette": "white_on_yellow"
+          },
+          {
+            "comparator": ">",
+            "value": 1000,
+            "palette": "white_on_red"
+          }
+        ]
+      },
+      "layout": {
+        "x": 10,
+        "y": 1,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 8,
+      "definition": {
+        "title": "Workflow Executions by Type",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "per_second(a)"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.started{service:pull-workers} by {workflow_type}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "dog_classic"
+            },
+            "display_type": "bars"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 3,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 9,
+      "definition": {
+        "title": "Workflow Completions & Failures",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "per_second(a)", "alias": "Completed"},
+              {"formula": "per_second(b)", "alias": "Failed"},
+              {"formula": "per_second(c)", "alias": "Cancelled"},
+              {"formula": "per_second(d)", "alias": "Timed Out"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.completed{service:pull-workers}.as_count()"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.failed{service:pull-workers}.as_count()"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.cancelled{service:pull-workers}.as_count()"
+              },
+              {
+                "name": "d",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.timed_out{service:pull-workers}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "semantic"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {
+        "x": 6,
+        "y": 3,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 10,
+      "definition": {
+        "type": "note",
+        "content": "## Order Execution Workflows",
+        "background_color": "green",
+        "font_size": "16",
+        "text_align": "center",
+        "vertical_align": "center",
+        "show_tick": false
+      },
+      "layout": {
+        "x": 0,
+        "y": 6,
+        "width": 12,
+        "height": 1
+      }
+    },
+    {
+      "id": 11,
+      "definition": {
+        "title": "Order Execution - Duration Distribution",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "p50"},
+              {"formula": "b", "alias": "p95"},
+              {"formula": "c", "alias": "p99"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:temporal.workflow.duration.p50{workflow_type:orderexecutionworkflow}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:temporal.workflow.duration.p95{workflow_type:orderexecutionworkflow}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:temporal.workflow.duration.p99{workflow_type:orderexecutionworkflow}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "cool"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "label": "ms"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 7,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 12,
+      "definition": {
+        "title": "Order Execution - Activity Breakdown",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Submit to Massive"},
+              {"formula": "b", "alias": "Check Status"},
+              {"formula": "c", "alias": "Record Trade"},
+              {"formula": "d", "alias": "Update Balance"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:temporal.activity.duration.p95{activity:submitordertomassive}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:temporal.activity.duration.p95{activity:checkorderstatus}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:temporal.activity.duration.p95{activity:recordtrade}"
+              },
+              {
+                "name": "d",
+                "data_source": "metrics",
+                "query": "avg:temporal.activity.duration.p95{activity:updatebalance}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "warm"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "label": "ms"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 7,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 13,
+      "definition": {
+        "type": "note",
+        "content": "## KYC Workflows",
+        "background_color": "orange",
+        "font_size": "16",
+        "text_align": "center",
+        "vertical_align": "center",
+        "show_tick": false
+      },
+      "layout": {
+        "x": 0,
+        "y": 10,
+        "width": 12,
+        "height": 1
+      }
+    },
+    {
+      "id": 14,
+      "definition": {
+        "title": "KYC Workflows - Status",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Started"},
+              {"formula": "b", "alias": "Completed"},
+              {"formula": "c", "alias": "Failed"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.started{workflow_type:onboardingkycworkflow}.as_count()"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.completed{workflow_type:onboardingkycworkflow}.as_count()"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "sum:temporal.workflow.failed{workflow_type:onboardingkycworkflow}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "semantic"
+            },
+            "display_type": "bars"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 11,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 15,
+      "definition": {
+        "title": "KYC - Step Completion Times",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a / 1000", "alias": "Sumsub Verification"},
+              {"formula": "b / 1000", "alias": "Checkr Background"},
+              {"formula": "c / 1000", "alias": "Plaid Bank Link"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:temporal.activity.duration.p95{activity:verifywithsumsub}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:temporal.activity.duration.p95{activity:runbackgroundcheck}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:temporal.activity.duration.p95{activity:linkbankaccount}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "orange"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "label": "seconds"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 11,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 16,
+      "definition": {
+        "type": "note",
+        "content": "## Task Queues",
+        "background_color": "purple",
+        "font_size": "16",
+        "text_align": "center",
+        "vertical_align": "center",
+        "show_tick": false
+      },
+      "layout": {
+        "x": 0,
+        "y": 14,
+        "width": 12,
+        "height": 1
+      }
+    },
+    {
+      "id": 17,
+      "definition": {
+        "title": "Task Queue Backlog by Queue",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:temporal.task_queue.backlog{service:pull-workers} by {task_queue}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "dog_classic"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 15,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 18,
+      "definition": {
+        "title": "Task Processing Rate by Queue",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "per_second(a)"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.activity.completed{service:pull-workers} by {task_queue}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "cool"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {
+        "x": 6,
+        "y": 15,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 19,
+      "definition": {
+        "title": "Activity Retries",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.activity.retries{service:pull-workers} by {activity}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "warm"
+            },
+            "display_type": "bars"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 18,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 20,
+      "definition": {
+        "title": "Activity Failures by Type",
+        "type": "toplist",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a",
+                "limit": {
+                  "count": 10,
+                  "order": "desc"
+                }
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:temporal.activity.failed{service:pull-workers} by {activity,error_type}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ]
+      },
+      "layout": {
+        "x": 6,
+        "y": 18,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 21,
+      "definition": {
+        "type": "note",
+        "content": "## Worker Health",
+        "background_color": "gray",
+        "font_size": "16",
+        "text_align": "center",
+        "vertical_align": "center",
+        "show_tick": false
+      },
+      "layout": {
+        "x": 0,
+        "y": 21,
+        "width": 12,
+        "height": 1
+      }
+    },
+    {
+      "id": 22,
+      "definition": {
+        "title": "Worker CPU Usage",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:system.cpu.user{service:pull-workers} by {host}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "warm"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "label": "%",
+          "max": "100"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 22,
+        "width": 4,
+        "height": 3
+      }
+    },
+    {
+      "id": 23,
+      "definition": {
+        "title": "Worker Memory Usage",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a / 1073741824"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:system.mem.used{service:pull-workers} by {host}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "cool"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "label": "GB"
+        }
+      },
+      "layout": {
+        "x": 4,
+        "y": 22,
+        "width": 4,
+        "height": 3
+      }
+    },
+    {
+      "id": 24,
+      "definition": {
+        "title": "Worker Instances",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "count:temporal.worker.heartbeat{service:pull-workers} by {host}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "green"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {
+        "x": 8,
+        "y": 22,
+        "width": 4,
+        "height": 3
+      }
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "env",
+      "default": "production",
+      "prefix": "env",
+      "available_values": ["production", "staging", "development"]
+    },
+    {
+      "name": "task_queue",
+      "default": "*",
+      "prefix": "task_queue",
+      "available_values": ["*", "trading-queue", "kyc-queue", "rewards-queue", "email-queue", "messaging-queue"]
+    }
+  ],
+  "layout_type": "ordered",
+  "notify_list": [],
+  "reflow_type": "fixed"
+}

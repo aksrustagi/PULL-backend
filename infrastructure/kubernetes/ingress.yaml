@@ -1,27 +1,69 @@
+# Ingress Configuration for PULL API
+# Uses nginx-ingress controller with TLS termination and security headers
+
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: pull-ingress
+  name: pull-api-ingress
   namespace: pull
+  labels:
+    app: pull-api
+    app.kubernetes.io/name: pull-api
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: pull
   annotations:
+    # Ingress class
     kubernetes.io/ingress.class: nginx
+    # TLS
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Proxy configuration
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    nginx.ingress.kubernetes.io/limit-rpm: "1000"
+    # Security headers
     nginx.ingress.kubernetes.io/configuration-snippet: |
+      # Security headers
       more_set_headers "X-Content-Type-Options: nosniff";
       more_set_headers "X-Frame-Options: DENY";
       more_set_headers "X-XSS-Protection: 1; mode=block";
       more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: geolocation=(), microphone=(), camera=()";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://api.pull.com wss://api.pull.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+
+      # Remove server header
+      more_clear_headers "Server";
+
+      # Add request ID for tracing
+      set $request_id $request_id;
+      if ($request_id = '') {
+        set $request_id $pid-$msec-$remote_addr-$request_length;
+      }
+      more_set_headers "X-Request-ID: $request_id";
+    # Backend protocol
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    # Upstream hashing for session affinity (optional)
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    # Custom error pages
+    nginx.ingress.kubernetes.io/custom-http-errors: "502,503,504"
+    nginx.ingress.kubernetes.io/default-backend: pull-api
+    # Modsecurity WAF (if installed)
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
         - api.pull.com
+        - api-staging.pull.com
       secretName: pull-api-tls
   rules:
     - host: api.pull.com
@@ -34,80 +76,72 @@ spec:
                 name: pull-api
                 port:
                   number: 80
+    - host: api-staging.pull.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pull-api
+                port:
+                  number: 80
 ---
+# Ingress for health checks (no TLS, internal only)
 apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+kind: Ingress
 metadata:
-  name: pull-api-network-policy
+  name: pull-api-health-ingress
   namespace: pull
+  labels:
+    app: pull-api
+    app.kubernetes.io/name: pull-api
+    app.kubernetes.io/component: ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 spec:
-  podSelector:
-    matchLabels:
-      app: pull-api
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              name: ingress-nginx
-        - podSelector:
-            matchLabels:
-              app: pull-api
-      ports:
-        - protocol: TCP
-          port: 3001
-  egress:
-    - to:
-        - podSelector:
-            matchLabels:
-              app: temporal
-      ports:
-        - protocol: TCP
-          port: 7233
-    - to:
-        - namespaceSelector: {}
-          podSelector:
-            matchLabels:
-              app: redis
-      ports:
-        - protocol: TCP
-          port: 6379
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-      ports:
-        - protocol: TCP
-          port: 443
+  ingressClassName: nginx
+  rules:
+    - host: api-internal.pull.local
+      http:
+        paths:
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: pull-api
+                port:
+                  number: 80
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: pull-api
+                port:
+                  number: 9090
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+# Certificate resource for automatic TLS cert management
+apiVersion: cert-manager.io/v1
+kind: Certificate
 metadata:
-  name: pull-worker-network-policy
+  name: pull-api-cert
   namespace: pull
+  labels:
+    app: pull-api
+    app.kubernetes.io/name: pull-api
+    app.kubernetes.io/component: tls
 spec:
-  podSelector:
-    matchLabels:
-      app: pull-temporal-worker
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 3002
-  egress:
-    - to:
-        - podSelector:
-            matchLabels:
-              app: temporal
-      ports:
-        - protocol: TCP
-          port: 7233
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-      ports:
-        - protocol: TCP
-          port: 443
+  secretName: pull-api-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - api.pull.com
+    - api-staging.pull.com
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  duration: 2160h  # 90 days
+  renewBefore: 720h  # 30 days before expiry

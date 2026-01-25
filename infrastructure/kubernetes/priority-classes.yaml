@@ -1,0 +1,68 @@
+# Priority Classes for PULL workloads
+# These define scheduling priority and preemption behavior
+
+---
+# Critical system components - highest priority
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: pull-critical
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: scheduling
+description: "Critical system components that must always run"
+value: 1000000
+preemptionPolicy: PreemptLowerPriority
+globalDefault: false
+---
+# API tier - high priority for user-facing services
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: pull-api-priority
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: scheduling
+description: "API services handling user requests"
+value: 100000
+preemptionPolicy: PreemptLowerPriority
+globalDefault: false
+---
+# Worker tier - medium-high priority for background processing
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: pull-worker-priority
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: scheduling
+description: "Background workers processing tasks"
+value: 75000
+preemptionPolicy: PreemptLowerPriority
+globalDefault: false
+---
+# Batch jobs - medium priority for scheduled tasks
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: pull-batch-priority
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: scheduling
+description: "Batch jobs and scheduled tasks"
+value: 50000
+preemptionPolicy: PreemptLowerPriority
+globalDefault: false
+---
+# Development/Test - low priority, can be preempted
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: pull-dev-priority
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: scheduling
+description: "Development and test workloads"
+value: 10000
+preemptionPolicy: Never
+globalDefault: false

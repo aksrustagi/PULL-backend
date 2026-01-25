@@ -1,0 +1,285 @@
+# Network Policies for PULL namespace
+# Implements zero-trust networking with explicit allow rules
+
+---
+# Default deny all ingress and egress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}  # Applies to all pods in namespace
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow DNS resolution for all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}  # Applies to all pods
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# API Network Policy - Allow ingress from ingress controller and internal services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pull-api-network-policy
+  namespace: pull
+  labels:
+    app: pull-api
+    app.kubernetes.io/name: pull-api
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: pull-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from ingress-nginx controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3001
+    # Allow from other API pods (for internal communication)
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pull-api
+      ports:
+        - protocol: TCP
+          port: 3001
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 3001
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Allow connection to Temporal
+    - to:
+        - podSelector:
+            matchLabels:
+              app: temporal
+      ports:
+        - protocol: TCP
+          port: 7233
+    # Allow connection to Redis
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow HTTPS egress for external APIs
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Worker Network Policy - Allow Temporal communication and external API access
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pull-worker-network-policy
+  namespace: pull
+  labels:
+    app: pull-temporal-worker
+    app.kubernetes.io/name: pull-temporal-worker
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: pull-temporal-worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow health check probes
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 3002
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 3002
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Allow connection to Temporal
+    - to:
+        - podSelector:
+            matchLabels:
+              app: temporal
+      ports:
+        - protocol: TCP
+          port: 7233
+    # Allow connection to Redis
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow HTTPS egress for external APIs (Kalshi, Polymarket, Plaid, etc.)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Temporal communication policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-temporal-communication
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: temporal
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from API
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pull-api
+      ports:
+        - protocol: TCP
+          port: 7233
+    # Allow from workers
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pull-temporal-worker
+      ports:
+        - protocol: TCP
+          port: 7233
+---
+# Redis communication policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-communication
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from API
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pull-api
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow from workers
+    - from:
+        - podSelector:
+            matchLabels:
+              app: pull-temporal-worker
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# Allow inter-pod communication for monitoring
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: pull
+  labels:
+    app.kubernetes.io/name: pull
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}  # All pods
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow Prometheus to scrape metrics from any pod
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+        - protocol: TCP
+          port: 3001
+        - protocol: TCP
+          port: 3002
