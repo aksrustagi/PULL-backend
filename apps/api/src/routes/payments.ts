@@ -1,6 +1,9 @@
 /**
  * Payments API Routes
  * Handles deposits, withdrawals, and payment methods using Stripe
+ *
+ * SECURITY: All financial operations require idempotency keys to prevent
+ * duplicate transactions from network retries.
  */
 
 import { Hono } from "hono";
@@ -15,6 +18,11 @@ import {
   getStripeClient,
 } from "@pull/core/services/stripe";
 import type { CreateCheckoutSessionParams } from "@pull/core/services/stripe";
+import { checkIdempotencyKey, isRedisAvailable } from "../lib/redis";
+import { toUserId } from "../lib/convex-types";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger();
 
 const app = new Hono<Env>();
 
@@ -28,13 +36,15 @@ const createDepositSchema = z.object({
   paymentMethods: z.array(z.enum(["card", "bank_transfer", "us_bank_account"])).optional(),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
-  idempotencyKey: z.string().uuid().optional(),
+  // REQUIRED for financial operations - prevents duplicate transactions
+  idempotencyKey: z.string().uuid({ message: "Idempotency key is required for financial operations" }),
 });
 
 const createWithdrawalSchema = z.object({
   amount: z.number().int().min(100).max(100000000), // Min $1, Max $1M in cents
   method: z.enum(["standard", "instant"]).default("standard"),
-  idempotencyKey: z.string().uuid().optional(),
+  // REQUIRED for financial operations - prevents duplicate transactions
+  idempotencyKey: z.string().uuid({ message: "Idempotency key is required for financial operations" }),
 });
 
 const setupConnectedAccountSchema = z.object({
@@ -75,12 +85,44 @@ app.post("/deposit", zValidator("json", createDepositSchema), async (c) => {
   }
 
   try {
+    // IDEMPOTENCY: Check for duplicate request
+    const idempotencyResult = await checkIdempotencyKey(
+      `deposit:${userId}:${body.idempotencyKey}`,
+      JSON.stringify({ amount: body.amount, currency: body.currency }),
+      86400 // 24 hour TTL
+    );
+
+    if (idempotencyResult.exists) {
+      logger.info("Duplicate deposit request detected", {
+        requestId,
+        userId,
+        idempotencyKey: body.idempotencyKey,
+      });
+      // Return the cached response for idempotent retry
+      const cachedResponse = JSON.parse(idempotencyResult.storedValue || "{}");
+      return c.json({
+        success: true,
+        data: cachedResponse,
+        idempotent: true,
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Warn if Redis is down - idempotency cannot be guaranteed
+    if (!isRedisAvailable()) {
+      logger.warn("Processing deposit without idempotency guarantee - Redis unavailable", {
+        requestId,
+        userId,
+      });
+    }
+
     const convex = getConvexClient();
     const checkoutService = getCheckoutService();
     const stripeClient = getStripeClient();
 
     // Get user for email
-    const user = await convex.query(api.users.getById, { id: userId as any });
+    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
     if (!user) {
       return c.json(
         {

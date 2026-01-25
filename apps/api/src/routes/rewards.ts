@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Env } from "../index";
 import { parseIntSafe } from "../utils/validation";
 import { convex, api } from "../lib/convex";
+import { toUserId, toRewardId } from "../lib/convex-types";
 
 const app = new Hono<Env>();
 
@@ -27,7 +28,7 @@ app.get("/balance", async (c) => {
 
   try {
     const balance = await convex.query(api.rewards.getBalance, {
-      userId: userId as any,
+      userId: toUserId(userId),
     });
 
     return c.json({
@@ -75,7 +76,7 @@ app.get("/history", async (c) => {
     const calculatedOffset = offset || (page - 1) * limit;
 
     const result = await convex.query(api.rewards.getHistory, {
-      userId: userId as any,
+      userId: toUserId(userId),
       type: type || undefined,
       limit,
       offset: calculatedOffset,
@@ -181,8 +182,8 @@ app.post("/redeem", zValidator("json", redeemSchema), async (c) => {
 
   try {
     const result = await convex.mutation(api.rewards.redeem, {
-      userId: userId as any,
-      rewardId: body.rewardId as any,
+      userId: toUserId(userId),
+      rewardId: toRewardId(body.rewardId),
       quantity: body.quantity,
       shippingAddress: body.shippingAddress,
     });
@@ -315,7 +316,7 @@ app.post("/daily-streak", async (c) => {
 
   try {
     const result = await convex.mutation(api.rewards.claimDailyStreak, {
-      userId: userId as any,
+      userId: toUserId(userId),
     });
 
     return c.json({

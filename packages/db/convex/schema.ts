@@ -70,6 +70,14 @@ export default defineSchema({
     walletAddress: v.optional(v.string()),
     passwordHash: v.optional(v.string()),
 
+    // Role-based access control
+    role: v.optional(v.union(
+      v.literal("user"),
+      v.literal("moderator"),
+      v.literal("admin"),
+      v.literal("superadmin")
+    )),
+
     // Referral
     referralCode: v.string(),
     referredBy: v.optional(v.id("users")),
@@ -86,6 +94,7 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_kyc_status", ["kycStatus"])
     .index("by_referrer", ["referredBy"])
+    .index("by_role", ["role"])
     .searchIndex("search_users", {
       searchField: "displayName",
       filterFields: ["status", "kycTier"],
