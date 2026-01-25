@@ -42,6 +42,9 @@ const mockPersonaClient = {
   approveInquiry: vi.fn(),
   declineInquiry: vi.fn(),
   verifyWebhook: vi.fn(),
+  getLatestInquiryByReferenceId: vi.fn(),
+  getInquiryFiles: vi.fn(),
+  getVerifications: vi.fn(),
 };
 
 vi.mock('@pull/core/services/persona', () => ({
@@ -418,6 +421,190 @@ function createTestApp(options: { authenticated?: boolean; userId?: string } = {
       success: true,
       data: records || [],
     });
+  });
+
+  // Get KYC documents
+  app.get('/kyc/documents', async (c) => {
+    const userId = c.get('userId');
+    if (!userId) {
+      return c.json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+      }, 401);
+    }
+
+    const inquiryId = c.req.query('inquiryId');
+    
+    try {
+      // Get inquiry ID - either from query or latest for user
+      let targetInquiryId = inquiryId;
+      if (!targetInquiryId) {
+        const latestInquiry = await mockPersonaClient.getLatestInquiryByReferenceId(userId);
+        if (!latestInquiry) {
+          return c.json({
+            success: true,
+            data: {
+              documents: [],
+              selfies: [],
+            },
+            timestamp: new Date().toISOString(),
+          });
+        }
+        targetInquiryId = latestInquiry.id;
+      }
+
+      const { documents, selfies } = await mockPersonaClient.getInquiryFiles(targetInquiryId);
+      const verifications = await mockPersonaClient.getVerifications(targetInquiryId);
+
+      // Format document response (matching actual route implementation)
+      const formattedDocuments = documents.map((doc: any) => ({
+        id: doc.id,
+        kind: doc.attributes.kind,
+        status: doc.attributes.status,
+        createdAt: doc.attributes.created_at,
+        processedAt: doc.attributes.processed_at,
+        files: doc.attributes.files.map((f: any) => ({
+          id: f.id,
+          filename: f.filename,
+          page: f.page,
+          url: f.url,
+          byteSize: f.byte_size,
+        })),
+      }));
+
+      const formattedSelfies = selfies.map((selfie: any) => ({
+        id: selfie.id,
+        status: selfie.attributes.status,
+        captureMethod: selfie.attributes.capture_method,
+        createdAt: selfie.attributes.created_at,
+        processedAt: selfie.attributes.processed_at,
+        centerPhotoUrl: selfie.attributes.center_photo_url,
+        leftPhotoUrl: selfie.attributes.left_photo_url,
+        rightPhotoUrl: selfie.attributes.right_photo_url,
+      }));
+
+      return c.json({
+        success: true,
+        data: {
+          inquiryId: targetInquiryId,
+          documents: formattedDocuments,
+          selfies: formattedSelfies,
+          verifications,
+          totalDocuments: documents.length,
+          totalSelfies: selfies.length,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'DOCUMENTS_FETCH_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to get documents',
+        },
+        timestamp: new Date().toISOString(),
+      }, 500);
+    }
+  });
+
+  // Cancel KYC workflow
+  app.post('/kyc/cancel', async (c) => {
+    const userId = c.get('userId');
+    if (!userId) {
+      return c.json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+      }, 401);
+    }
+
+    try {
+      // Mock temporal client check
+      // In real implementation, would check for active workflows
+      // For testing, we'll simulate based on whether we have a pending KYC record
+      const kycRecord = await mockConvexQuery('kyc:getLatest', { userId });
+      
+      if (!kycRecord || kycRecord.status !== 'in_progress') {
+        return c.json({
+          success: false,
+          error: {
+            code: 'NO_ACTIVE_KYC',
+            message: 'No active KYC workflow to cancel',
+          },
+          timestamp: new Date().toISOString(),
+        }, 404);
+      }
+
+      // Would signal Temporal workflow in real implementation
+      await mockConvexMutation('kyc:update', {
+        id: kycRecord._id,
+        status: 'cancelled',
+      });
+
+      return c.json({
+        success: true,
+        data: {
+          message: 'KYC workflow cancelled',
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'KYC_CANCEL_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to cancel KYC',
+        },
+        timestamp: new Date().toISOString(),
+      }, 500);
+    }
+  });
+
+  // Upgrade KYC tier
+  app.post('/kyc/upgrade', async (c) => {
+    const userId = c.get('userId');
+    if (!userId) {
+      return c.json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+      }, 401);
+    }
+
+    try {
+      const body = await c.req.json();
+      const targetTier = body.targetTier;
+
+      // Validate target tier
+      const validUpgradeTiers = ['enhanced', 'accredited'];
+      if (!validUpgradeTiers.includes(targetTier)) {
+        return c.json({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid target tier' },
+        }, 400);
+      }
+
+      // Would start Temporal workflow in real implementation
+      const workflowId = `kyc-upgrade-${userId}-${Date.now()}`;
+      
+      return c.json({
+        success: true,
+        data: {
+          workflowId,
+          status: 'in_progress',
+          currentStep: 'persona_verification',
+          progress: 25,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      return c.json({
+        success: false,
+        error: {
+          code: 'UPGRADE_START_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to start upgrade',
+        },
+        timestamp: new Date().toISOString(),
+      }, 500);
+    }
   });
 
   return app;
@@ -943,6 +1130,300 @@ describe('KYC Routes', () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.data).toEqual([]);
+    });
+  });
+
+  // =========================================================================
+  // Get Documents Tests
+  // =========================================================================
+
+  describe('GET /kyc/documents', () => {
+    it('should reject without authentication', async () => {
+      const app = createTestApp({ authenticated: false });
+
+      const res = await app.request('/kyc/documents');
+
+      expect(res.status).toBe(401);
+    });
+
+    it('should return documents for latest inquiry', async () => {
+      const app = createTestApp();
+
+      const mockDocuments = {
+        documents: [
+          {
+            id: 'doc-001',
+            attributes: {
+              kind: 'government_id',
+              status: 'processed',
+              created_at: '2024-01-01T10:00:00Z',
+              processed_at: '2024-01-01T10:05:00Z',
+              files: [
+                {
+                  id: 'file-001',
+                  filename: 'id_front.jpg',
+                  page: 0,
+                  url: 'https://example.com/file-001',
+                  byte_size: 102400,
+                },
+              ],
+            },
+          },
+        ],
+        selfies: [
+          {
+            id: 'selfie-001',
+            attributes: {
+              status: 'processed',
+              capture_method: 'video',
+              created_at: '2024-01-01T10:10:00Z',
+              processed_at: '2024-01-01T10:15:00Z',
+              center_photo_url: 'https://example.com/selfie-center',
+              left_photo_url: 'https://example.com/selfie-left',
+              right_photo_url: 'https://example.com/selfie-right',
+            },
+          },
+        ],
+      };
+
+      mockPersonaClient.getLatestInquiryByReferenceId.mockResolvedValueOnce(mockPersonaInquiry);
+      mockPersonaClient.getInquiryFiles.mockResolvedValueOnce(mockDocuments);
+      mockPersonaClient.getVerifications.mockResolvedValueOnce([]);
+
+      const res = await app.request('/kyc/documents');
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.documents).toHaveLength(1);
+      expect(body.data.selfies).toHaveLength(1);
+      expect(body.data.documents[0].kind).toBe('government_id');
+    });
+
+    it('should return empty documents for new user', async () => {
+      const app = createTestApp();
+
+      mockPersonaClient.getLatestInquiryByReferenceId.mockResolvedValueOnce(null);
+
+      const res = await app.request('/kyc/documents');
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.documents).toEqual([]);
+      expect(body.data.selfies).toEqual([]);
+    });
+
+    it('should return documents for specific inquiry ID', async () => {
+      const app = createTestApp();
+
+      const mockDocuments = {
+        documents: [],
+        selfies: [],
+      };
+
+      mockPersonaClient.getInquiryFiles.mockResolvedValueOnce(mockDocuments);
+      mockPersonaClient.getVerifications.mockResolvedValueOnce([]);
+
+      const res = await app.request('/kyc/documents?inquiryId=inq_123');
+
+      expect(res.status).toBe(200);
+      expect(mockPersonaClient.getInquiryFiles).toHaveBeenCalledWith('inq_123');
+    });
+
+    it('should handle document fetch errors gracefully', async () => {
+      const app = createTestApp();
+
+      mockPersonaClient.getLatestInquiryByReferenceId.mockRejectedValueOnce(
+        new Error('API error')
+      );
+
+      const res = await app.request('/kyc/documents');
+
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('DOCUMENTS_FETCH_FAILED');
+    });
+  });
+
+  // =========================================================================
+  // Cancel KYC Tests
+  // =========================================================================
+
+  describe('POST /kyc/cancel', () => {
+    it('should reject without authentication', async () => {
+      const app = createTestApp({ authenticated: false });
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('should cancel active KYC workflow', async () => {
+      const app = createTestApp();
+
+      // Mock an active KYC record
+      mockConvexQuery.mockResolvedValueOnce(mockKYCRecord);
+      mockConvexMutation.mockResolvedValueOnce({ success: true });
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.message).toContain('cancelled');
+      expect(body.timestamp).toBeDefined();
+    });
+
+    it('should return 404 when no active workflow exists', async () => {
+      const app = createTestApp();
+
+      // Mock no KYC record
+      mockConvexQuery.mockResolvedValueOnce(null);
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(404);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('NO_ACTIVE_KYC');
+    });
+
+    it('should return 404 when KYC is not in progress', async () => {
+      const app = createTestApp();
+
+      // Mock completed KYC record
+      mockConvexQuery.mockResolvedValueOnce(mockCompletedKYC);
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(404);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('NO_ACTIVE_KYC');
+    });
+
+    it('should handle errors gracefully', async () => {
+      const app = createTestApp();
+
+      mockConvexQuery.mockRejectedValueOnce(new Error('Database error'));
+
+      const res = await app.request('/kyc/cancel', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('KYC_CANCEL_FAILED');
+    });
+  });
+
+  // =========================================================================
+  // Upgrade KYC Tests
+  // =========================================================================
+
+  describe('POST /kyc/upgrade', () => {
+    it('should reject without authentication', async () => {
+      const app = createTestApp({ authenticated: false });
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'enhanced' }),
+      });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('should start upgrade workflow to enhanced tier', async () => {
+      const app = createTestApp();
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetTier: 'enhanced',
+          requireBankLink: true,
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('in_progress');
+      expect(body.data.workflowId).toContain('kyc-upgrade');
+      expect(body.timestamp).toBeDefined();
+    });
+
+    it('should start upgrade workflow to accredited tier', async () => {
+      const app = createTestApp();
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'accredited' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.workflowId).toContain('kyc-upgrade');
+    });
+
+    it('should reject invalid target tier', async () => {
+      const app = createTestApp();
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'basic' }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('should handle errors gracefully', async () => {
+      const app = createTestApp();
+
+      // Force a JSON parse error by sending invalid JSON
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'invalid json',
+      });
+
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('UPGRADE_START_FAILED');
+    });
+
+    it('should include timestamp in response', async () => {
+      const app = createTestApp();
+
+      const res = await app.request('/kyc/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTier: 'enhanced' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.timestamp).toBeDefined();
+      expect(typeof body.timestamp).toBe('string');
     });
   });
 });

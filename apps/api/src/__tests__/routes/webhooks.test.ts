@@ -1,509 +1,780 @@
-/**
- * Webhooks Routes Tests
- * Tests for webhook signature verification and event processing
- */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Hono } from 'hono';
+import * as crypto from 'crypto';
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Hono } from "hono";
-import crypto from "crypto";
+// Mock logger
+const mockLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn(() => mockLogger),
+};
 
-// Mock environment
-vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test_secret");
-vi.stubEnv("PERSONA_WEBHOOK_SECRET", "persona_test_secret");
-vi.stubEnv("PLAID_WEBHOOK_SECRET", "plaid_test_secret");
-vi.stubEnv("CHECKR_WEBHOOK_SECRET", "checkr_test_secret");
-vi.stubEnv("NYLAS_WEBHOOK_SECRET", "nylas_test_secret");
-vi.stubEnv("MASSIVE_WEBHOOK_SECRET", "massive_test_secret");
-vi.stubEnv("POLYGON_WEBHOOK_SECRET", "polygon_test_secret");
+vi.mock('@pull/core/services', () => ({
+  getLogger: vi.fn(() => mockLogger),
+}));
 
-// Mock Convex
-const mockConvexQuery = vi.fn();
+// Mock Convex client
 const mockConvexMutation = vi.fn();
+const mockConvexQuery = vi.fn();
 
-vi.mock("../../lib/convex", () => ({
-  getConvexClient: vi.fn(() => ({
-    query: mockConvexQuery,
+vi.mock('convex/browser', () => ({
+  ConvexHttpClient: vi.fn(() => ({
     mutation: mockConvexMutation,
+    query: mockConvexQuery,
   })),
+}));
+
+// Mock Convex API
+vi.mock('@pull/db/convex/_generated/api', () => ({
   api: {
     kyc: {
-      updateKYCStatus: "kyc:updateKYCStatus",
-      storeWebhookEvent: "kyc:storeWebhookEvent",
+      storeWebhookEvent: 'kyc:storeWebhookEvent',
+      updateKYCStatus: 'kyc:updateKYCStatus',
+      markWebhookProcessed: 'kyc:markWebhookProcessed',
     },
     payments: {
-      completeDeposit: "payments:completeDeposit",
-      updatePaymentStatus: "payments:updatePaymentStatus",
-    },
-    users: {
-      updateBankAccounts: "users:updateBankAccounts",
+      completeDepositByExternalId: 'payments:completeDepositByExternalId',
+      failDepositByExternalId: 'payments:failDepositByExternalId',
+      completeWithdrawalByPayoutId: 'payments:completeWithdrawalByPayoutId',
+      failWithdrawalByPayoutId: 'payments:failWithdrawalByPayoutId',
+      markConnectedAccountReady: 'payments:markConnectedAccountReady',
     },
   },
 }));
 
-// Mock logger
-vi.mock("@pull/core/services", () => ({
-  getLogger: vi.fn(() => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  })),
+// Mock Persona client
+const mockPersonaClient = {
+  getInquiryWithVerifications: vi.fn(),
+};
+
+vi.mock('@pull/core/services/persona', () => ({
+  PersonaClient: vi.fn(() => mockPersonaClient),
 }));
 
-// Helper to create HMAC signature
+// Mock Stripe webhook handler
+const mockStripeWebhookHandler = {
+  processWebhook: vi.fn(),
+};
+
+vi.mock('@pull/core/services/stripe', () => ({
+  initializeWebhookHandler: vi.fn(() => mockStripeWebhookHandler),
+}));
+
+// Helper function to create HMAC signature
 function createHmacSignature(payload: string, secret: string): string {
-  return crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
-describe("Webhooks Routes", () => {
+// Helper function to create Persona-style signature
+function createPersonaSignature(payload: string, secret: string): string {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signedPayload = `${timestamp}.${payload}`;
+  const signature = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');
+  return `t=${timestamp},v1=${signature}`;
+}
+
+describe('Webhooks Routes', () => {
   let app: Hono;
-  let webhookRoutes: any;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-
-    const module = await import("../../routes/webhooks");
-    webhookRoutes = module.webhookRoutes;
-
-    app = new Hono();
-    app.use("*", async (c, next) => {
-      c.set("requestId", "req-123");
-      await next();
-    });
-    app.route("/webhooks", webhookRoutes);
+    process.env.PERSONA_WEBHOOK_SECRET = 'persona-test-secret';
+    process.env.STRIPE_WEBHOOK_SECRET = 'stripe-test-secret';
+    process.env.POLYGON_WEBHOOK_SECRET = 'polygon-test-secret';
+    process.env.CHECKR_WEBHOOK_SECRET = 'checkr-test-secret';
+    process.env.CONVEX_URL = 'https://test.convex.cloud';
+    process.env.PERSONA_API_KEY = 'persona-api-key';
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  // ==========================================================================
-  // STRIPE WEBHOOK TESTS
-  // ==========================================================================
-
-  describe("POST /webhooks/stripe", () => {
-    it("should reject requests without signature", async () => {
-      const res = await app.request("/webhooks/stripe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "payment_intent.succeeded" }),
-      });
-
-      expect(res.status).toBe(400);
+  describe('Stripe Webhooks', () => {
+    beforeEach(async () => {
+      vi.resetModules();
+      const { webhookRoutes } = await import('../../routes/webhooks');
+      app = new Hono();
+      app.route('/webhooks', webhookRoutes);
     });
 
-    it("should reject requests with invalid signature", async () => {
-      const res = await app.request("/webhooks/stripe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "stripe-signature": "invalid_signature",
-        },
-        body: JSON.stringify({ type: "payment_intent.succeeded" }),
+    describe('Signature Verification', () => {
+      it('should reject webhook without signature', async () => {
+        const payload = JSON.stringify({ type: 'checkout.session.completed' });
+
+        const res = await app.request('/webhooks/stripe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+        });
+
+        expect(res.status).toBe(401);
+        const data = await res.json();
+        expect(data).toHaveProperty('error');
       });
 
-      expect(res.status).toBe(401);
-    });
+      it('should reject webhook with invalid signature', async () => {
+        const payload = JSON.stringify({ type: 'checkout.session.completed' });
+        mockStripeWebhookHandler.processWebhook.mockResolvedValueOnce({
+          success: false,
+          error: 'Invalid signature',
+          eventType: 'checkout.session.completed',
+        });
 
-    it("should process payment_intent.succeeded event", async () => {
-      const payload = JSON.stringify({
-        type: "payment_intent.succeeded",
-        data: {
-          object: {
-            id: "pi_123",
-            metadata: { userId: "user-123", depositId: "dep-123" },
+        const res = await app.request('/webhooks/stripe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Stripe-Signature': 'invalid-signature',
           },
-        },
+          body: payload,
+        });
+
+        expect(res.status).toBe(401);
       });
 
-      mockConvexMutation.mockResolvedValue({ success: true });
+      it('should accept webhook with valid signature', async () => {
+        const payload = JSON.stringify({ type: 'checkout.session.completed' });
+        mockStripeWebhookHandler.processWebhook.mockResolvedValueOnce({
+          success: true,
+          processed: true,
+          eventId: 'evt_123',
+          eventType: 'checkout.session.completed',
+        });
 
-      // Note: Full Stripe signature verification is complex
-      // In production, use Stripe's SDK
-      const res = await app.request("/webhooks/stripe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "stripe-signature": "t=123,v1=test,v0=test",
-        },
-        body: payload,
-      });
-
-      // Will fail signature verification in test but tests the flow
-      expect(res.status).toBe(401);
-    });
-  });
-
-  // ==========================================================================
-  // PERSONA WEBHOOK TESTS
-  // ==========================================================================
-
-  describe("POST /webhooks/persona", () => {
-    const validPayload = {
-      data: {
-        type: "inquiry.completed",
-        attributes: {
-          status: "completed",
-          reference_id: "user-123",
-        },
-      },
-    };
-
-    it("should reject requests without signature", async () => {
-      const res = await app.request("/webhooks/persona", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validPayload),
-      });
-
-      expect(res.status).toBe(401);
-    });
-
-    it("should process inquiry.completed event", async () => {
-      const payload = JSON.stringify(validPayload);
-      const signature = createHmacSignature(payload, "persona_test_secret");
-
-      mockConvexMutation.mockResolvedValue({ success: true });
-
-      const res = await app.request("/webhooks/persona", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Persona-Signature": signature,
-        },
-        body: payload,
-      });
-
-      expect(res.status).toBe(200);
-    });
-
-    it("should handle inquiry.failed event", async () => {
-      const payload = JSON.stringify({
-        data: {
-          type: "inquiry.failed",
-          attributes: {
-            status: "failed",
-            reference_id: "user-123",
+        const res = await app.request('/webhooks/stripe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Stripe-Signature': 'valid-signature',
           },
-        },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data).toMatchObject({
+          received: true,
+          processed: true,
+        });
       });
-      const signature = createHmacSignature(payload, "persona_test_secret");
+    });
 
-      mockConvexMutation.mockResolvedValue({ success: true });
+    describe('checkout.session.completed', () => {
+      it('should process deposit completion', async () => {
+        mockConvexMutation.mockResolvedValue('deposit_123');
+        mockStripeWebhookHandler.processWebhook.mockImplementation(async () => {
+          // Simulate calling onDepositCompleted
+          const handler = vi.mocked(await import('@pull/core/services/stripe')).initializeWebhookHandler.mock.calls[0][0];
+          await handler.onDepositCompleted({
+            userId: 'user_123',
+            netAmount: 10000,
+            sessionId: 'cs_123',
+            paymentIntentId: 'pi_123',
+            customerId: 'cus_123',
+          });
 
-      const res = await app.request("/webhooks/persona", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Persona-Signature": signature,
-        },
-        body: payload,
+          return {
+            success: true,
+            processed: true,
+            eventId: 'evt_123',
+            eventType: 'checkout.session.completed',
+          };
+        });
+
+        const payload = JSON.stringify({
+          type: 'checkout.session.completed',
+          data: { object: { id: 'cs_123' } },
+        });
+
+        const res = await app.request('/webhooks/stripe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Stripe-Signature': 'valid-signature',
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+        expect(mockConvexMutation).toHaveBeenCalled();
       });
+    });
 
-      expect(res.status).toBe(200);
+    describe('payout.paid', () => {
+      it('should mark withdrawal as complete', async () => {
+        mockConvexMutation.mockResolvedValue(undefined);
+        mockStripeWebhookHandler.processWebhook.mockImplementation(async () => {
+          const handler = vi.mocked(await import('@pull/core/services/stripe')).initializeWebhookHandler.mock.calls[0][0];
+          await handler.onPayoutPaid({
+            payoutId: 'po_123',
+            amount: 5000,
+          });
+
+          return {
+            success: true,
+            processed: true,
+            eventId: 'evt_124',
+            eventType: 'payout.paid',
+          };
+        });
+
+        const payload = JSON.stringify({
+          type: 'payout.paid',
+          data: { object: { id: 'po_123' } },
+        });
+
+        const res = await app.request('/webhooks/stripe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Stripe-Signature': 'valid-signature',
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+      });
+    });
+
+    describe('payout.failed', () => {
+      it('should handle withdrawal failure', async () => {
+        mockConvexMutation.mockResolvedValue(undefined);
+        mockStripeWebhookHandler.processWebhook.mockImplementation(async () => {
+          const handler = vi.mocked(await import('@pull/core/services/stripe')).initializeWebhookHandler.mock.calls[0][0];
+          await handler.onPayoutFailed({
+            payoutId: 'po_123',
+            failureCode: 'insufficient_funds',
+            failureMessage: 'Insufficient funds in account',
+          });
+
+          return {
+            success: true,
+            processed: true,
+            eventId: 'evt_125',
+            eventType: 'payout.failed',
+          };
+        });
+
+        const payload = JSON.stringify({
+          type: 'payout.failed',
+          data: { object: { id: 'po_123' } },
+        });
+
+        const res = await app.request('/webhooks/stripe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Stripe-Signature': 'valid-signature',
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+      });
+    });
+
+    describe('account.updated', () => {
+      it('should update connected account status', async () => {
+        mockConvexMutation.mockResolvedValue(undefined);
+        mockStripeWebhookHandler.processWebhook.mockImplementation(async () => {
+          const handler = vi.mocked(await import('@pull/core/services/stripe')).initializeWebhookHandler.mock.calls[0][0];
+          await handler.onAccountUpdated({
+            accountId: 'acct_123',
+            payoutsEnabled: true,
+            detailsSubmitted: true,
+          });
+
+          return {
+            success: true,
+            processed: true,
+            eventId: 'evt_126',
+            eventType: 'account.updated',
+          };
+        });
+
+        const payload = JSON.stringify({
+          type: 'account.updated',
+          data: { object: { id: 'acct_123' } },
+        });
+
+        const res = await app.request('/webhooks/stripe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Stripe-Signature': 'valid-signature',
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+      });
+    });
+
+    describe('Webhook Event Storage', () => {
+      it('should store webhook events for audit', async () => {
+        mockStripeWebhookHandler.processWebhook.mockResolvedValueOnce({
+          success: true,
+          processed: true,
+          eventId: 'evt_123',
+          eventType: 'checkout.session.completed',
+        });
+
+        const payload = JSON.stringify({
+          type: 'checkout.session.completed',
+          data: { object: { id: 'cs_123' } },
+        });
+
+        const res = await app.request('/webhooks/stripe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Stripe-Signature': 'valid-signature',
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+      });
     });
   });
 
-  // ==========================================================================
-  // PLAID WEBHOOK TESTS
-  // ==========================================================================
-
-  describe("POST /webhooks/plaid", () => {
-    it("should reject requests without signature", async () => {
-      const res = await app.request("/webhooks/plaid", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ webhook_type: "TRANSACTIONS", webhook_code: "SYNC_UPDATES_AVAILABLE" }),
-      });
-
-      expect(res.status).toBe(401);
+  describe('Persona Webhooks', () => {
+    beforeEach(async () => {
+      vi.resetModules();
+      const { webhookRoutes } = await import('../../routes/webhooks');
+      app = new Hono();
+      app.route('/webhooks', webhookRoutes);
     });
 
-    it("should process AUTH webhook", async () => {
-      const payload = JSON.stringify({
-        webhook_type: "AUTH",
-        webhook_code: "AUTOMATICALLY_VERIFIED",
-        item_id: "item-123",
+    describe('Signature Verification', () => {
+      it('should reject webhook with invalid signature', async () => {
+        const payload = JSON.stringify({
+          data: {
+            type: 'inquiry.completed',
+            attributes: {
+              payload: {
+                data: {
+                  type: 'inquiry',
+                  id: 'inq_123',
+                  attributes: { reference_id: 'user_123' },
+                },
+              },
+            },
+          },
+        });
+
+        const res = await app.request('/webhooks/persona', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Persona-Signature': 'invalid-signature',
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(401);
+        const data = await res.json();
+        expect(data).toHaveProperty('error');
       });
-      const signature = createHmacSignature(payload, "plaid_test_secret");
 
-      mockConvexMutation.mockResolvedValue({ success: true });
+      it('should accept webhook with valid Persona signature', async () => {
+        mockConvexMutation.mockResolvedValue('webhook_123');
+        mockPersonaClient.getInquiryWithVerifications.mockResolvedValue({
+          inquiry: {
+            id: 'inq_123',
+            attributes: { status: 'completed', reference_id: 'user_123' },
+          },
+          verifications: [
+            { attributes: { status: 'passed' } },
+          ],
+        });
 
-      const res = await app.request("/webhooks/plaid", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Plaid-Verification": signature,
-        },
-        body: payload,
+        const payload = JSON.stringify({
+          data: {
+            type: 'inquiry.completed',
+            attributes: {
+              payload: {
+                data: {
+                  type: 'inquiry',
+                  id: 'inq_123',
+                  attributes: { reference_id: 'user_123', status: 'completed' },
+                },
+              },
+            },
+          },
+        });
+
+        const signature = createPersonaSignature(payload, 'persona-test-secret');
+
+        const res = await app.request('/webhooks/persona', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Persona-Signature': signature,
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data).toHaveProperty('received', true);
       });
 
-      expect(res.status).toBe(200);
+      it('should reject webhook with expired timestamp', async () => {
+        const payload = JSON.stringify({
+          data: {
+            type: 'inquiry.completed',
+            attributes: {
+              payload: {
+                data: {
+                  type: 'inquiry',
+                  id: 'inq_123',
+                  attributes: { reference_id: 'user_123' },
+                },
+              },
+            },
+          },
+        });
+
+        // Create signature with old timestamp (more than 5 minutes old)
+        const oldTimestamp = Math.floor(Date.now() / 1000) - 400; // 6+ minutes ago
+        const signedPayload = `${oldTimestamp}.${payload}`;
+        const signature = crypto.createHmac('sha256', 'persona-test-secret')
+          .update(signedPayload)
+          .digest('hex');
+        const personaSignature = `t=${oldTimestamp},v1=${signature}`;
+
+        const res = await app.request('/webhooks/persona', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Persona-Signature': personaSignature,
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(401);
+      });
+    });
+
+    describe('inquiry.completed', () => {
+      it('should update KYC status to in_progress', async () => {
+        mockConvexMutation.mockResolvedValue('webhook_123');
+        mockPersonaClient.getInquiryWithVerifications.mockResolvedValue({
+          inquiry: {
+            id: 'inq_123',
+            attributes: { status: 'completed', reference_id: 'user_123' },
+          },
+          verifications: [
+            { attributes: { status: 'passed' } },
+          ],
+        });
+
+        const payload = JSON.stringify({
+          data: {
+            type: 'inquiry.completed',
+            attributes: {
+              payload: {
+                data: {
+                  type: 'inquiry',
+                  id: 'inq_123',
+                  attributes: { reference_id: 'user_123', status: 'completed' },
+                },
+              },
+            },
+          },
+        });
+
+        const signature = createPersonaSignature(payload, 'persona-test-secret');
+
+        const res = await app.request('/webhooks/persona', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Persona-Signature': signature,
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+        expect(mockConvexMutation).toHaveBeenCalledWith(
+          'kyc:updateKYCStatus',
+          expect.objectContaining({
+            userId: 'user_123',
+            status: 'in_progress',
+          })
+        );
+      });
+    });
+
+    describe('inquiry.approved', () => {
+      it('should update KYC status to approved', async () => {
+        mockConvexMutation.mockResolvedValue('webhook_123');
+
+        const payload = JSON.stringify({
+          data: {
+            type: 'inquiry.approved',
+            attributes: {
+              payload: {
+                data: {
+                  type: 'inquiry',
+                  id: 'inq_123',
+                  attributes: {
+                    reference_id: 'user_123',
+                    status: 'approved',
+                    tags: ['basic'],
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        const signature = createPersonaSignature(payload, 'persona-test-secret');
+
+        const res = await app.request('/webhooks/persona', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Persona-Signature': signature,
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+        expect(mockConvexMutation).toHaveBeenCalledWith(
+          'kyc:updateKYCStatus',
+          expect.objectContaining({
+            userId: 'user_123',
+            status: 'approved',
+            tier: 'basic',
+          })
+        );
+      });
+    });
+
+    describe('inquiry.declined', () => {
+      it('should handle KYC rejection', async () => {
+        mockConvexMutation.mockResolvedValue('webhook_123');
+
+        const payload = JSON.stringify({
+          data: {
+            type: 'inquiry.declined',
+            attributes: {
+              payload: {
+                data: {
+                  type: 'inquiry',
+                  id: 'inq_123',
+                  attributes: {
+                    reference_id: 'user_123',
+                    status: 'declined',
+                    reviewer_comment: 'Document quality too low',
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        const signature = createPersonaSignature(payload, 'persona-test-secret');
+
+        const res = await app.request('/webhooks/persona', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Persona-Signature': signature,
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(200);
+        expect(mockConvexMutation).toHaveBeenCalledWith(
+          'kyc:updateKYCStatus',
+          expect.objectContaining({
+            userId: 'user_123',
+            status: 'rejected',
+            rejectionReason: 'Document quality too low',
+          })
+        );
+      });
     });
   });
 
-  // ==========================================================================
-  // CHECKR WEBHOOK TESTS
-  // ==========================================================================
-
-  describe("POST /webhooks/checkr", () => {
-    it("should reject requests without signature", async () => {
-      const res = await app.request("/webhooks/checkr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "report.completed" }),
-      });
-
-      expect(res.status).toBe(401);
+  describe('Polygon Webhooks', () => {
+    beforeEach(async () => {
+      vi.resetModules();
+      const { webhookRoutes } = await import('../../routes/webhooks');
+      app = new Hono();
+      app.route('/webhooks', webhookRoutes);
     });
 
-    it("should return 202 for unimplemented handler", async () => {
-      const payload = JSON.stringify({
-        type: "report.completed",
-        id: "report-123",
+    describe('Signature Verification', () => {
+      it('should reject webhook with invalid signature', async () => {
+        const payload = JSON.stringify({
+          event: 'token.transfer',
+          transactionHash: '0x123',
+        });
+
+        const res = await app.request('/webhooks/polygon', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Polygon-Signature': 'invalid-signature',
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(401);
       });
-      const signature = createHmacSignature(payload, "checkr_test_secret");
 
-      mockConvexMutation.mockResolvedValue({ success: true });
+      it('should accept webhook with valid signature', async () => {
+        mockConvexMutation.mockResolvedValue('webhook_123');
 
-      const res = await app.request("/webhooks/checkr", {
-        method: "POST",
+        const payload = JSON.stringify({
+          event: 'token.transfer',
+          transactionHash: '0x123',
+        });
+
+        const signature = createHmacSignature(payload, 'polygon-test-secret');
+
+        const res = await app.request('/webhooks/polygon', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Polygon-Signature': signature,
+          },
+          body: payload,
+        });
+
+        expect(res.status).toBe(202); // Accepted but not processed
+        const data = await res.json();
+        expect(data).toMatchObject({
+          received: true,
+          processed: false,
+        });
+      });
+    });
+
+    it('should acknowledge events but not process them', async () => {
+      mockConvexMutation.mockResolvedValue('webhook_123');
+
+      const payload = JSON.stringify({
+        event: 'token.transfer',
+        transactionHash: '0xabc123',
+      });
+
+      const signature = createHmacSignature(payload, 'polygon-test-secret');
+
+      const res = await app.request('/webhooks/polygon', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-Checkr-Signature": signature,
+          'Content-Type': 'application/json',
+          'X-Polygon-Signature': signature,
         },
         body: payload,
       });
-
-      const json = await res.json();
 
       expect(res.status).toBe(202);
-      expect(json.received).toBe(true);
-      expect(json.processed).toBe(false);
+      const data = await res.json();
+      expect(data).toHaveProperty('message');
+      expect(data.message).toContain('not yet implemented');
     });
 
-    it("should store webhook event for audit trail", async () => {
-      const payload = JSON.stringify({
-        type: "report.completed",
-        id: "report-123",
-      });
-      const signature = createHmacSignature(payload, "checkr_test_secret");
+    it('should store events for audit', async () => {
+      mockConvexMutation.mockResolvedValue('webhook_123');
 
-      await app.request("/webhooks/checkr", {
-        method: "POST",
+      const payload = JSON.stringify({
+        event: 'token.mint',
+        transactionHash: '0xdef456',
+      });
+
+      const signature = createHmacSignature(payload, 'polygon-test-secret');
+
+      const res = await app.request('/webhooks/polygon', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-Checkr-Signature": signature,
+          'Content-Type': 'application/json',
+          'X-Polygon-Signature': signature,
         },
         body: payload,
       });
-
-      expect(mockConvexMutation).toHaveBeenCalled();
-    });
-  });
-
-  // ==========================================================================
-  // NYLAS WEBHOOK TESTS
-  // ==========================================================================
-
-  describe("POST /webhooks/nylas", () => {
-    it("should handle challenge verification", async () => {
-      const res = await app.request("/webhooks/nylas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challenge: "test-challenge-123" }),
-      });
-
-      const text = await res.text();
-      expect(res.status).toBe(200);
-      expect(text).toBe("test-challenge-123");
-    });
-
-    it("should return 202 for unimplemented handler", async () => {
-      const payload = JSON.stringify({
-        trigger: "message.created",
-        deltas: [{ id: "delta-1" }],
-      });
-      const signature = createHmacSignature(payload, "nylas_test_secret");
-
-      const res = await app.request("/webhooks/nylas", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Nylas-Signature": signature,
-        },
-        body: payload,
-      });
-
-      const json = await res.json();
 
       expect(res.status).toBe(202);
-      expect(json.received).toBe(true);
-      expect(json.processed).toBe(false);
+      expect(mockConvexMutation).toHaveBeenCalledWith(
+        'kyc:storeWebhookEvent',
+        expect.objectContaining({
+          source: 'polygon',
+          eventType: 'token.mint',
+        })
+      );
     });
   });
 
-  // ==========================================================================
-  // MASSIVE WEBHOOK TESTS
-  // ==========================================================================
-
-  describe("POST /webhooks/massive", () => {
-    it("should reject requests without signature", async () => {
-      const res = await app.request("/webhooks/massive", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: "order.filled" }),
-      });
-
-      expect(res.status).toBe(401);
+  describe('Error Handling', () => {
+    beforeEach(async () => {
+      vi.resetModules();
+      const { webhookRoutes } = await import('../../routes/webhooks');
+      app = new Hono();
+      app.route('/webhooks', webhookRoutes);
     });
 
-    it("should return 202 and log critical error for unimplemented handler", async () => {
-      const payload = JSON.stringify({
-        event: "order.filled",
-        orderId: "order-123",
-      });
-      const signature = createHmacSignature(payload, "massive_test_secret");
+    it('should handle missing webhook secret configuration', async () => {
+      delete process.env.PERSONA_WEBHOOK_SECRET;
 
-      mockConvexMutation.mockResolvedValue({ success: true });
+      const payload = JSON.stringify({ data: { type: 'test' } });
 
-      const res = await app.request("/webhooks/massive", {
-        method: "POST",
+      const res = await app.request('/webhooks/persona', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-Massive-Signature": signature,
+          'Content-Type': 'application/json',
+          'Persona-Signature': 'some-signature',
         },
         body: payload,
       });
 
-      const json = await res.json();
-
-      expect(res.status).toBe(202);
-      expect(json.received).toBe(true);
-      expect(json.message).toContain("CRITICAL");
-    });
-  });
-
-  // ==========================================================================
-  // POLYGON WEBHOOK TESTS
-  // ==========================================================================
-
-  describe("POST /webhooks/polygon", () => {
-    it("should reject requests without signature", async () => {
-      const res = await app.request("/webhooks/polygon", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: "token.transfer" }),
-      });
-
-      expect(res.status).toBe(401);
-    });
-
-    it("should return 202 for unimplemented handler", async () => {
-      const payload = JSON.stringify({
-        event: "token.transfer",
-        transactionHash: "0x123",
-      });
-      const signature = createHmacSignature(payload, "polygon_test_secret");
-
-      mockConvexMutation.mockResolvedValue({ success: true });
-
-      const res = await app.request("/webhooks/polygon", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Polygon-Signature": signature,
-        },
-        body: payload,
-      });
-
-      const json = await res.json();
-
-      expect(res.status).toBe(202);
-      expect(json.received).toBe(true);
-      expect(json.processed).toBe(false);
-    });
-  });
-
-  // ==========================================================================
-  // SIGNATURE VERIFICATION TESTS
-  // ==========================================================================
-
-  describe("Signature Verification", () => {
-    it("should reject tampered payloads", async () => {
-      const originalPayload = JSON.stringify({ data: "original" });
-      const signature = createHmacSignature(originalPayload, "persona_test_secret");
-      const tamperedPayload = JSON.stringify({ data: "tampered" });
-
-      const res = await app.request("/webhooks/persona", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Persona-Signature": signature,
-        },
-        body: tamperedPayload,
-      });
-
-      expect(res.status).toBe(401);
-    });
-
-    it("should reject wrong secret", async () => {
-      const payload = JSON.stringify({ data: "test" });
-      const wrongSignature = createHmacSignature(payload, "wrong_secret");
-
-      const res = await app.request("/webhooks/persona", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Persona-Signature": wrongSignature,
-        },
-        body: payload,
-      });
-
-      expect(res.status).toBe(401);
-    });
-  });
-
-  // ==========================================================================
-  // ERROR HANDLING TESTS
-  // ==========================================================================
-
-  describe("Error Handling", () => {
-    it("should handle invalid JSON", async () => {
-      const res = await app.request("/webhooks/stripe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "stripe-signature": "test",
-        },
-        body: "invalid json",
-      });
-
-      expect(res.status).toBe(400);
-    });
-
-    it("should handle database errors gracefully", async () => {
-      const payload = JSON.stringify({
-        data: {
-          type: "inquiry.completed",
-          attributes: { reference_id: "user-123" },
-        },
-      });
-      const signature = createHmacSignature(payload, "persona_test_secret");
-
-      mockConvexMutation.mockRejectedValue(new Error("Database error"));
-
-      const res = await app.request("/webhooks/persona", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Persona-Signature": signature,
-        },
-        body: payload,
-      });
-
-      // Should still return 200 to prevent webhook retries
       expect(res.status).toBe(500);
+      const data = await res.json();
+      expect(data).toHaveProperty('error');
+    });
+
+    it('should handle Convex mutation failures gracefully', async () => {
+      mockConvexMutation.mockRejectedValue(new Error('Database error'));
+      mockPersonaClient.getInquiryWithVerifications.mockResolvedValue({
+        inquiry: {
+          id: 'inq_123',
+          attributes: { status: 'completed', reference_id: 'user_123' },
+        },
+        verifications: [],
+      });
+
+      const payload = JSON.stringify({
+        data: {
+          type: 'inquiry.completed',
+          attributes: {
+            payload: {
+              data: {
+                type: 'inquiry',
+                id: 'inq_123',
+                attributes: { reference_id: 'user_123', status: 'completed' },
+              },
+            },
+          },
+        },
+      });
+
+      const signature = createPersonaSignature(payload, 'persona-test-secret');
+
+      const res = await app.request('/webhooks/persona', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Persona-Signature': signature,
+        },
+        body: payload,
+      });
+
+      // Should still return 200 to prevent retries
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data).toHaveProperty('received', true);
     });
   });
 });

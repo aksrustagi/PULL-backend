@@ -95,6 +95,19 @@ import { insuranceRoutes } from "./routes/insurance";
 import { propsRoutes } from "./routes/props";
 import { watchPartyRoutes } from "./routes/watch-party";
 import { nftsRoutes } from "./routes/nfts";
+
+// 10x Feature Enhancement Routes
+import presenceRoutes from "./routes/presence";
+import tradeAdvisorRoutes from "./routes/trade-advisor";
+import voiceRoutes from "./routes/voice";
+import visionRoutes from "./routes/vision";
+import injuriesRoutes from "./routes/injuries";
+import socialGraphRoutes from "./routes/social-graph";
+import financeRoutes from "./routes/finance";
+import analyticsEnhancedRoutes from "./routes/analytics";
+import engagementRoutes from "./routes/engagement";
+import complianceRoutes from "./routes/compliance";
+import widgetsRoutes from "./routes/widgets";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -292,6 +305,19 @@ app.route("/api/v1/watch-party", watchPartyRoutes);
 
 app.use("/api/v1/nfts/*", requireFeature("nfts", "NFTs"));
 app.route("/api/v1/nfts", nftsRoutes);
+
+// 10x Feature Enhancement Routes
+app.route("/api/v1/presence", presenceRoutes);
+app.route("/api/v1/trade-advisor", tradeAdvisorRoutes);
+app.route("/api/v1/voice", voiceRoutes);
+app.route("/api/v1/vision", visionRoutes);
+app.route("/api/v1/injuries", injuriesRoutes);
+app.route("/api/v1/social-graph", socialGraphRoutes); // Changed from /social to avoid conflict
+app.route("/api/v1/finance", financeRoutes);
+app.route("/api/v1/analytics-advanced", analyticsEnhancedRoutes); // Changed from /analytics to avoid conflict
+app.route("/api/v1/engagement", engagementRoutes);
+app.route("/api/v1/compliance", complianceRoutes);
+app.route("/api/v1/widgets", widgetsRoutes);
 
 // Admin routes (require auth + admin role)
 app.use("/admin/*", authMiddleware);
