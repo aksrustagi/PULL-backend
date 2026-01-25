@@ -4,6 +4,10 @@
  */
 
 import { ConvexHttpClient } from "convex/browser";
+import { api as generatedApi } from "@pull/db/convex/_generated/api";
+
+// Re-export api for typed access
+export const api = generatedApi;
 
 // Convex URL from environment
 const CONVEX_URL = process.env.CONVEX_URL ?? "";
@@ -23,6 +27,18 @@ export function getConvexClient(): ConvexHttpClient {
   }
   return convexClient;
 }
+
+// Export singleton instance for easy import
+export const convex = {
+  query: <T>(fn: any, args: Record<string, unknown>) => {
+    const client = getConvexClient();
+    return client.query(fn, args) as Promise<T>;
+  },
+  mutation: <T>(fn: any, args: Record<string, unknown>) => {
+    const client = getConvexClient();
+    return client.mutation(fn, args) as Promise<T>;
+  },
+};
 
 /**
  * Typed query helper
@@ -76,6 +92,90 @@ export const convexUsers = {
   }) => convexMutation("users:updateKYCStatus", args),
   connectWallet: (args: { id: string; walletAddress: string }) =>
     convexMutation("users:connectWallet", args),
+};
+
+/**
+ * Auth-related Convex operations
+ */
+export const convexAuth = {
+  getUserForAuth: (email: string) =>
+    convexQuery<{
+      id: string;
+      email: string;
+      passwordHash?: string;
+      status: "active" | "inactive" | "suspended" | "closed";
+      emailVerified: boolean;
+      displayName?: string;
+      kycStatus: string;
+      kycTier: string;
+    } | null>("auth:getUserForAuth", { email }),
+
+  getUserById: (id: string) =>
+    convexQuery<{
+      id: string;
+      email: string;
+      displayName?: string;
+      emailVerified: boolean;
+      kycStatus: string;
+      kycTier: string;
+      status: string;
+    } | null>("auth:getUserById", { id }),
+
+  validateCredentials: (email: string) =>
+    convexQuery<{
+      id: string;
+      email: string;
+      passwordHash?: string;
+      status: string;
+      emailVerified: boolean;
+    } | null>("auth:validateCredentials", { email }),
+
+  recordLoginAttempt: (args: {
+    userId?: string;
+    email: string;
+    success: boolean;
+    ipAddress?: string;
+    userAgent?: string;
+    failureReason?: string;
+  }) => convexMutation("auth:recordLoginAttempt", args),
+
+  createEmailVerificationToken: (args: {
+    userId: string;
+    token: string;
+    expiresAt: number;
+  }) => convexMutation("auth:createEmailVerificationToken", args),
+
+  validateEmailVerificationToken: (token: string) =>
+    convexMutation<{
+      valid: boolean;
+      error?: string;
+      userId?: string;
+      email?: string;
+      displayName?: string;
+    }>("auth:validateEmailVerificationToken", { token }),
+
+  canResendVerificationEmail: (userId: string) =>
+    convexQuery<{
+      canResend: boolean;
+      reason?: string;
+      remainingSeconds?: number;
+    }>("auth:canResendVerificationEmail", { userId }),
+
+  createPasswordResetToken: (args: {
+    userId: string;
+    token: string;
+    expiresAt: number;
+  }) => convexMutation("auth:createPasswordResetToken", args),
+
+  validatePasswordResetToken: (token: string) =>
+    convexMutation<{
+      valid: boolean;
+      error?: string;
+      userId?: string;
+    }>("auth:validatePasswordResetToken", { token }),
+
+  updatePassword: (args: { userId: string; passwordHash: string }) =>
+    convexMutation("auth:updatePassword", args),
 };
 
 /**

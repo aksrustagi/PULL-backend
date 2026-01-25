@@ -85,6 +85,7 @@ export default defineSchema({
     .index("by_referral_code", ["referralCode"])
     .index("by_status", ["status"])
     .index("by_kyc_status", ["kycStatus"])
+    .index("by_referrer", ["referredBy"])
     .searchIndex("search_users", {
       searchField: "displayName",
       filterFields: ["status", "kycTier"],
@@ -3819,4 +3820,34 @@ export default defineSchema({
     .index("by_player", ["playerId"])
     .index("by_season", ["season", "status"])
     .index("by_status", ["status"]),
+
+  // ============================================================================
+  // BACKUP & RECOVERY TABLES
+  // ============================================================================
+
+  /**
+   * Backup Snapshots - Track database export snapshots
+   */
+  backupSnapshots: defineTable({
+    type: v.union(
+      v.literal("full"),
+      v.literal("incremental"),
+      v.literal("on_demand")
+    ),
+    status: v.union(
+      v.literal("in_progress"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    initiatedBy: v.optional(v.string()),
+    tables: v.array(v.string()),
+    recordCounts: v.record(v.string(), v.number()),
+    storageLocation: v.optional(v.string()),
+    error: v.optional(v.string()),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_status", ["status"])
+    .index("by_type", ["type", "status"])
+    .index("by_started_at", ["startedAt"]),
 });

@@ -5,3 +5,4 @@
 
 export { RedisClient, default } from "./client";
 export * from "./types";
+export * from "./pubsub";

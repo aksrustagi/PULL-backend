@@ -1,6 +1,7 @@
 /**
  * KYC Activities for Temporal workflows
- * Re-exports from centralized activities and adds worker-specific implementations
+ * Activities for Persona KYC integration, Checkr background checks,
+ * wallet screening, and related operations.
  */
 
 import { ConvexHttpClient } from "convex/browser";
@@ -19,14 +20,25 @@ const convex = new ConvexHttpClient(process.env.CONVEX_URL!);
 
 export interface PersonaInquiry {
   inquiryId: string;
-  status: "pending" | "completed" | "failed" | "expired";
+  status: "pending" | "completed" | "failed" | "expired" | "approved" | "declined";
   templateId: string;
+  sessionToken?: string;
 }
 
 export interface CheckrCandidate {
   candidateId: string;
   reportId?: string;
   status: "pending" | "clear" | "consider" | "suspended";
+}
+
+export interface KYCDatabaseUpdate {
+  status?: "pending" | "in_progress" | "approved" | "rejected" | "expired";
+  currentTier?: string;
+  targetTier?: string;
+  personaInquiryId?: string;
+  completedAt?: number;
+  expiresAt?: number;
+  bankLinked?: boolean;
 }
 
 // ============================================================================
@@ -368,5 +380,355 @@ export async function updateUserKYCStatus(
     });
   } catch (error) {
     console.error("[KYC Activity] KYC status update error:", error);
+  }
+}
+
+// ============================================================================
+// Additional Persona Activities
+// ============================================================================
+
+/**
+ * Resume a Persona inquiry
+ */
+export async function resumePersonaInquiry(
+  inquiryId: string
+): Promise<{ inquiryId: string; sessionToken: string }> {
+  console.log(`Resuming Persona inquiry ${inquiryId}`);
+
+  try {
+    const response = await fetch(
+      `https://api.withpersona.com/api/v1/inquiries/${inquiryId}/resume`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.PERSONA_API_KEY}`,
+          "Content-Type": "application/json",
+          "Persona-Version": "2023-01-05",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error("[KYC Activity] Resume inquiry error:", await response.text());
+      return { inquiryId, sessionToken: "" };
+    }
+
+    const data = await response.json();
+    return {
+      inquiryId,
+      sessionToken: data.meta?.session_token ?? "",
+    };
+  } catch (error) {
+    console.error("[KYC Activity] Resume inquiry error:", error);
+    return { inquiryId, sessionToken: "" };
+  }
+}
+
+/**
+ * Get Persona verifications for an inquiry
+ */
+export async function getPersonaVerifications(
+  inquiryId: string
+): Promise<Array<{ type: string; status: string; passed: boolean }>> {
+  console.log(`Getting verifications for inquiry ${inquiryId}`);
+
+  try {
+    const response = await fetch(
+      `https://api.withpersona.com/api/v1/inquiries/${inquiryId}/verifications`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.PERSONA_API_KEY}`,
+          "Persona-Version": "2023-01-05",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    return (data.data ?? []).map((v: any) => ({
+      type: v.type,
+      status: v.attributes?.status ?? "unknown",
+      passed: v.attributes?.status === "passed" || v.attributes?.status === "confirmed",
+    }));
+  } catch (error) {
+    console.error("[KYC Activity] Get verifications error:", error);
+    return [];
+  }
+}
+
+// ============================================================================
+// KYC Database Activities
+// ============================================================================
+
+/**
+ * Update KYC record in database
+ */
+export async function updateKYCInDatabase(
+  userId: string,
+  updates: KYCDatabaseUpdate
+): Promise<void> {
+  console.log(`Updating KYC record for user ${userId}`, updates);
+
+  try {
+    await convex.mutation(api.kyc.updateKYCStatus, {
+      userId: userId as any,
+      status: updates.status as any,
+      tier: updates.currentTier as any,
+      personaInquiryId: updates.personaInquiryId,
+      completedAt: updates.completedAt,
+      expiresAt: updates.expiresAt,
+      bankLinked: updates.bankLinked,
+    });
+  } catch (error) {
+    console.error("[KYC Activity] Database update error:", error);
+  }
+}
+
+// ============================================================================
+// Email Notification Activities
+// ============================================================================
+
+/**
+ * Send KYC approved email
+ */
+export async function sendKYCApprovedEmail(
+  email: string,
+  tier: string
+): Promise<void> {
+  console.log(`Sending KYC approved email to ${email} for tier ${tier}`);
+
+  try {
+    const tierLimits: Record<string, { deposit: string; withdraw: string; trade: string }> = {
+      basic: { deposit: "$1,000/day", withdraw: "$500/day", trade: "$5,000/day" },
+      standard: { deposit: "$10,000/day", withdraw: "$5,000/day", trade: "$50,000/day" },
+      enhanced: { deposit: "$50,000/day", withdraw: "$25,000/day", trade: "$250,000/day" },
+      accredited: { deposit: "$500,000/day", withdraw: "$250,000/day", trade: "$2,500,000/day" },
+    };
+
+    const limits = tierLimits[tier] ?? tierLimits.basic;
+
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "PULL <support@pull.com>",
+        to: email,
+        subject: "Your PULL account has been verified!",
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <h1>Welcome to PULL!</h1>
+            <p>Great news! Your identity verification is complete and your account has been approved.</p>
+            <h2>Your Account Tier: ${tier.charAt(0).toUpperCase() + tier.slice(1)}</h2>
+            <p>With your verified account, you can now:</p>
+            <ul>
+              <li>Deposit up to ${limits.deposit}</li>
+              <li>Withdraw up to ${limits.withdraw}</li>
+              <li>Trade up to ${limits.trade}</li>
+            </ul>
+            <p><a href="https://pull.app/dashboard" style="display: inline-block; background-color: #0066FF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Go to Dashboard</a></p>
+            <p>Thank you for choosing PULL!</p>
+          </body>
+          </html>
+        `,
+      }),
+    });
+  } catch (error) {
+    console.error("[KYC Activity] Approved email send error:", error);
+  }
+}
+
+/**
+ * Send KYC rejected email
+ */
+export async function sendKYCRejectedEmail(
+  email: string,
+  reason: string
+): Promise<void> {
+  console.log(`Sending KYC rejected email to ${email}`);
+
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "PULL <support@pull.com>",
+        to: email,
+        subject: "Update on your PULL verification",
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <h1>Verification Update</h1>
+            <p>We were unable to verify your identity at this time.</p>
+            <p><strong>Reason:</strong> ${reason}</p>
+            <p>If you believe this is an error, you can try verifying again or contact our support team for assistance.</p>
+            <p><a href="https://pull.app/kyc/retry" style="display: inline-block; background-color: #0066FF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Try Again</a></p>
+            <p>If you have questions, please reply to this email or contact support@pull.com</p>
+          </body>
+          </html>
+        `,
+      }),
+    });
+  } catch (error) {
+    console.error("[KYC Activity] Rejected email send error:", error);
+  }
+}
+
+/**
+ * Send KYC reminder email
+ */
+export async function sendKYCReminderEmail(
+  email: string,
+  step: string
+): Promise<void> {
+  console.log(`Sending KYC reminder email to ${email} for step ${step}`);
+
+  try {
+    const stepMessages: Record<string, { subject: string; message: string }> = {
+      email_verification: {
+        subject: "Complete your email verification",
+        message: "Please verify your email address to continue with your PULL account setup.",
+      },
+      identity_verification: {
+        subject: "Complete your identity verification",
+        message: "Your identity verification is pending. Please complete it to unlock all PULL features.",
+      },
+      reverification_expired: {
+        subject: "Your PULL verification has expired",
+        message: "Your identity verification has expired. Please re-verify to maintain your account access.",
+      },
+      reverification_reminder: {
+        subject: "Reminder: Re-verify your PULL account",
+        message: "Please complete your re-verification to maintain full access to your account.",
+      },
+    };
+
+    const content = stepMessages[step] ?? {
+      subject: "Action needed on your PULL account",
+      message: "Please complete the pending steps to fully activate your PULL account.",
+    };
+
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "PULL <support@pull.com>",
+        to: email,
+        subject: content.subject,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+            <h1>Action Required</h1>
+            <p>${content.message}</p>
+            <p><a href="https://pull.app/kyc" style="display: inline-block; background-color: #0066FF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Complete Verification</a></p>
+            <p>If you have questions, please contact support@pull.com</p>
+          </body>
+          </html>
+        `,
+      }),
+    });
+  } catch (error) {
+    console.error("[KYC Activity] Reminder email send error:", error);
+  }
+}
+
+// ============================================================================
+// Plaid Bank Linking Activities
+// ============================================================================
+
+/**
+ * Exchange Plaid public token for access token
+ */
+export async function exchangePlaidToken(publicToken: string): Promise<string> {
+  console.log("Exchanging Plaid public token");
+
+  try {
+    const response = await fetch("https://production.plaid.com/item/public_token/exchange", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: process.env.PLAID_CLIENT_ID,
+        secret: process.env.PLAID_SECRET,
+        public_token: publicToken,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[KYC Activity] Plaid token exchange error:", await response.text());
+      throw new Error("Failed to exchange Plaid token");
+    }
+
+    const data = await response.json();
+    return data.access_token;
+  } catch (error) {
+    console.error("[KYC Activity] Plaid token exchange error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Verify bank account with Plaid
+ */
+export async function verifyBankAccount(
+  accessToken: string,
+  accountId: string
+): Promise<boolean> {
+  console.log(`Verifying bank account ${accountId}`);
+
+  try {
+    // Get account info to verify it exists and is active
+    const response = await fetch("https://production.plaid.com/accounts/get", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: process.env.PLAID_CLIENT_ID,
+        secret: process.env.PLAID_SECRET,
+        access_token: accessToken,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[KYC Activity] Plaid account verification error:", await response.text());
+      return false;
+    }
+
+    const data = await response.json();
+    const account = data.accounts?.find((a: any) => a.account_id === accountId);
+
+    if (!account) {
+      console.error("[KYC Activity] Account not found:", accountId);
+      return false;
+    }
+
+    // Check if account is active and is a valid type
+    const validTypes = ["depository"];
+    const validSubtypes = ["checking", "savings"];
+
+    return (
+      validTypes.includes(account.type) &&
+      validSubtypes.includes(account.subtype)
+    );
+  } catch (error) {
+    console.error("[KYC Activity] Bank account verification error:", error);
+    return false;
   }
 }

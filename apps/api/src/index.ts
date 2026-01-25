@@ -35,8 +35,9 @@ import { kycRoutes } from "./routes/kyc";
 import { gamificationRoutes } from "./routes/gamification";
 import { webhookRoutes } from "./routes/webhooks";
 import { fantasyRoutes } from "./routes/fantasy";
+import { paymentsRoutes } from "./routes/payments";
 import { dataFlywheelRoutes } from "./routes/dataFlywheel";
-import { analyticsRoutes, experimentsRoutes } from "./routes/admin";
+import { analyticsRoutes, experimentsRoutes, backupRoutes } from "./routes/admin";
 import { adminRoutes } from "./routes/admin";
 import { portfolioAgentRoutes } from "./routes/portfolio-agent";
 import { docsRoutes } from "./routes/docs";
@@ -132,6 +133,7 @@ app.route("/api/v1/social", socialRoutes);
 app.route("/api/v1/kyc", kycRoutes);
 app.route("/api/v1/portfolio-agent", portfolioAgentRoutes);
 app.route("/api/v1/gamification", gamificationRoutes);
+app.route("/api/v1/payments", paymentsRoutes);
 
 // AI Insights & Sports routes
 app.route("/api/v1/ai-insights", aiInsightsRoutes);
@@ -145,6 +147,7 @@ app.route("/api/v1/mlb", mlbRoutes);
 app.use("/admin/*", authMiddleware);
 app.route("/admin/analytics", analyticsRoutes);
 app.route("/admin/experiments", experimentsRoutes);
+app.route("/admin/backup", backupRoutes);
 
 app.use("/api/admin/*", authMiddleware);
 app.route("/api/admin", adminRoutes);

@@ -10,7 +10,148 @@
  * - Nylas: Email integration
  * - Plaid: Banking/ACH integration
  * - Fireblocks: Digital asset custody
+ * - Logger: Structured logging
+ * - Metrics: Prometheus metrics
+ * - Tracing: Distributed tracing
  */
+
+// Observability Services
+export * as logger from "./logger";
+export {
+  createLogger,
+  getLogger,
+  initLogger,
+  getDefaultLoggerConfig,
+  generateCorrelationId,
+  withCorrelationId,
+  withCorrelationIdAsync,
+  getCorrelationId,
+  createLoggingMiddleware,
+  createLoggerContextMiddleware,
+  createErrorLoggingMiddleware,
+  createRequestLogger,
+  getRequestLogger,
+  withTiming,
+  withDatabaseTiming,
+  withExternalServiceTiming,
+  DEFAULT_REDACT_FIELDS,
+} from "./logger";
+
+export type {
+  Logger,
+  LogLevel,
+  LogContext,
+  LoggerConfig,
+  LogEntry,
+  ErrorContext,
+  HttpRequestContext,
+  HttpResponseContext,
+  PerformanceContext,
+  DatabaseContext,
+  ExternalServiceContext,
+  LoggingMiddlewareOptions,
+} from "./logger";
+
+export * as metrics from "./metrics";
+export {
+  getRegistry,
+  createRegistry,
+  resetRegistry,
+  createHttpMetrics,
+  createAppMetrics,
+  createBusinessMetrics,
+  createMetricsMiddleware,
+  createMetricsHandler,
+  getHttpMetrics,
+  getAppMetrics,
+  getBusinessMetrics,
+  updateUptimeMetric,
+  startUptimeUpdates,
+  recordUserRegistration,
+  recordUserLogin,
+  recordTradeExecution,
+  recordKycVerification,
+  recordApiCall,
+  DEFAULT_HTTP_DURATION_BUCKETS,
+  DEFAULT_SIZE_BUCKETS,
+  DEFAULT_PATH_NORMALIZERS,
+} from "./metrics";
+
+export type {
+  MetricType,
+  Labels,
+  Counter,
+  Gauge,
+  Histogram,
+  Summary,
+  MetricConfig,
+  MetricsRegistry,
+  MetricValue,
+  HttpMetricsConfig,
+  HttpMetrics,
+  AppMetrics,
+  BusinessMetrics,
+} from "./metrics";
+
+export * as tracing from "./tracing";
+export {
+  initTracerProvider,
+  getTracer,
+  getTracerConfig,
+  getCurrentContext,
+  getActiveSpan,
+  parseTraceparent,
+  createTraceparent,
+  extractTraceContext,
+  injectTraceContext,
+  withContext,
+  withContextAsync,
+  flushSpans,
+  shutdownTracer,
+  stopBatchExport,
+  createHttpServerSpan,
+  createHttpClientSpan,
+  createDatabaseSpan,
+  createRpcSpan,
+  createInternalSpan,
+  withSpan,
+  withSpanSync,
+  tracedFetch,
+  traceDatabase,
+  traceExternalService,
+  addSpanAttributes,
+  addSpanEvent,
+  recordSpanException,
+  setSpanError,
+  setSpanOk,
+  getCurrentTraceId,
+  getCurrentSpanId,
+  createTracingMiddleware,
+  getSpanFromContext,
+  getTraceIdFromContext,
+  Traced,
+  SpanKind,
+  SpanStatusCode,
+  HTTP_ATTRIBUTES,
+  DB_ATTRIBUTES,
+  RPC_ATTRIBUTES,
+  GENERAL_ATTRIBUTES,
+} from "./tracing";
+
+export type {
+  Span,
+  SpanContext,
+  SpanOptions,
+  SpanStatus,
+  SpanAttributes,
+  SpanAttributeValue,
+  SpanEvent,
+  SpanLink,
+  Tracer,
+  TracerProviderConfig,
+  TracingContext,
+  TraceContextHeaders,
+} from "./tracing";
 
 // Trading Services
 export { KalshiClient, type KalshiClientConfig } from "./kalshi/client";

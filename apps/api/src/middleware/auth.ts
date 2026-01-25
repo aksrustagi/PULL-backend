@@ -1,6 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import * as jose from "jose";
 import type { Env } from "../index";
+import { isTokenBlacklisted } from "../lib/redis";
 
 // Fail fast if JWT_SECRET is not configured
 const jwtSecretValue = process.env.JWT_SECRET;
@@ -14,6 +15,10 @@ if (jwtSecretValue.length < 32) {
   throw new Error("FATAL: JWT_SECRET must be at least 32 characters long");
 }
 const JWT_SECRET = new TextEncoder().encode(jwtSecretValue);
+
+// Token expiry times in seconds
+export const ACCESS_TOKEN_EXPIRY = 15 * 60; // 15 minutes
+export const REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days
 
 export const authMiddleware = createMiddleware<Env>(async (c, next) => {
   const authHeader = c.req.header("Authorization");
@@ -51,6 +56,23 @@ export const authMiddleware = createMiddleware<Env>(async (c, next) => {
   }
 
   try {
+    // Check if token is blacklisted (logged out)
+    const blacklisted = await isTokenBlacklisted(token);
+    if (blacklisted) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "UNAUTHORIZED",
+            message: "Token has been revoked",
+          },
+          requestId: c.get("requestId"),
+          timestamp: new Date().toISOString(),
+        },
+        401
+      );
+    }
+
     const { payload } = await jose.jwtVerify(token, JWT_SECRET, {
       algorithms: ["HS256"],
     });

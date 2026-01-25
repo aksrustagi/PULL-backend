@@ -986,6 +986,892 @@ export const getAuditLogs = query({
 });
 
 // ============================================================================
+// DEPOSITS MANAGEMENT
+// ============================================================================
+
+/**
+ * Get all deposits with filters (admin view)
+ */
+export const getDeposits = query({
+  args: {
+    userId: v.optional(v.id("users")),
+    status: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("cancelled")
+      )
+    ),
+    method: v.optional(
+      v.union(
+        v.literal("bank_transfer"),
+        v.literal("wire"),
+        v.literal("crypto"),
+        v.literal("card")
+      )
+    ),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    minAmount: v.optional(v.number()),
+    maxAmount: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let deposits = await ctx.db.query("deposits").order("desc").collect();
+
+    // Apply filters
+    if (args.userId) {
+      deposits = deposits.filter((d) => d.userId === args.userId);
+    }
+    if (args.status) {
+      deposits = deposits.filter((d) => d.status === args.status);
+    }
+    if (args.method) {
+      deposits = deposits.filter((d) => d.method === args.method);
+    }
+    if (args.startDate) {
+      deposits = deposits.filter((d) => d.createdAt >= args.startDate!);
+    }
+    if (args.endDate) {
+      deposits = deposits.filter((d) => d.createdAt <= args.endDate!);
+    }
+    if (args.minAmount) {
+      deposits = deposits.filter((d) => d.amount >= args.minAmount!);
+    }
+    if (args.maxAmount) {
+      deposits = deposits.filter((d) => d.amount <= args.maxAmount!);
+    }
+
+    const total = deposits.length;
+    const offset = args.offset ?? 0;
+    const limit = args.limit ?? 50;
+
+    // Calculate totals
+    const totalAmount = deposits.reduce((sum, d) => sum + d.amount, 0);
+    const completedAmount = deposits
+      .filter((d) => d.status === "completed")
+      .reduce((sum, d) => sum + d.amount, 0);
+
+    // Enrich with user info
+    const enrichedDeposits = await Promise.all(
+      deposits.slice(offset, offset + limit).map(async (deposit) => {
+        const user = await ctx.db.get(deposit.userId);
+        return {
+          ...deposit,
+          userEmail: user?.email,
+          userDisplayName: user?.displayName,
+        };
+      })
+    );
+
+    return {
+      deposits: enrichedDeposits,
+      total,
+      totalAmount,
+      completedAmount,
+      hasMore: offset + limit < total,
+      page: Math.floor(offset / limit) + 1,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+});
+
+// ============================================================================
+// WITHDRAWALS MANAGEMENT
+// ============================================================================
+
+/**
+ * Get all withdrawals with filters (admin view)
+ */
+export const getWithdrawals = query({
+  args: {
+    userId: v.optional(v.id("users")),
+    status: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("cancelled")
+      )
+    ),
+    method: v.optional(
+      v.union(
+        v.literal("bank_transfer"),
+        v.literal("wire"),
+        v.literal("crypto")
+      )
+    ),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    minAmount: v.optional(v.number()),
+    maxAmount: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let withdrawals = await ctx.db.query("withdrawals").order("desc").collect();
+
+    // Apply filters
+    if (args.userId) {
+      withdrawals = withdrawals.filter((w) => w.userId === args.userId);
+    }
+    if (args.status) {
+      withdrawals = withdrawals.filter((w) => w.status === args.status);
+    }
+    if (args.method) {
+      withdrawals = withdrawals.filter((w) => w.method === args.method);
+    }
+    if (args.startDate) {
+      withdrawals = withdrawals.filter((w) => w.createdAt >= args.startDate!);
+    }
+    if (args.endDate) {
+      withdrawals = withdrawals.filter((w) => w.createdAt <= args.endDate!);
+    }
+    if (args.minAmount) {
+      withdrawals = withdrawals.filter((w) => w.amount >= args.minAmount!);
+    }
+    if (args.maxAmount) {
+      withdrawals = withdrawals.filter((w) => w.amount <= args.maxAmount!);
+    }
+
+    const total = withdrawals.length;
+    const offset = args.offset ?? 0;
+    const limit = args.limit ?? 50;
+
+    // Calculate totals
+    const totalAmount = withdrawals.reduce((sum, w) => sum + w.amount, 0);
+    const pendingAmount = withdrawals
+      .filter((w) => w.status === "pending")
+      .reduce((sum, w) => sum + w.amount, 0);
+    const completedAmount = withdrawals
+      .filter((w) => w.status === "completed")
+      .reduce((sum, w) => sum + w.amount, 0);
+
+    // Enrich with user info
+    const enrichedWithdrawals = await Promise.all(
+      withdrawals.slice(offset, offset + limit).map(async (withdrawal) => {
+        const user = await ctx.db.get(withdrawal.userId);
+        return {
+          ...withdrawal,
+          userEmail: user?.email,
+          userDisplayName: user?.displayName,
+        };
+      })
+    );
+
+    return {
+      withdrawals: enrichedWithdrawals,
+      total,
+      totalAmount,
+      pendingAmount,
+      completedAmount,
+      hasMore: offset + limit < total,
+      page: Math.floor(offset / limit) + 1,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+});
+
+/**
+ * Get withdrawal details (admin view)
+ */
+export const getWithdrawalDetails = query({
+  args: { withdrawalId: v.id("withdrawals") },
+  handler: async (ctx, args) => {
+    const withdrawal = await ctx.db.get(args.withdrawalId);
+    if (!withdrawal) return null;
+
+    // Get user info
+    const user = await ctx.db.get(withdrawal.userId);
+
+    // Get user's balance
+    const balances = await ctx.db
+      .query("balances")
+      .withIndex("by_user", (q) => q.eq("userId", withdrawal.userId))
+      .collect();
+
+    // Get audit logs for this withdrawal
+    const auditLogs = await ctx.db
+      .query("auditLog")
+      .withIndex("by_resource", (q) =>
+        q.eq("resourceType", "withdrawals").eq("resourceId", args.withdrawalId)
+      )
+      .order("desc")
+      .collect();
+
+    // Get user's recent withdrawals for context
+    const recentWithdrawals = await ctx.db
+      .query("withdrawals")
+      .withIndex("by_user", (q) => q.eq("userId", withdrawal.userId))
+      .order("desc")
+      .take(10);
+
+    return {
+      withdrawal,
+      user: user
+        ? {
+            _id: user._id,
+            email: user.email,
+            displayName: user.displayName,
+            kycStatus: user.kycStatus,
+            kycTier: user.kycTier,
+            status: user.status,
+          }
+        : null,
+      balances,
+      auditLogs,
+      recentWithdrawals,
+    };
+  },
+});
+
+/**
+ * Approve withdrawal (admin action)
+ */
+export const approveWithdrawal = mutation({
+  args: {
+    withdrawalId: v.id("withdrawals"),
+    adminId: v.id("users"),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    const withdrawal = await ctx.db.get(args.withdrawalId);
+    if (!withdrawal) {
+      throw new Error("Withdrawal not found");
+    }
+
+    if (withdrawal.status !== "pending") {
+      throw new Error(`Cannot approve withdrawal with status: ${withdrawal.status}`);
+    }
+
+    // Update withdrawal status
+    await ctx.db.patch(args.withdrawalId, {
+      status: "processing",
+    });
+
+    // Log admin action
+    await ctx.db.insert("auditLog", {
+      userId: args.adminId,
+      action: "admin.withdrawal.approved",
+      resourceType: "withdrawals",
+      resourceId: args.withdrawalId,
+      changes: {
+        old: { status: "pending" },
+        new: { status: "processing" },
+      },
+      metadata: {
+        targetUserId: withdrawal.userId,
+        amount: withdrawal.amount,
+        currency: withdrawal.currency,
+        method: withdrawal.method,
+        notes: args.notes,
+      },
+      timestamp: now,
+    });
+
+    return args.withdrawalId;
+  },
+});
+
+/**
+ * Reject withdrawal (admin action)
+ */
+export const rejectWithdrawal = mutation({
+  args: {
+    withdrawalId: v.id("withdrawals"),
+    adminId: v.id("users"),
+    reason: v.string(),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    const withdrawal = await ctx.db.get(args.withdrawalId);
+    if (!withdrawal) {
+      throw new Error("Withdrawal not found");
+    }
+
+    if (withdrawal.status !== "pending") {
+      throw new Error(`Cannot reject withdrawal with status: ${withdrawal.status}`);
+    }
+
+    // Update withdrawal status
+    await ctx.db.patch(args.withdrawalId, {
+      status: "cancelled",
+      metadata: {
+        ...withdrawal.metadata,
+        rejectionReason: args.reason,
+        rejectedAt: now,
+        rejectedBy: args.adminId,
+      },
+    });
+
+    // Return funds to user's available balance
+    const userBalances = await ctx.db
+      .query("balances")
+      .withIndex("by_user_asset", (q) =>
+        q.eq("userId", withdrawal.userId).eq("assetType", "usd").eq("assetId", withdrawal.currency)
+      )
+      .first();
+
+    if (userBalances) {
+      await ctx.db.patch(userBalances._id, {
+        available: userBalances.available + withdrawal.amount,
+        held: Math.max(0, userBalances.held - withdrawal.amount),
+        updatedAt: now,
+      });
+    }
+
+    // Log admin action
+    await ctx.db.insert("auditLog", {
+      userId: args.adminId,
+      action: "admin.withdrawal.rejected",
+      resourceType: "withdrawals",
+      resourceId: args.withdrawalId,
+      changes: {
+        old: { status: "pending" },
+        new: { status: "cancelled" },
+      },
+      metadata: {
+        targetUserId: withdrawal.userId,
+        amount: withdrawal.amount,
+        currency: withdrawal.currency,
+        method: withdrawal.method,
+        reason: args.reason,
+        notes: args.notes,
+      },
+      timestamp: now,
+    });
+
+    return args.withdrawalId;
+  },
+});
+
+// ============================================================================
+// FRAUD FLAGS MANAGEMENT
+// ============================================================================
+
+/**
+ * Get fraud flags (admin view)
+ */
+export const getFraudFlags = query({
+  args: {
+    userId: v.optional(v.id("users")),
+    status: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("investigating"),
+        v.literal("confirmed"),
+        v.literal("cleared"),
+        v.literal("escalated")
+      )
+    ),
+    severity: v.optional(
+      v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical"))
+    ),
+    type: v.optional(v.string()),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    // Query audit logs for fraud-related actions
+    let logs = await ctx.db
+      .query("auditLog")
+      .order("desc")
+      .take(5000);
+
+    // Filter for fraud-related entries
+    logs = logs.filter(
+      (l) =>
+        l.action.includes("fraud") ||
+        l.action.includes("suspicious") ||
+        l.action.includes("risk") ||
+        l.resourceType === "fraud"
+    );
+
+    // Apply filters
+    if (args.userId) {
+      logs = logs.filter((l) => l.userId === args.userId);
+    }
+    if (args.status) {
+      logs = logs.filter((l) => (l.metadata as Record<string, unknown>)?.status === args.status);
+    }
+    if (args.severity) {
+      logs = logs.filter((l) => (l.metadata as Record<string, unknown>)?.severity === args.severity);
+    }
+    if (args.type) {
+      logs = logs.filter((l) => l.action.includes(args.type!));
+    }
+    if (args.startDate) {
+      logs = logs.filter((l) => l.timestamp >= args.startDate!);
+    }
+    if (args.endDate) {
+      logs = logs.filter((l) => l.timestamp <= args.endDate!);
+    }
+
+    const total = logs.length;
+    const offset = args.offset ?? 0;
+    const limit = args.limit ?? 50;
+
+    // Enrich with user info
+    const enrichedFlags = await Promise.all(
+      logs.slice(offset, offset + limit).map(async (log) => {
+        let userEmail: string | undefined;
+        let userDisplayName: string | undefined;
+        if (log.userId) {
+          const user = await ctx.db.get(log.userId);
+          userEmail = user?.email;
+          userDisplayName = user?.displayName;
+        }
+        return {
+          _id: log._id,
+          userId: log.userId,
+          userEmail,
+          userDisplayName,
+          type: log.action,
+          resourceType: log.resourceType,
+          resourceId: log.resourceId,
+          severity: (log.metadata as Record<string, unknown>)?.severity ?? "medium",
+          status: (log.metadata as Record<string, unknown>)?.status ?? "pending",
+          description: (log.metadata as Record<string, unknown>)?.description ?? log.action,
+          timestamp: log.timestamp,
+          metadata: log.metadata,
+        };
+      })
+    );
+
+    // Calculate summary stats
+    const bySeverity = enrichedFlags.reduce(
+      (acc, f) => {
+        const severity = f.severity as string;
+        acc[severity] = (acc[severity] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+
+    const byStatus = enrichedFlags.reduce(
+      (acc, f) => {
+        const status = f.status as string;
+        acc[status] = (acc[status] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+
+    return {
+      flags: enrichedFlags,
+      total,
+      bySeverity,
+      byStatus,
+      hasMore: offset + limit < total,
+      page: Math.floor(offset / limit) + 1,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+});
+
+/**
+ * Create fraud flag (admin or system action)
+ */
+export const createFraudFlag = mutation({
+  args: {
+    userId: v.id("users"),
+    adminId: v.optional(v.id("users")),
+    type: v.string(),
+    severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")),
+    description: v.string(),
+    resourceType: v.optional(v.string()),
+    resourceId: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Create audit log entry for fraud flag
+    const flagId = await ctx.db.insert("auditLog", {
+      userId: args.userId,
+      action: `fraud.${args.type}`,
+      resourceType: args.resourceType ?? "fraud",
+      resourceId: args.resourceId ?? args.userId,
+      metadata: {
+        severity: args.severity,
+        status: "pending",
+        description: args.description,
+        flaggedBy: args.adminId ?? "system",
+        ...args.metadata,
+      },
+      timestamp: now,
+    });
+
+    // If critical severity, consider suspending the user
+    if (args.severity === "critical") {
+      const user = await ctx.db.get(args.userId);
+      if (user && user.status === "active") {
+        await ctx.db.patch(args.userId, {
+          status: "suspended",
+          updatedAt: now,
+        });
+
+        // Log the auto-suspension
+        await ctx.db.insert("auditLog", {
+          userId: args.adminId,
+          action: "admin.user.auto_suspended",
+          resourceType: "users",
+          resourceId: args.userId,
+          metadata: {
+            reason: "Critical fraud flag triggered",
+            fraudFlagId: flagId,
+            previousStatus: user.status,
+          },
+          timestamp: now,
+        });
+      }
+    }
+
+    return flagId;
+  },
+});
+
+/**
+ * Review fraud flag (admin action)
+ */
+export const reviewFraudFlag = mutation({
+  args: {
+    flagId: v.id("auditLog"),
+    adminId: v.id("users"),
+    status: v.union(
+      v.literal("investigating"),
+      v.literal("confirmed"),
+      v.literal("cleared"),
+      v.literal("escalated")
+    ),
+    notes: v.string(),
+    actionTaken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    const flag = await ctx.db.get(args.flagId);
+    if (!flag) {
+      throw new Error("Fraud flag not found");
+    }
+
+    const oldMetadata = flag.metadata as Record<string, unknown> | undefined;
+    const oldStatus = oldMetadata?.status ?? "pending";
+
+    // Update the flag with review info
+    await ctx.db.patch(args.flagId, {
+      metadata: {
+        ...oldMetadata,
+        status: args.status,
+        reviewedBy: args.adminId,
+        reviewedAt: now,
+        reviewNotes: args.notes,
+        actionTaken: args.actionTaken,
+      },
+    });
+
+    // Log the review action
+    await ctx.db.insert("auditLog", {
+      userId: args.adminId,
+      action: "admin.fraud.reviewed",
+      resourceType: "fraud",
+      resourceId: args.flagId,
+      changes: {
+        old: { status: oldStatus },
+        new: { status: args.status },
+      },
+      metadata: {
+        originalFlagId: args.flagId,
+        notes: args.notes,
+        actionTaken: args.actionTaken,
+      },
+      timestamp: now,
+    });
+
+    // If confirmed, take appropriate action
+    if (args.status === "confirmed" && flag.userId) {
+      const user = await ctx.db.get(flag.userId);
+      if (user && user.status === "active") {
+        await ctx.db.patch(flag.userId, {
+          status: "suspended",
+          updatedAt: now,
+        });
+
+        await ctx.db.insert("auditLog", {
+          userId: args.adminId,
+          action: "admin.user.suspended",
+          resourceType: "users",
+          resourceId: flag.userId,
+          metadata: {
+            reason: "Fraud confirmed",
+            fraudFlagId: args.flagId,
+            previousStatus: user.status,
+          },
+          timestamp: now,
+        });
+      }
+    }
+
+    // If cleared and user was suspended, consider reactivating
+    if (args.status === "cleared" && flag.userId && args.actionTaken === "reactivate_user") {
+      const user = await ctx.db.get(flag.userId);
+      if (user && user.status === "suspended") {
+        await ctx.db.patch(flag.userId, {
+          status: "active",
+          updatedAt: now,
+        });
+
+        await ctx.db.insert("auditLog", {
+          userId: args.adminId,
+          action: "admin.user.reactivated",
+          resourceType: "users",
+          resourceId: flag.userId,
+          metadata: {
+            reason: "Fraud flag cleared",
+            fraudFlagId: args.flagId,
+          },
+          timestamp: now,
+        });
+      }
+    }
+
+    return args.flagId;
+  },
+});
+
+// ============================================================================
+// PLATFORM STATISTICS
+// ============================================================================
+
+/**
+ * Get comprehensive platform statistics
+ */
+export const getPlatformStats = query({
+  args: {
+    period: v.optional(v.union(v.literal("day"), v.literal("week"), v.literal("month"), v.literal("all"))),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const period = args.period ?? "week";
+
+    let startDate: number;
+    switch (period) {
+      case "day":
+        startDate = now - 24 * 60 * 60 * 1000;
+        break;
+      case "week":
+        startDate = now - 7 * 24 * 60 * 60 * 1000;
+        break;
+      case "month":
+        startDate = now - 30 * 24 * 60 * 60 * 1000;
+        break;
+      default:
+        startDate = 0;
+    }
+
+    // Get all data
+    const allUsers = await ctx.db.query("users").collect();
+    const allOrders = await ctx.db.query("orders").collect();
+    const allTrades = await ctx.db.query("trades").collect();
+    const allDeposits = await ctx.db.query("deposits").collect();
+    const allWithdrawals = await ctx.db.query("withdrawals").collect();
+
+    // Filter by period
+    const periodUsers = allUsers.filter((u) => u.createdAt >= startDate);
+    const periodOrders = allOrders.filter((o) => o.createdAt >= startDate);
+    const periodTrades = allTrades.filter((t) => t.executedAt >= startDate);
+    const periodDeposits = allDeposits.filter((d) => d.createdAt >= startDate);
+    const periodWithdrawals = allWithdrawals.filter((w) => w.createdAt >= startDate);
+
+    // Calculate user stats
+    const userStats = {
+      total: allUsers.length,
+      active: allUsers.filter((u) => u.status === "active").length,
+      suspended: allUsers.filter((u) => u.status === "suspended").length,
+      newInPeriod: periodUsers.length,
+      byKYCStatus: allUsers.reduce(
+        (acc, u) => {
+          acc[u.kycStatus] = (acc[u.kycStatus] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+      byKYCTier: allUsers.reduce(
+        (acc, u) => {
+          acc[u.kycTier] = (acc[u.kycTier] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+    };
+
+    // Calculate order stats
+    const orderStats = {
+      total: allOrders.length,
+      inPeriod: periodOrders.length,
+      byStatus: allOrders.reduce(
+        (acc, o) => {
+          acc[o.status] = (acc[o.status] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+      byAssetClass: allOrders.reduce(
+        (acc, o) => {
+          acc[o.assetClass] = (acc[o.assetClass] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+    };
+
+    // Calculate trade stats
+    const tradeStats = {
+      total: allTrades.length,
+      inPeriod: periodTrades.length,
+      totalVolume: allTrades.reduce((sum, t) => sum + t.notionalValue, 0),
+      periodVolume: periodTrades.reduce((sum, t) => sum + t.notionalValue, 0),
+      totalFees: allTrades.reduce((sum, t) => sum + t.fee, 0),
+      periodFees: periodTrades.reduce((sum, t) => sum + t.fee, 0),
+    };
+
+    // Calculate deposit stats
+    const depositStats = {
+      total: allDeposits.length,
+      inPeriod: periodDeposits.length,
+      totalAmount: allDeposits
+        .filter((d) => d.status === "completed")
+        .reduce((sum, d) => sum + d.amount, 0),
+      periodAmount: periodDeposits
+        .filter((d) => d.status === "completed")
+        .reduce((sum, d) => sum + d.amount, 0),
+      pending: allDeposits.filter((d) => d.status === "pending").length,
+      byMethod: allDeposits.reduce(
+        (acc, d) => {
+          acc[d.method] = (acc[d.method] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+    };
+
+    // Calculate withdrawal stats
+    const withdrawalStats = {
+      total: allWithdrawals.length,
+      inPeriod: periodWithdrawals.length,
+      totalAmount: allWithdrawals
+        .filter((w) => w.status === "completed")
+        .reduce((sum, w) => sum + w.amount, 0),
+      periodAmount: periodWithdrawals
+        .filter((w) => w.status === "completed")
+        .reduce((sum, w) => sum + w.amount, 0),
+      pending: allWithdrawals.filter((w) => w.status === "pending").length,
+      pendingAmount: allWithdrawals
+        .filter((w) => w.status === "pending")
+        .reduce((sum, w) => sum + w.amount, 0),
+      byMethod: allWithdrawals.reduce(
+        (acc, w) => {
+          acc[w.method] = (acc[w.method] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+    };
+
+    // Calculate net flow
+    const netFlow = depositStats.totalAmount - withdrawalStats.totalAmount;
+    const periodNetFlow = depositStats.periodAmount - withdrawalStats.periodAmount;
+
+    return {
+      period,
+      startDate,
+      endDate: now,
+      users: userStats,
+      orders: orderStats,
+      trades: tradeStats,
+      deposits: depositStats,
+      withdrawals: withdrawalStats,
+      financials: {
+        netFlow,
+        periodNetFlow,
+        totalRevenue: tradeStats.totalFees,
+        periodRevenue: tradeStats.periodFees,
+      },
+      generatedAt: now,
+    };
+  },
+});
+
+/**
+ * Get admin audit log with enriched data
+ */
+export const getAdminAuditLog = query({
+  args: {
+    adminOnly: v.optional(v.boolean()),
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let logs = await ctx.db.query("auditLog").order("desc").take(5000);
+
+    // Filter for admin actions only if requested
+    if (args.adminOnly) {
+      logs = logs.filter((l) => l.action.startsWith("admin."));
+    }
+
+    const total = logs.length;
+    const offset = args.offset ?? 0;
+    const limit = args.limit ?? 100;
+
+    // Enrich with user info
+    const enrichedLogs = await Promise.all(
+      logs.slice(offset, offset + limit).map(async (log) => {
+        let userEmail: string | undefined;
+        let userDisplayName: string | undefined;
+        if (log.userId) {
+          const user = await ctx.db.get(log.userId);
+          userEmail = user?.email;
+          userDisplayName = user?.displayName;
+        }
+        return {
+          ...log,
+          userEmail,
+          userDisplayName,
+        };
+      })
+    );
+
+    // Group by action for summary
+    const byAction = logs.slice(0, 1000).reduce(
+      (acc, log) => {
+        acc[log.action] = (acc[log.action] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+
+    return {
+      logs: enrichedLogs,
+      total,
+      byAction,
+      hasMore: offset + limit < total,
+      page: Math.floor(offset / limit) + 1,
+      totalPages: Math.ceil(total / limit),
+    };
+  },
+});
+
+// ============================================================================
 // ADMIN VERIFICATION
 // ============================================================================
 

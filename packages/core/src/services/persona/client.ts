@@ -13,6 +13,9 @@ import type {
   GetVerificationsResponse,
   RedactInquiryResponse,
   WebhookPayload,
+  Document,
+  Selfie,
+  Report,
 } from "./types";
 import { PersonaApiError } from "./types";
 
@@ -503,6 +506,198 @@ export class PersonaClient {
         postalCode: attrs.address_postal_code,
         countryCode: attrs.address_country_code,
       },
+    };
+  }
+
+  // ==========================================================================
+  // List and Search Methods
+  // ==========================================================================
+
+  /**
+   * List inquiries for a reference ID (user)
+   */
+  async listInquiriesByReferenceId(referenceId: string): Promise<Inquiry[]> {
+    this.logger.debug("Listing inquiries by reference ID", { referenceId });
+
+    const response = await this.request<{ data: Inquiry[] }>(
+      "GET",
+      `/inquiries?filter[reference-id]=${encodeURIComponent(referenceId)}`
+    );
+
+    return response.data;
+  }
+
+  /**
+   * List inquiries for an account
+   */
+  async listInquiriesByAccountId(accountId: string): Promise<Inquiry[]> {
+    this.logger.debug("Listing inquiries by account ID", { accountId });
+
+    const response = await this.request<{ data: Inquiry[] }>(
+      "GET",
+      `/inquiries?filter[account-id]=${encodeURIComponent(accountId)}`
+    );
+
+    return response.data;
+  }
+
+  /**
+   * Get the most recent inquiry for a user
+   */
+  async getLatestInquiryByReferenceId(referenceId: string): Promise<Inquiry | null> {
+    const inquiries = await this.listInquiriesByReferenceId(referenceId);
+    if (inquiries.length === 0) {
+      return null;
+    }
+
+    // Sort by created_at descending and return most recent
+    return inquiries.sort((a, b) => {
+      const aTime = new Date(a.attributes.created_at).getTime();
+      const bTime = new Date(b.attributes.created_at).getTime();
+      return bTime - aTime;
+    })[0];
+  }
+
+  // ==========================================================================
+  // Document Methods
+  // ==========================================================================
+
+  /**
+   * Get documents for an inquiry
+   */
+  async getInquiryDocuments(inquiryId: string): Promise<Document[]> {
+    this.logger.debug("Getting documents for inquiry", { inquiryId });
+
+    const response = await this.request<{ data: Document[] }>(
+      "GET",
+      `/inquiries/${inquiryId}/documents`
+    );
+
+    return response.data;
+  }
+
+  /**
+   * Get selfies for an inquiry
+   */
+  async getInquirySelfies(inquiryId: string): Promise<Selfie[]> {
+    this.logger.debug("Getting selfies for inquiry", { inquiryId });
+
+    const response = await this.request<{ data: Selfie[] }>(
+      "GET",
+      `/inquiries/${inquiryId}/selfies`
+    );
+
+    return response.data;
+  }
+
+  /**
+   * Get all uploaded files (documents and selfies) for an inquiry
+   */
+  async getInquiryFiles(inquiryId: string): Promise<{
+    documents: Document[];
+    selfies: Selfie[];
+  }> {
+    const [documents, selfies] = await Promise.all([
+      this.getInquiryDocuments(inquiryId),
+      this.getInquirySelfies(inquiryId),
+    ]);
+
+    return { documents, selfies };
+  }
+
+  // ==========================================================================
+  // Session Token Methods
+  // ==========================================================================
+
+  /**
+   * Generate a new session token for an existing inquiry
+   * Useful for continuing an incomplete inquiry
+   */
+  async generateSessionToken(inquiryId: string): Promise<string> {
+    this.logger.info("Generating new session token", { inquiryId });
+
+    const response = await this.request<{
+      data: Inquiry;
+      meta: { session_token: string };
+    }>("POST", `/inquiries/${inquiryId}/generate-one-time-link`);
+
+    return response.meta.session_token;
+  }
+
+  /**
+   * Expire an active session for an inquiry
+   */
+  async expireSession(inquiryId: string): Promise<void> {
+    this.logger.info("Expiring session for inquiry", { inquiryId });
+
+    await this.request("POST", `/inquiries/${inquiryId}/expire`);
+  }
+
+  // ==========================================================================
+  // Report Methods
+  // ==========================================================================
+
+  /**
+   * Get reports for an inquiry
+   */
+  async getInquiryReports(inquiryId: string): Promise<Report[]> {
+    this.logger.debug("Getting reports for inquiry", { inquiryId });
+
+    const response = await this.request<{ data: Report[] }>(
+      "GET",
+      `/inquiries/${inquiryId}/reports`
+    );
+
+    return response.data;
+  }
+
+  // ==========================================================================
+  // Helper Status Checks
+  // ==========================================================================
+
+  /**
+   * Check if inquiry needs user action
+   */
+  needsUserAction(inquiry: Inquiry): boolean {
+    const pendingStatuses = ["created", "pending"];
+    return pendingStatuses.includes(inquiry.attributes.status);
+  }
+
+  /**
+   * Check if inquiry is in review
+   */
+  isInReview(inquiry: Inquiry): boolean {
+    return inquiry.attributes.status === "needs_review";
+  }
+
+  /**
+   * Check if inquiry failed
+   */
+  isInquiryFailed(inquiry: Inquiry): boolean {
+    const failedStatuses = ["failed", "declined"];
+    return failedStatuses.includes(inquiry.attributes.status);
+  }
+
+  /**
+   * Get detailed status information
+   */
+  getInquiryStatusDetails(inquiry: Inquiry): {
+    status: string;
+    isComplete: boolean;
+    isApproved: boolean;
+    isFailed: boolean;
+    needsAction: boolean;
+    currentStep: string | null;
+    nextStep: string | null;
+  } {
+    return {
+      status: inquiry.attributes.status,
+      isComplete: this.isInquiryComplete(inquiry),
+      isApproved: this.isInquiryApproved(inquiry),
+      isFailed: this.isInquiryFailed(inquiry),
+      needsAction: this.needsUserAction(inquiry),
+      currentStep: inquiry.attributes.current_step_name,
+      nextStep: inquiry.attributes.next_step_name,
     };
   }
 }
