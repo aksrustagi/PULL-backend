@@ -8,6 +8,9 @@ import { streamSSE } from "hono/streaming";
 import type { Env } from "../index";
 import { verifyToken } from "../middleware/auth";
 import { initRedisPubSub, type RedisPubSub, type PriceUpdate, type PubSubMessage } from "@pull/core/services/redis";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("sse");
 
 // ============================================================================
 // Types
@@ -48,7 +51,7 @@ class SSEManager {
   private async initializePubSub(): Promise<void> {
     const redisUrl = process.env.REDIS_URL;
     if (!redisUrl) {
-      console.warn("[SSE] Redis URL not configured, SSE updates will be limited");
+      logger.warn("Redis URL not configured, SSE updates will be limited");
       return;
     }
 
@@ -76,9 +79,9 @@ class SSEManager {
         this.broadcastToChannel(message.channel, "trade", message.data);
       });
 
-      console.log("[SSE] Connected to Redis Pub/Sub");
+      logger.info("Connected to Redis Pub/Sub");
     } catch (error) {
-      console.error("[SSE] Failed to connect to Redis:", error);
+      logger.error("Failed to connect to Redis", { error });
     }
   }
 
@@ -100,12 +103,12 @@ class SSEManager {
 
   registerConnection(conn: SSEConnection): void {
     this.connections.set(conn.id, conn);
-    console.log(`[SSE] Connection registered: ${conn.id}`);
+    logger.info("Connection registered", { connectionId: conn.id });
   }
 
   removeConnection(id: string): void {
     this.connections.delete(id);
-    console.log(`[SSE] Connection removed: ${id}`);
+    logger.info("Connection removed", { connectionId: id });
   }
 
   getConnection(id: string): SSEConnection | undefined {
@@ -117,7 +120,7 @@ class SSEManager {
     if (!conn) return false;
 
     conn.subscriptions.add(channel);
-    console.log(`[SSE] ${connectionId} subscribed to ${channel}`);
+    logger.info("Client subscribed", { connectionId, channel });
     return true;
   }
 
@@ -126,7 +129,7 @@ class SSEManager {
     if (!conn) return false;
 
     conn.subscriptions.delete(channel);
-    console.log(`[SSE] ${connectionId} unsubscribed from ${channel}`);
+    logger.info("Client unsubscribed", { connectionId, channel });
     return true;
   }
 
@@ -334,7 +337,7 @@ app.get("/stream", async (c) => {
         await stream.sleep(1000);
       }
     } catch (error) {
-      console.error(`[SSE] Stream error for ${connectionId}:`, error);
+      logger.error("Stream error", { connectionId, error });
     } finally {
       manager.removeConnection(connectionId);
     }

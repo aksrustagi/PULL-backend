@@ -15,8 +15,12 @@ import {
   INSIGHT_BUNDLES,
   InsightTier,
 } from "@pull/core/services/ai-insights";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all AI insights routes - feature is not production-ready
+app.use("*", requireFeature("ai_insights", "AI Insights"));
 
 // ============================================================================
 // SCHEMAS

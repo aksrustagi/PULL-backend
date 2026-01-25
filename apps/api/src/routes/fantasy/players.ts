@@ -7,8 +7,12 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../../index";
 import { getSportsDataService } from "@pull/core/services/sports-data";
+import { requireFeature } from "../../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all fantasy routes - feature is not production-ready
+app.use("*", requireFeature("fantasy_leagues", "Fantasy Leagues"));
 
 // =============================================================================
 // SCHEMAS

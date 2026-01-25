@@ -13,6 +13,9 @@ import {
 import { getBroadcastManager, initBroadcastManager, type BroadcastManager } from "./broadcast";
 import { handleMessage, sendResponse, sendError } from "./handlers";
 import { initRedisPubSub, type RedisPubSub, type PriceUpdate } from "@pull/core/services/redis";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("websocket");
 
 // ============================================================================
 // Types
@@ -127,7 +130,7 @@ export class WebSocketServer {
       this.broadcast.cleanupStaleConnections(this.config.idleTimeout * 1000);
     }, 60000);
 
-    console.log(`[WebSocket] Server components started`);
+    logger.info("Server components started");
   }
 
   /**
@@ -151,7 +154,7 @@ export class WebSocketServer {
 
     this.broadcast.closeAll("Server shutdown");
 
-    console.log(`[WebSocket] Server components stopped`);
+    logger.info("Server components stopped");
   }
 
   // ==========================================================================
@@ -162,7 +165,7 @@ export class WebSocketServer {
    * Handle new WebSocket connection
    */
   private async handleOpen(ws: ServerWebSocket<WebSocketData>): Promise<void> {
-    console.log(`[WebSocket] New connection: ${ws.data.connectionId}`);
+    logger.info("New connection", { connectionId: ws.data.connectionId });
 
     // Register with broadcast manager
     this.broadcast.registerConnection(ws);
@@ -200,9 +203,7 @@ export class WebSocketServer {
     code: number,
     reason: string
   ): void {
-    console.log(
-      `[WebSocket] Connection closed: ${ws.data.connectionId} (${code}: ${reason})`
-    );
+    logger.info("Connection closed", { connectionId: ws.data.connectionId, code, reason });
     this.broadcast.unregisterConnection(ws.data.connectionId);
   }
 
@@ -346,7 +347,7 @@ export class WebSocketServer {
       this.messageCountOut++;
     });
 
-    console.log("[WebSocket] Redis Pub/Sub bridge established");
+    logger.info("Redis Pub/Sub bridge established");
   }
 
   // ==========================================================================

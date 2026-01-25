@@ -3,6 +3,10 @@
  * Handles sending authentication-related emails using SendGrid or similar
  */
 
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("email");
+
 // Email configuration from environment
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const FROM_EMAIL = process.env.FROM_EMAIL ?? "noreply@pull.app";
@@ -21,9 +25,9 @@ interface SendEmailOptions {
  */
 async function sendEmail(options: SendEmailOptions): Promise<boolean> {
   if (!SENDGRID_API_KEY) {
-    console.warn("[Email] SendGrid not configured. Email not sent:", options.subject);
+    logger.warn("SendGrid not configured, email not sent", { subject: options.subject });
     // In development, log the email content
-    console.log("[Email] Would have sent:", JSON.stringify(options, null, 2));
+    logger.debug("Would have sent email", { options });
     return true; // Return true in dev to not block flows
   }
 
@@ -47,14 +51,14 @@ async function sendEmail(options: SendEmailOptions): Promise<boolean> {
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("[Email] SendGrid error:", error);
+      logger.error("SendGrid error", { error });
       return false;
     }
 
-    console.log(`[Email] Sent "${options.subject}" to ${options.to}`);
+    logger.info("Email sent", { subject: options.subject, to: options.to });
     return true;
   } catch (error) {
-    console.error("[Email] Failed to send:", error);
+    logger.error("Failed to send email", { error });
     return false;
   }
 }

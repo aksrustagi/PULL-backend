@@ -3,8 +3,12 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
 import { engagementService } from "@pull/core/services/engagement";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect advanced engagement routes - viral growth features are not production-ready
+app.use("*", requireFeature("viral_growth", "Engagement & Gamification"));
 
 const claimDailySchema = z.object({
   challengeId: z.string().optional(),
