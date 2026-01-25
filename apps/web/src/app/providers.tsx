@@ -10,9 +10,11 @@ import { Toaster } from "sonner";
 // Convex Client
 // ============================================================================
 
-const convex = new ConvexReactClient(
-  process.env.NEXT_PUBLIC_CONVEX_URL as string
-);
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+if (!convexUrl) {
+  throw new Error("NEXT_PUBLIC_CONVEX_URL environment variable is required");
+}
+const convex = new ConvexReactClient(convexUrl);
 
 // ============================================================================
 // Auth Context (for Convex auth integration)
@@ -42,8 +44,9 @@ function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    // Check for existing auth token
-    const token = localStorage.getItem("pull-auth-token");
+    // Check for existing auth token from Zustand persisted store (sessionStorage)
+    const stored = sessionStorage.getItem("pull-auth");
+    const token = stored ? JSON.parse(stored)?.state?.token : null;
     setAuthState({
       isAuthenticated: !!token,
       isLoading: false,

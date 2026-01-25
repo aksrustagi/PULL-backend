@@ -174,6 +174,11 @@ export class KalshiWebSocket extends EventEmitter {
           this.isConnecting = false;
           this.isAuthenticated = false;
           this.stopHeartbeat();
+          // Reject all pending messages on disconnect to prevent memory leaks
+          for (const [id, { reject: rejectFn }] of this.pendingMessages) {
+            rejectFn(new Error(`WebSocket disconnected (code: ${event.code})`));
+          }
+          this.pendingMessages.clear();
           this.logger.info("WebSocket disconnected", {
             code: event.code,
             reason: event.reason,
@@ -251,6 +256,7 @@ export class KalshiWebSocket extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
+        this.pendingMessages.delete(authMessage.id);
         reject(new Error("Authentication timeout"));
       }, 10000);
 

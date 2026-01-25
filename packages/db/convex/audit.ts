@@ -1,5 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { authenticatedQuery, systemMutation } from "./lib/auth";
+import { Id } from "./_generated/dataModel";
 
 /**
  * Audit log queries and mutations for PULL
@@ -13,17 +15,18 @@ import { mutation, query } from "./_generated/server";
 /**
  * Get audit logs by user
  */
-export const getByUser = query({
+export const getByUser = authenticatedQuery({
   args: {
-    userId: v.id("users"),
     limit: v.optional(v.number()),
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const userId = ctx.userId as Id<"users">;
+
     let logs = await ctx.db
       .query("auditLog")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .take(args.limit ?? 100);
 
@@ -38,6 +41,7 @@ export const getByUser = query({
   },
 });
 
+// TODO: Restrict to admin users
 /**
  * Get audit logs by resource
  */
@@ -58,6 +62,7 @@ export const getByResource = query({
   },
 });
 
+// TODO: Restrict to admin users
 /**
  * Get audit logs by action type
  */
@@ -80,6 +85,7 @@ export const getByAction = query({
   },
 });
 
+// TODO: Restrict to admin users
 /**
  * Get audit logs by date range
  */
@@ -116,6 +122,7 @@ export const getByDateRange = query({
   },
 });
 
+// TODO: Restrict to admin users
 /**
  * Get recent activity summary
  */
@@ -169,6 +176,7 @@ export const getActivitySummary = query({
   },
 });
 
+// TODO: Restrict to admin users
 /**
  * Search audit logs
  */
@@ -205,7 +213,7 @@ export const search = query({
 /**
  * Log an audit event (append-only)
  */
-export const log = mutation({
+export const log = systemMutation({
   args: {
     userId: v.optional(v.id("users")),
     action: v.string(),
@@ -238,7 +246,7 @@ export const log = mutation({
 /**
  * Log batch of events
  */
-export const logBatch = mutation({
+export const logBatch = systemMutation({
   args: {
     events: v.array(
       v.object({
@@ -282,7 +290,7 @@ export const logBatch = mutation({
 /**
  * Log webhook event
  */
-export const logWebhook = mutation({
+export const logWebhook = systemMutation({
   args: {
     source: v.string(),
     eventType: v.string(),
@@ -308,7 +316,7 @@ export const logWebhook = mutation({
 /**
  * Update webhook processing status
  */
-export const updateWebhookStatus = mutation({
+export const updateWebhookStatus = systemMutation({
   args: {
     webhookId: v.id("webhookEvents"),
     status: v.union(

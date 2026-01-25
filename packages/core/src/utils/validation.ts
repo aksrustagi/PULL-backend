@@ -106,10 +106,18 @@ export const dateRangeSchema = z
   });
 
 /**
- * Sanitize string input (trim and remove dangerous chars)
+ * Sanitize string input by HTML-encoding dangerous characters.
+ * Prevents XSS via angle brackets, quotes, backticks, and ampersands.
  */
 export function sanitizeString(input: string): string {
-  return input.trim().replace(/[<>]/g, "");
+  return input
+    .trim()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;")
+    .replace(/`/g, "&#x60;");
 }
 
 /**

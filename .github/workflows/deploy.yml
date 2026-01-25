@@ -1,8 +1,10 @@
 name: Deploy
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -18,6 +20,7 @@ jobs:
   deploy:
     name: Deploy to ${{ github.event.inputs.environment || 'production' }}
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     environment: ${{ github.event.inputs.environment || 'production' }}
     steps:
       - uses: actions/checkout@v4

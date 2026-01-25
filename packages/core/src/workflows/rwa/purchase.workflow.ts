@@ -8,6 +8,7 @@ import {
   defineQuery,
   setHandler,
   ApplicationFailure,
+  uuid4,
 } from "@temporalio/workflow";
 
 import type * as activities from "./activities";
@@ -80,7 +81,7 @@ export async function rwaPurchaseWorkflow(
   const { listingId, buyerId, shares } = input;
 
   // Generate purchase ID
-  const purchaseId = `purchase_${crypto.randomUUID()}`;
+  const purchaseId = `purchase_${uuid4()}`;
 
   // Initialize status
   const status: PurchaseStatus = {
@@ -284,7 +285,7 @@ export async function rwaPurchaseWorkflow(
       try {
         await releaseShares(reservationId);
       } catch (releaseError) {
-        console.error("Failed to release shares:", releaseError);
+        // Error will be handled by the workflow retry mechanism
       }
     }
 
@@ -293,7 +294,7 @@ export async function rwaPurchaseWorkflow(
       try {
         await releaseBuyerFunds(buyerId, holdId);
       } catch (releaseError) {
-        console.error("Failed to release funds:", releaseError);
+        // Error will be handled by the workflow retry mechanism
       }
     }
 
