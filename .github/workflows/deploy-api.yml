@@ -29,33 +29,23 @@ env:
 
 jobs:
   # ==========================================================================
-  # Build
+  # Build API
   # ==========================================================================
   build:
     name: Build API
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      cache-key: ${{ steps.cache-key.outputs.key }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - name: Setup
+        uses: ./.github/actions/setup
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build API
-        run: pnpm --filter @pull/api build
+          turbo-token: ${{ secrets.TURBO_TOKEN }}
+          turbo-team: ${{ vars.TURBO_TEAM }}
 
       - name: Generate version
         id: version
@@ -63,12 +53,24 @@ jobs:
           VERSION=$(echo "${{ github.sha }}" | cut -c1-7)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - name: Generate cache key
+        id: cache-key
+        run: echo "key=api-build-${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Build API
+        run: pnpm --filter @pull/api build
+
+      - name: Cache build artifact
+        uses: actions/cache/save@v4
         with:
-          name: api-build-${{ steps.version.outputs.version }}
           path: apps/api/dist
-          retention-days: 7
+          key: ${{ steps.cache-key.outputs.key }}
+
+      - name: Build Summary
+        run: |
+          echo "## API Build" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SHA: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
   # Deploy to Staging
@@ -85,24 +87,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
+      - name: Restore build artifact
+        uses: actions/cache/restore@v4
         with:
-          name: api-build-${{ needs.build.outputs.version }}
           path: apps/api/dist
+          key: ${{ needs.build.outputs.cache-key }}
+          fail-on-cache-miss: true
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
+      - name: Setup Node.js (for Wrangler)
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Cache Wrangler
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: wrangler-${{ runner.os }}-${{ hashFiles('**/package.json') }}
+          restore-keys: wrangler-${{ runner.os }}-
+
       - name: Install Wrangler
-        run: pnpm add -g wrangler
+        run: npm install -g wrangler@latest
 
       - name: Deploy to Cloudflare Workers (Staging)
         run: |
@@ -113,18 +118,30 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Health check
+        id: health
         run: |
+          echo "Waiting for deployment to propagate..."
+          sleep 10
           for i in {1..10}; do
             response=$(curl -s -o /dev/null -w "%{http_code}" https://api-staging.pull.com/health)
             if [ "$response" == "200" ]; then
               echo "Health check passed!"
+              echo "status=success" >> $GITHUB_OUTPUT
               exit 0
             fi
             echo "Attempt $i: Health check returned $response, retrying..."
             sleep 5
           done
-          echo "Health check failed after 10 attempts"
+          echo "status=failed" >> $GITHUB_OUTPUT
           exit 1
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## Staging Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ needs.build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- URL: https://api-staging.pull.com" >> $GITHUB_STEP_SUMMARY
+          echo "- Health Check: ${{ steps.health.outputs.status || 'unknown' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify on failure
         if: failure()
@@ -138,7 +155,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*API Staging Deployment Failed* :x:\n\nCommit: ${{ github.sha }}\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "*API Staging Deployment Failed*\n\nVersion: `${{ needs.build.outputs.version }}`\nCommit: `${{ github.sha }}`\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
                   }
                 }
               ]
@@ -161,26 +178,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
+      - name: Restore build artifact
+        uses: actions/cache/restore@v4
         with:
-          name: api-build-${{ needs.build.outputs.version }}
           path: apps/api/dist
+          key: ${{ needs.build.outputs.cache-key }}
+          fail-on-cache-miss: true
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
+      - name: Setup Node.js (for Wrangler)
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Cache Wrangler
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: wrangler-${{ runner.os }}-${{ hashFiles('**/package.json') }}
+          restore-keys: wrangler-${{ runner.os }}-
+
       - name: Install Wrangler
-        run: pnpm add -g wrangler
+        run: npm install -g wrangler@latest
+
+      - name: Get current deployment (for rollback)
+        id: current
+        run: |
+          echo "Storing current deployment info for potential rollback"
+          echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
 
       - name: Deploy to Cloudflare Workers (Production)
+        id: deploy
         run: |
           cd apps/api
           wrangler deploy --env production
@@ -189,27 +216,41 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Health check
+        id: health
         run: |
+          echo "Waiting for deployment to propagate..."
+          sleep 10
           for i in {1..10}; do
             response=$(curl -s -o /dev/null -w "%{http_code}" https://api.pull.com/health)
             if [ "$response" == "200" ]; then
               echo "Health check passed!"
+              echo "status=success" >> $GITHUB_OUTPUT
               exit 0
             fi
             echo "Attempt $i: Health check returned $response, retrying..."
             sleep 5
           done
-          echo "Health check failed after 10 attempts"
+          echo "status=failed" >> $GITHUB_OUTPUT
           exit 1
 
       - name: Rollback on failure
-        if: failure()
+        if: failure() && steps.deploy.outcome == 'success'
         run: |
           cd apps/api
-          wrangler rollback --env production
+          echo "Attempting rollback..."
+          wrangler rollback --env production || echo "Rollback command not available, manual intervention required"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ needs.build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- URL: https://api.pull.com" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy Status: ${{ steps.deploy.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Health Check: ${{ steps.health.outputs.status || 'unknown' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify on success
         if: success()
@@ -223,7 +264,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*API Production Deployment Successful* :white_check_mark:\n\nVersion: ${{ needs.build.outputs.version }}\nURL: https://api.pull.com"
+                    "text": "*API Production Deployment Successful*\n\nVersion: `${{ needs.build.outputs.version }}`\nURL: https://api.pull.com"
                   }
                 }
               ]
@@ -237,13 +278,13 @@ jobs:
         with:
           payload: |
             {
-              "text": "API Production Deployment Failed - Rolling back",
+              "text": "API Production Deployment Failed - Rollback attempted",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*API Production Deployment Failed* :x:\n\nAttempted rollback. Please verify.\n\nCommit: ${{ github.sha }}\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "*API Production Deployment Failed*\n\nRollback attempted. Please verify.\n\nVersion: `${{ needs.build.outputs.version }}`\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
                   }
                 }
               ]

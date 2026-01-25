@@ -1,3 +1,7 @@
+# API Deployment - Production Ready Configuration
+# Includes: Deployment, Service, HPA, PDB with comprehensive health checks and security
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,8 +11,13 @@ metadata:
     app: pull-api
     app.kubernetes.io/name: pull-api
     app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: pull
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    kubernetes.io/change-cause: "Initial production deployment"
 spec:
   replicas: 3
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: pull-api
@@ -22,16 +31,35 @@ spec:
       labels:
         app: pull-api
         app.kubernetes.io/name: pull-api
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: pull
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "3001"
         prometheus.io/path: "/metrics"
+        # Force rollout on config changes
+        checksum/config: "${CONFIG_CHECKSUM}"
     spec:
       serviceAccountName: pull-api
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      # Pod Security Context
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        runAsGroup: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # Priority Class for workload prioritization
+      priorityClassName: pull-api-priority
+      # DNS Configuration for faster lookups
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
+          - name: single-request-reopen
       containers:
         - name: api
           image: gcr.io/PROJECT_ID/pull-api:latest
@@ -40,11 +68,35 @@ spec:
             - containerPort: 3001
               name: http
               protocol: TCP
+            - containerPort: 9090
+              name: metrics
+              protocol: TCP
+          # Environment from ConfigMaps
+          envFrom:
+            - configMapRef:
+                name: pull-shared-config
+            - configMapRef:
+                name: pull-api-config
+            - configMapRef:
+                name: pull-observability-config
+          # Environment from Secrets and overrides
           env:
-            - name: NODE_ENV
-              value: "production"
-            - name: PORT
-              value: "3001"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
@@ -55,39 +107,112 @@ spec:
                 secretKeyRef:
                   name: pull-secrets
                   key: convex-url
+            - name: CLERK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: clerk-secret-key
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: jwt-secret
             - name: TEMPORAL_ADDRESS
               value: "temporal:7233"
+          # Resource Management
           resources:
             requests:
               cpu: "200m"
               memory: "256Mi"
+              ephemeral-storage: "100Mi"
             limits:
               cpu: "1000m"
               memory: "1Gi"
-          readinessProbe:
+              ephemeral-storage: "500Mi"
+          # Startup Probe - allows slow container startup
+          startupProbe:
             httpGet:
               path: /health
               port: 3001
-            initialDelaySeconds: 10
+              httpHeaders:
+                - name: X-Health-Check
+                  value: startup
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 30  # 5 * 30 = 150 seconds max startup time
+            successThreshold: 1
+          # Readiness Probe - traffic routing
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3001
+              httpHeaders:
+                - name: X-Health-Check
+                  value: readiness
+            initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+            successThreshold: 1
+          # Liveness Probe - container restart
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 3001
-            initialDelaySeconds: 30
+              httpHeaders:
+                - name: X-Health-Check
+                  value: liveness
+            initialDelaySeconds: 0
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
+            successThreshold: 1
+          # Lifecycle hooks
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    # Graceful shutdown: stop accepting new connections
+                    # and wait for existing connections to drain
+                    sleep 15
+          # Container Security Context
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
             capabilities:
               drop:
                 - ALL
+          # Volume Mounts
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /home/node/.cache
+      # Volumes
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 100Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 200Mi
+      # Pod Scheduling
       affinity:
         podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - pull-api
+              topologyKey: kubernetes.io/hostname
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               podAffinityTerm:
@@ -97,10 +222,16 @@ spec:
                       operator: In
                       values:
                         - pull-api
-                topologyKey: kubernetes.io/hostname
+                topologyKey: topology.kubernetes.io/zone
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: pull-api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
@@ -113,10 +244,39 @@ metadata:
   namespace: pull
   labels:
     app: pull-api
+    app.kubernetes.io/name: pull-api
+    app.kubernetes.io/component: api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
 spec:
   type: ClusterIP
+  sessionAffinity: None
   ports:
     - port: 80
+      targetPort: 3001
+      protocol: TCP
+      name: http
+    - port: 9090
+      targetPort: 9090
+      protocol: TCP
+      name: metrics
+  selector:
+    app: pull-api
+---
+# Headless service for direct pod access (useful for debugging)
+apiVersion: v1
+kind: Service
+metadata:
+  name: pull-api-headless
+  namespace: pull
+  labels:
+    app: pull-api
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 3001
       targetPort: 3001
       protocol: TCP
       name: http
@@ -128,6 +288,8 @@ kind: HorizontalPodAutoscaler
 metadata:
   name: pull-api-hpa
   namespace: pull
+  labels:
+    app: pull-api
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -148,6 +310,14 @@ spec:
         target:
           type: Utilization
           averageUtilization: 80
+    # Custom metrics (requires metrics-server and prometheus-adapter)
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "1000"
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
@@ -155,6 +325,10 @@ spec:
         - type: Percent
           value: 10
           periodSeconds: 60
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+      selectPolicy: Min
     scaleUp:
       stabilizationWindowSeconds: 60
       policies:
@@ -171,6 +345,8 @@ kind: PodDisruptionBudget
 metadata:
   name: pull-api-pdb
   namespace: pull
+  labels:
+    app: pull-api
 spec:
   minAvailable: 2
   selector:

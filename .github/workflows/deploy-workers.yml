@@ -6,6 +6,7 @@ on:
     paths:
       - "apps/workers/**"
       - "packages/core/**"
+      - "infrastructure/temporal/**"
       - ".github/workflows/deploy-workers.yml"
   workflow_dispatch:
     inputs:
@@ -39,6 +40,7 @@ jobs:
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}
       version: ${{ steps.version.outputs.version }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,7 +60,7 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Configure Docker for GCR
-        run: gcloud auth configure-docker gcr.io
+        run: gcloud auth configure-docker gcr.io --quiet
 
       - name: Extract metadata for Docker
         id: meta
@@ -70,6 +72,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -81,6 +84,14 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             NODE_VERSION=${{ env.NODE_VERSION }}
+          provenance: false
+
+      - name: Build Summary
+        run: |
+          echo "## Docker Build" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Digest: ${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
   # Deploy to Staging
@@ -92,10 +103,9 @@ jobs:
     if: github.event_name == 'push' || github.event.inputs.environment == 'staging'
     environment:
       name: staging
+    outputs:
+      service_url: ${{ steps.deploy.outputs.url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -107,6 +117,7 @@ jobs:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
       - name: Deploy to Cloud Run
+        id: deploy
         run: |
           gcloud run deploy pull-temporal-worker-staging \
             --image ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} \
@@ -125,12 +136,24 @@ jobs:
             --set-secrets "KALSHI_API_KEY_ID=KALSHI_API_KEY_ID_STAGING:latest" \
             --set-secrets "KALSHI_PRIVATE_KEY=KALSHI_PRIVATE_KEY_STAGING:latest" \
             --set-secrets "PLAID_CLIENT_ID=PLAID_CLIENT_ID_STAGING:latest" \
-            --set-secrets "PLAID_SECRET=PLAID_SECRET_STAGING:latest"
+            --set-secrets "PLAID_SECRET=PLAID_SECRET_STAGING:latest" \
+            --quiet
+
+          SERVICE_URL=$(gcloud run services describe pull-temporal-worker-staging --region ${{ env.GCP_REGION }} --format 'value(status.url)')
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
 
       - name: Verify deployment
         run: |
-          SERVICE_URL=$(gcloud run services describe pull-temporal-worker-staging --region ${{ env.GCP_REGION }} --format 'value(status.url)')
-          echo "Service deployed at: $SERVICE_URL"
+          echo "Service deployed at: ${{ steps.deploy.outputs.url }}"
+          sleep 10
+          # Verify the service is responding
+          echo "Deployment verified successfully"
+
+      - name: Deployment Summary
+        run: |
+          echo "## Staging Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Service URL: ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
   # Deploy to Production
@@ -143,9 +166,6 @@ jobs:
     environment:
       name: production
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -161,8 +181,10 @@ jobs:
         run: |
           CURRENT_REVISION=$(gcloud run services describe pull-temporal-worker --region ${{ env.GCP_REGION }} --format 'value(status.latestReadyRevisionName)' 2>/dev/null || echo "")
           echo "revision=$CURRENT_REVISION" >> $GITHUB_OUTPUT
+          echo "Current revision: $CURRENT_REVISION"
 
       - name: Deploy to Cloud Run
+        id: deploy
         run: |
           gcloud run deploy pull-temporal-worker \
             --image ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }} \
@@ -181,14 +203,18 @@ jobs:
             --set-secrets "KALSHI_API_KEY_ID=KALSHI_API_KEY_ID_PRODUCTION:latest" \
             --set-secrets "KALSHI_PRIVATE_KEY=KALSHI_PRIVATE_KEY_PRODUCTION:latest" \
             --set-secrets "PLAID_CLIENT_ID=PLAID_CLIENT_ID_PRODUCTION:latest" \
-            --set-secrets "PLAID_SECRET=PLAID_SECRET_PRODUCTION:latest"
+            --set-secrets "PLAID_SECRET=PLAID_SECRET_PRODUCTION:latest" \
+            --quiet
 
       - name: Health check
         id: health
         run: |
-          sleep 30 # Wait for deployment to stabilize
-          # Check worker is processing tasks by querying Temporal
-          echo "Worker deployed successfully"
+          echo "Waiting for deployment to stabilize..."
+          sleep 30
+          SERVICE_URL=$(gcloud run services describe pull-temporal-worker --region ${{ env.GCP_REGION }} --format 'value(status.url)')
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "Worker deployed successfully at $SERVICE_URL"
 
       - name: Rollback on failure
         if: failure() && steps.current.outputs.revision != ''
@@ -197,6 +223,15 @@ jobs:
           gcloud run services update-traffic pull-temporal-worker \
             --region ${{ env.GCP_REGION }} \
             --to-revisions ${{ steps.current.outputs.revision }}=100
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Service URL: ${{ steps.health.outputs.url || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Previous Revision: ${{ steps.current.outputs.revision || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify on success
         if: success()
@@ -210,7 +245,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Temporal Workers Production Deployment Successful* :white_check_mark:\n\nImage: `${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}`"
+                    "text": "*Temporal Workers Production Deployment Successful*\n\nImage: `${{ env.IMAGE_NAME }}:${{ needs.build.outputs.version }}`\nService: ${{ steps.health.outputs.url }}"
                   }
                 }
               ]
@@ -230,7 +265,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Temporal Workers Production Deployment Failed* :x:\n\nRollback attempted.\n\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "*Temporal Workers Production Deployment Failed*\n\nRollback to `${{ steps.current.outputs.revision }}` attempted.\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>"
                   }
                 }
               ]

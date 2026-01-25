@@ -1,0 +1,695 @@
+{
+  "title": "PULL API - Performance Dashboard",
+  "description": "API latency, throughput, and error metrics for PULL backend services",
+  "widgets": [
+    {
+      "id": 1,
+      "definition": {
+        "title": "API Request Rate (req/s)",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "per_second(a)"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api} by {endpoint}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 2,
+      "definition": {
+        "title": "API Latency P50/P95/P99",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "p50"},
+              {"formula": "b", "alias": "p95"},
+              {"formula": "c", "alias": "p99"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p50{service:pull-api} by {endpoint}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{service:pull-api} by {endpoint}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p99{service:pull-api} by {endpoint}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "warm"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear",
+          "label": "ms"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 0,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 3,
+      "definition": {
+        "title": "Error Rate by Status Code",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "per_second(a)"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api,status_code:4*} by {status_code}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "orange"
+            },
+            "display_type": "bars"
+          },
+          {
+            "formulas": [
+              {
+                "formula": "per_second(b)"
+              }
+            ],
+            "queries": [
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api,status_code:5*} by {status_code}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "red"
+            },
+            "display_type": "bars"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 3,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 4,
+      "definition": {
+        "title": "Error Rate %",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "(a / b) * 100"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api,status_code:5*}.as_count()"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 2,
+        "autoscale": false,
+        "custom_unit": "%",
+        "text_align": "center"
+      },
+      "layout": {
+        "x": 6,
+        "y": 3,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 5,
+      "definition": {
+        "title": "Apdex Score",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.api.apdex{service:pull-api}"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 2,
+        "autoscale": false,
+        "text_align": "center",
+        "conditional_formats": [
+          {
+            "comparator": ">=",
+            "value": 0.94,
+            "palette": "white_on_green"
+          },
+          {
+            "comparator": ">=",
+            "value": 0.85,
+            "palette": "white_on_yellow"
+          },
+          {
+            "comparator": "<",
+            "value": 0.85,
+            "palette": "white_on_red"
+          }
+        ]
+      },
+      "layout": {
+        "x": 8,
+        "y": 3,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 6,
+      "definition": {
+        "title": "Active Connections",
+        "type": "query_value",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a"
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.api.connections.active{service:pull-api}"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "precision": 0,
+        "autoscale": true,
+        "text_align": "center"
+      },
+      "layout": {
+        "x": 10,
+        "y": 3,
+        "width": 2,
+        "height": 2
+      }
+    },
+    {
+      "id": 7,
+      "definition": {
+        "title": "Latency by Route",
+        "type": "toplist",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a",
+                "limit": {
+                  "count": 15,
+                  "order": "desc"
+                }
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{service:pull-api} by {endpoint}"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "style": {
+          "display": {
+            "type": "stacked",
+            "legend": "automatic"
+          }
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 6,
+        "width": 4,
+        "height": 4
+      }
+    },
+    {
+      "id": 8,
+      "definition": {
+        "title": "Request Volume by Route",
+        "type": "toplist",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a",
+                "limit": {
+                  "count": 15,
+                  "order": "desc"
+                }
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api} by {endpoint}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "style": {
+          "display": {
+            "type": "stacked",
+            "legend": "automatic"
+          }
+        }
+      },
+      "layout": {
+        "x": 4,
+        "y": 6,
+        "width": 4,
+        "height": 4
+      }
+    },
+    {
+      "id": 9,
+      "definition": {
+        "title": "Errors by Route",
+        "type": "toplist",
+        "requests": [
+          {
+            "formulas": [
+              {
+                "formula": "a",
+                "limit": {
+                  "count": 15,
+                  "order": "desc"
+                }
+              }
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:pull.api.requests.count{service:pull-api,status_code:5*} by {endpoint}.as_count()"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ],
+        "style": {
+          "display": {
+            "type": "stacked",
+            "legend": "automatic"
+          }
+        }
+      },
+      "layout": {
+        "x": 8,
+        "y": 6,
+        "width": 4,
+        "height": 4
+      }
+    },
+    {
+      "id": 10,
+      "definition": {
+        "title": "Trading API Latency",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Orders"},
+              {"formula": "b", "alias": "Portfolio"},
+              {"formula": "c", "alias": "Buying Power"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/trading/orders*}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/trading/portfolio}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/trading/buying-power}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "cool"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "label": "ms"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 10,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 11,
+      "definition": {
+        "title": "Predictions API Latency",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Events"},
+              {"formula": "b", "alias": "Markets"},
+              {"formula": "c", "alias": "Positions"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/predictions/events*}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/predictions/markets*}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/predictions/positions}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "purple"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "label": "ms"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 10,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 12,
+      "definition": {
+        "title": "KYC API Performance",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Start KYC"},
+              {"formula": "b", "alias": "Status Check"},
+              {"formula": "c", "alias": "Plaid Link"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/kyc/start}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/kyc/status}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/v1/kyc/plaid/*}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "warm"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "label": "ms"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 13,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 13,
+      "definition": {
+        "title": "Auth API Performance",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Login"},
+              {"formula": "b", "alias": "Register"},
+              {"formula": "c", "alias": "Token Refresh"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/auth/login}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/auth/register}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:pull.api.latency.p95{endpoint:/api/auth/refresh}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "green"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "label": "ms"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 13,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 14,
+      "definition": {
+        "title": "Rate Limiting Stats",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Requests Limited"},
+              {"formula": "b", "alias": "Requests Allowed"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "sum:pull.api.rate_limit.exceeded{service:pull-api}.as_count()"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "sum:pull.api.rate_limit.allowed{service:pull-api}.as_count()"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "semantic"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 16,
+        "width": 6,
+        "height": 3
+      }
+    },
+    {
+      "id": 15,
+      "definition": {
+        "title": "External API Call Latency",
+        "type": "timeseries",
+        "requests": [
+          {
+            "formulas": [
+              {"formula": "a", "alias": "Kalshi"},
+              {"formula": "b", "alias": "Massive"},
+              {"formula": "c", "alias": "Plaid"},
+              {"formula": "d", "alias": "Sumsub"}
+            ],
+            "queries": [
+              {
+                "name": "a",
+                "data_source": "metrics",
+                "query": "avg:pull.external.latency.p95{service:kalshi}"
+              },
+              {
+                "name": "b",
+                "data_source": "metrics",
+                "query": "avg:pull.external.latency.p95{service:massive}"
+              },
+              {
+                "name": "c",
+                "data_source": "metrics",
+                "query": "avg:pull.external.latency.p95{service:plaid}"
+              },
+              {
+                "name": "d",
+                "data_source": "metrics",
+                "query": "avg:pull.external.latency.p95{service:sumsub}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "dog_classic"
+            },
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "include_zero": true,
+          "label": "ms"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 16,
+        "width": 6,
+        "height": 3
+      }
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "env",
+      "default": "production",
+      "prefix": "env",
+      "available_values": ["production", "staging", "development"]
+    },
+    {
+      "name": "service",
+      "default": "pull-api",
+      "prefix": "service",
+      "available_values": ["pull-api", "pull-workers", "pull-web"]
+    }
+  ],
+  "layout_type": "ordered",
+  "notify_list": [],
+  "reflow_type": "fixed"
+}

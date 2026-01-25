@@ -1,3 +1,7 @@
+# Temporal Worker Deployment - Production Ready Configuration
+# Includes: Deployment, HPA, PDB with comprehensive health checks and graceful shutdown
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,8 +11,13 @@ metadata:
     app: pull-temporal-worker
     app.kubernetes.io/name: pull-temporal-worker
     app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: pull
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    kubernetes.io/change-cause: "Initial production deployment"
 spec:
   replicas: 5
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: pull-temporal-worker
@@ -22,17 +31,36 @@ spec:
       labels:
         app: pull-temporal-worker
         app.kubernetes.io/name: pull-temporal-worker
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: pull
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "3002"
         prometheus.io/path: "/metrics"
+        # Force rollout on config changes
+        checksum/config: "${CONFIG_CHECKSUM}"
     spec:
       serviceAccountName: pull-worker
+      automountServiceAccountToken: false
+      # Longer grace period for workers to complete in-flight activities
       terminationGracePeriodSeconds: 120
+      # Pod Security Context
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        runAsGroup: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # Priority Class - workers are slightly lower priority than API
+      priorityClassName: pull-worker-priority
+      # DNS Configuration
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
+          - name: single-request-reopen
       containers:
         - name: worker
           image: gcr.io/PROJECT_ID/pull-temporal-worker:latest
@@ -41,20 +69,49 @@ spec:
             - containerPort: 3002
               name: health
               protocol: TCP
+            - containerPort: 9090
+              name: metrics
+              protocol: TCP
+          # Environment from ConfigMaps
+          envFrom:
+            - configMapRef:
+                name: pull-shared-config
+            - configMapRef:
+                name: pull-worker-config
+            - configMapRef:
+                name: pull-observability-config
+            - configMapRef:
+                name: pull-redis-config
+          # Environment from Secrets and overrides
           env:
-            - name: NODE_ENV
-              value: "production"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: TEMPORAL_ADDRESS
               value: "temporal:7233"
-            - name: TEMPORAL_NAMESPACE
-              value: "pull-production"
-            - name: TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_TIMEOUT
-              value: "30000"
             - name: CONVEX_URL
               valueFrom:
                 secretKeyRef:
                   name: pull-secrets
                   key: convex-url
+            - name: CONVEX_DEPLOY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: convex-deploy-key
             - name: KALSHI_API_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -75,43 +132,120 @@ spec:
                 secretKeyRef:
                   name: pull-secrets
                   key: plaid-secret
-            - name: PLAID_ENV
-              value: "production"
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: redis-url
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pull-secrets
+                  key: encryption-key
+          # Resource Management - workers need more resources
           resources:
             requests:
               cpu: "500m"
               memory: "1Gi"
+              ephemeral-storage: "200Mi"
             limits:
               cpu: "2000m"
               memory: "4Gi"
-          readinessProbe:
+              ephemeral-storage: "1Gi"
+          # Startup Probe - workers may take longer to initialize
+          startupProbe:
             httpGet:
               path: /health
               port: 3002
-            initialDelaySeconds: 30
+              httpHeaders:
+                - name: X-Health-Check
+                  value: startup
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 36  # 5 * 36 = 180 seconds max startup time
+            successThreshold: 1
+          # Readiness Probe - check if worker can accept tasks
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3002
+              httpHeaders:
+                - name: X-Health-Check
+                  value: readiness
+            initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+            successThreshold: 1
+          # Liveness Probe - check if worker is healthy
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 3002
-            initialDelaySeconds: 60
+              httpHeaders:
+                - name: X-Health-Check
+                  value: liveness
+            initialDelaySeconds: 0
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
+            successThreshold: 1
+          # Lifecycle hooks - graceful shutdown is critical for workers
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "sleep 30"]
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    # Signal the worker to stop accepting new tasks
+                    # and wait for in-flight activities to complete
+                    echo "Starting graceful shutdown..."
+                    # Send SIGTERM to allow graceful shutdown
+                    kill -TERM 1 2>/dev/null || true
+                    # Wait for activities to complete (up to 90 seconds)
+                    sleep 90
+                    echo "Graceful shutdown complete"
+          # Container Security Context
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
             capabilities:
               drop:
                 - ALL
+          # Volume Mounts
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /home/node/.cache
+            - name: workflow-data
+              mountPath: /data/workflows
+      # Volumes
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 200Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 500Mi
+        - name: workflow-data
+          emptyDir:
+            sizeLimit: 1Gi
+      # Pod Scheduling - spread workers across nodes and zones
       affinity:
         podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - pull-temporal-worker
+              topologyKey: kubernetes.io/hostname
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               podAffinityTerm:
@@ -121,20 +255,69 @@ spec:
                       operator: In
                       values:
                         - pull-temporal-worker
-                topologyKey: kubernetes.io/hostname
+                topologyKey: topology.kubernetes.io/zone
+        # Prefer nodes with more resources
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: node.kubernetes.io/instance-type
+                    operator: In
+                    values:
+                      - n2-standard-4
+                      - n2-standard-8
+                      - n2-highmem-4
+                      - n2-highmem-8
       topologySpreadConstraints:
         - maxSkew: 2
           topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: pull-temporal-worker
+        - maxSkew: 2
+          topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
               app: pull-temporal-worker
+---
+# Service for health checks and metrics scraping
+apiVersion: v1
+kind: Service
+metadata:
+  name: pull-temporal-worker
+  namespace: pull
+  labels:
+    app: pull-temporal-worker
+    app.kubernetes.io/name: pull-temporal-worker
+    app.kubernetes.io/component: worker
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+  ports:
+    - port: 3002
+      targetPort: 3002
+      protocol: TCP
+      name: health
+    - port: 9090
+      targetPort: 9090
+      protocol: TCP
+      name: metrics
+  selector:
+    app: pull-temporal-worker
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: pull-temporal-worker-hpa
   namespace: pull
+  labels:
+    app: pull-temporal-worker
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -155,14 +338,41 @@ spec:
         target:
           type: Utilization
           averageUtilization: 75
+    # Custom metrics for Temporal task queue depth
+    - type: External
+      external:
+        metric:
+          name: temporal_workflow_task_queue_backlog
+          selector:
+            matchLabels:
+              task_queue: pull-main-queue
+        target:
+          type: AverageValue
+          averageValue: "10"
+    - type: External
+      external:
+        metric:
+          name: temporal_activity_task_queue_backlog
+          selector:
+            matchLabels:
+              task_queue: pull-main-queue
+        target:
+          type: AverageValue
+          averageValue: "50"
   behavior:
     scaleDown:
+      # Conservative scale-down for workers
       stabilizationWindowSeconds: 600
       policies:
         - type: Percent
           value: 10
           periodSeconds: 120
+        - type: Pods
+          value: 2
+          periodSeconds: 120
+      selectPolicy: Min
     scaleUp:
+      # Aggressive scale-up for task backlogs
       stabilizationWindowSeconds: 30
       policies:
         - type: Percent
@@ -178,8 +388,37 @@ kind: PodDisruptionBudget
 metadata:
   name: pull-temporal-worker-pdb
   namespace: pull
+  labels:
+    app: pull-temporal-worker
 spec:
+  # Ensure enough workers are always available
   minAvailable: 3
   selector:
     matchLabels:
       app: pull-temporal-worker
+---
+# Vertical Pod Autoscaler recommendation (optional - for right-sizing)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: pull-temporal-worker-vpa
+  namespace: pull
+  labels:
+    app: pull-temporal-worker
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pull-temporal-worker
+  updatePolicy:
+    updateMode: "Off"  # Recommendation only, don't auto-update
+  resourcePolicy:
+    containerPolicies:
+      - containerName: worker
+        minAllowed:
+          cpu: "250m"
+          memory: "512Mi"
+        maxAllowed:
+          cpu: "4000m"
+          memory: "8Gi"
+        controlledResources: ["cpu", "memory"]

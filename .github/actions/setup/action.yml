@@ -1,0 +1,72 @@
+name: "Setup Node.js with pnpm"
+description: "Sets up Node.js, pnpm, and caches dependencies for the PULL monorepo"
+
+inputs:
+  node-version:
+    description: "Node.js version"
+    default: "20"
+  pnpm-version:
+    description: "pnpm version"
+    default: "9"
+  install-dependencies:
+    description: "Whether to install dependencies"
+    default: "true"
+  turbo-token:
+    description: "Turbo remote cache token"
+    default: ""
+  turbo-team:
+    description: "Turbo team name"
+    default: ""
+
+outputs:
+  pnpm-store-path:
+    description: "Path to pnpm store"
+    value: ${{ steps.pnpm-config.outputs.store-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: ${{ inputs.pnpm-version }}
+
+    - name: Get pnpm store directory
+      id: pnpm-config
+      shell: bash
+      run: echo "store-path=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "pnpm"
+
+    - name: Cache pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.pnpm-config.outputs.store-path }}
+        key: pnpm-store-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          pnpm-store-${{ runner.os }}-
+
+    - name: Cache Turbo
+      uses: actions/cache@v4
+      with:
+        path: .turbo
+        key: turbo-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-
+
+    - name: Configure Turbo Remote Cache
+      if: inputs.turbo-token != ''
+      shell: bash
+      run: |
+        echo "TURBO_TOKEN=${{ inputs.turbo-token }}" >> $GITHUB_ENV
+        echo "TURBO_TEAM=${{ inputs.turbo-team }}" >> $GITHUB_ENV
+        echo "TURBO_REMOTE_ONLY=false" >> $GITHUB_ENV
+
+    - name: Install dependencies
+      if: inputs.install-dependencies == 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile

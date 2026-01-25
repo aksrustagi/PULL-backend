@@ -3,37 +3,51 @@
   "globalDependencies": ["**/.env.*local", ".env"],
   "globalEnv": [
     "NODE_ENV",
-    "NEXT_PUBLIC_CONVEX_URL"
+    "NEXT_PUBLIC_CONVEX_URL",
+    "CI"
+  ],
+  "globalPassThroughEnv": [
+    "TURBO_TOKEN",
+    "TURBO_TEAM"
   ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["NODE_ENV"]
+      "env": ["NODE_ENV"],
+      "inputs": ["src/**", "package.json", "tsconfig.json"]
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
     "test": {
-      "dependsOn": ["build"],
+      "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "env": ["NODE_ENV"]
+      "env": ["NODE_ENV"],
+      "inputs": ["src/**", "**/*.test.ts", "**/*.spec.ts", "vitest.config.*"]
     },
     "test:e2e": {
       "dependsOn": ["build"],
-      "outputs": [],
-      "env": ["NODE_ENV"]
+      "outputs": ["playwright-report/**", "test-results/**"],
+      "env": ["NODE_ENV", "E2E_BASE_URL", "CI"],
+      "inputs": ["e2e/**", "playwright.config.*"]
     },
     "lint": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "inputs": ["src/**", "*.config.*", ".eslintrc*", "eslint.config.*"]
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "inputs": ["src/**", "tsconfig.json", "tsconfig.*.json"]
     },
     "clean": {
+      "cache": false
+    },
+    "codegen": {
+      "outputs": ["convex/_generated/**"],
+      "inputs": ["convex/**/*.ts", "!convex/_generated/**"],
       "cache": false
     },
     "db:push": {
