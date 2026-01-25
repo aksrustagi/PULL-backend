@@ -7,6 +7,9 @@
 import { Hono } from "hono";
 import type { Env } from "../../index";
 import { convex, api } from "../../lib/convex";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("admin-backup");
 
 const app = new Hono<Env>();
 
@@ -25,7 +28,7 @@ app.get("/", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching backup history:", error);
+    logger.error("Error fetching backup history:", error);
     return c.json(
       {
         success: false,
@@ -62,7 +65,7 @@ app.get("/latest", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching latest backup:", error);
+    logger.error("Error fetching latest backup:", error);
     return c.json(
       {
         success: false,
@@ -90,7 +93,7 @@ app.get("/summary", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching database summary:", error);
+    logger.error("Error fetching database summary:", error);
     return c.json(
       {
         success: false,
@@ -156,7 +159,7 @@ app.post("/trigger", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error triggering backup:", error);
+    logger.error("Error triggering backup:", error);
     return c.json(
       {
         success: false,
@@ -188,7 +191,7 @@ app.get("/export/users", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error exporting users:", error);
+    logger.error("Error exporting users:", error);
     return c.json(
       {
         success: false,
@@ -228,7 +231,7 @@ app.get("/export/orders", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error exporting orders:", error);
+    logger.error("Error exporting orders:", error);
     return c.json(
       {
         success: false,
@@ -270,7 +273,7 @@ app.get("/export/audit", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error exporting audit logs:", error);
+    logger.error("Error exporting audit logs:", error);
     return c.json(
       {
         success: false,

@@ -4,6 +4,9 @@ import { z } from "zod";
 import type { Env } from "../index";
 import { convex, api } from "../lib/convex";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("admin");
 
 const app = new Hono<Env>();
 
@@ -69,7 +72,7 @@ const adminOnly = async (c: any, next: any) => {
 
     await next();
   } catch (error) {
-    console.error("Admin middleware error:", error);
+    logger.error("Admin middleware error:", error);
     return c.json(
       {
         success: false,

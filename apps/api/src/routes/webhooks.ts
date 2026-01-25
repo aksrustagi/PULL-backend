@@ -5,6 +5,7 @@ import { api } from "@pull/db/convex/_generated/api";
 import { PersonaClient } from "@pull/core/services/persona";
 import type { WebhookPayload, Inquiry, Verification } from "@pull/core/services/persona/types";
 import { getLogger } from "@pull/core/services";
+import { toUserId } from "../lib/convex-types";
 
 const app = new Hono();
 const logger = getLogger().child({ service: "webhooks" });
@@ -157,7 +158,7 @@ app.post("/persona", async (c) => {
 
   try {
     webhookEventId = await convex.mutation(api.kyc.storeWebhookEvent, {
-      source: "persona" as any,
+      source: "persona",
       eventType: body.data.type,
       eventId,
       payload: rawBody,
@@ -194,8 +195,8 @@ app.post("/persona", async (c) => {
           );
 
           await convex.mutation(api.kyc.updateKYCStatus, {
-            userId: userId as any,
-            status: "in_progress" as any,
+            userId: toUserId(userId),
+            status: "in_progress",
             personaInquiryId: event.inquiryId,
             personaReviewStatus: inquiry.attributes.status,
             personaCompletedAt: Date.now(),
@@ -229,9 +230,9 @@ app.post("/persona", async (c) => {
           const expiresAt = Date.now() + 365 * 24 * 60 * 60 * 1000;
 
           await convex.mutation(api.kyc.updateKYCStatus, {
-            userId: userId as any,
-            status: "approved" as any,
-            tier: approvedTier as any,
+            userId: toUserId(userId),
+            status: "approved",
+            tier: approvedTier,
             personaInquiryId: event.inquiryId,
             personaReviewStatus: "approved",
             personaReviewResult: "passed",
@@ -257,8 +258,8 @@ app.post("/persona", async (c) => {
           const reviewerComment = event.inquiry.attributes.reviewer_comment;
 
           await convex.mutation(api.kyc.updateKYCStatus, {
-            userId: userId as any,
-            status: "rejected" as any,
+            userId: toUserId(userId),
+            status: "rejected",
             personaInquiryId: event.inquiryId,
             personaReviewStatus: "declined",
             personaReviewResult: "failed",
@@ -282,8 +283,8 @@ app.post("/persona", async (c) => {
           const userId = event.referenceId;
 
           await convex.mutation(api.kyc.updateKYCStatus, {
-            userId: userId as any,
-            status: "rejected" as any,
+            userId: toUserId(userId),
+            status: "rejected",
             personaInquiryId: event.inquiryId,
             personaReviewStatus: "failed",
             rejectionReason: "Verification process failed",
@@ -302,8 +303,8 @@ app.post("/persona", async (c) => {
           const userId = event.referenceId;
 
           await convex.mutation(api.kyc.updateKYCStatus, {
-            userId: userId as any,
-            status: "expired" as any,
+            userId: toUserId(userId),
+            status: "expired",
             personaInquiryId: event.inquiryId,
             personaReviewStatus: "expired",
           });
@@ -429,7 +430,7 @@ app.post("/checkr", async (c) => {
   const convex = getConvexClient();
   try {
     await convex.mutation(api.kyc.storeWebhookEvent, {
-      source: "checkr" as any,
+      source: "checkr",
       eventType: body.type || "unknown",
       eventId: `checkr-${body.id || Date.now()}`,
       payload: rawBody,
@@ -518,7 +519,7 @@ app.post("/massive", async (c) => {
   const convex = getConvexClient();
   try {
     await convex.mutation(api.kyc.storeWebhookEvent, {
-      source: "massive" as any,
+      source: "massive",
       eventType: body.event || "unknown",
       eventId: `massive-${body.orderId || body.id || Date.now()}`,
       payload: rawBody,
@@ -738,7 +739,7 @@ app.post("/polygon", async (c) => {
   const convex = getConvexClient();
   try {
     await convex.mutation(api.kyc.storeWebhookEvent, {
-      source: "polygon" as any,
+      source: "polygon",
       eventType: body.event || "unknown",
       eventId: `polygon-${body.transactionHash || body.id || Date.now()}`,
       payload: rawBody,

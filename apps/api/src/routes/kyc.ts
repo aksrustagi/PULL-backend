@@ -12,6 +12,10 @@ import { KycTier, getTemplateId, getTierLimits, TEMPLATE_CONFIGS } from "@pull/c
 import { PlaidClient } from "@pull/core/services/plaid";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@pull/db/convex/_generated/api";
+import { getLogger } from "@pull/core/services";
+import { toUserId } from "../lib/convex-types";
+
+const logger = getLogger("kyc");
 
 // ==========================================================================
 // SCHEMAS
@@ -200,18 +204,18 @@ kyc.post("/start", zValidator("json", startKYCSchema), async (c) => {
     // Store KYC record in database
     try {
       await convex.mutation(api.kyc.createKYCRecord, {
-        userId: userId as any,
-        targetTier: body.targetTier as any,
+        userId: toUserId(userId),
+        targetTier: body.targetTier,
         workflowId: inquiry.id,
       });
     } catch (dbError) {
-      console.warn("KYC record may already exist:", dbError);
+      logger.warn("KYC record may already exist:", dbError);
     }
 
     // Update KYC record with Persona inquiry details
     await convex.mutation(api.kyc.updateKYCStatus, {
-      userId: userId as any,
-      status: "in_progress" as any,
+      userId: toUserId(userId),
+      status: "in_progress",
       personaInquiryId: inquiry.id,
       personaAccountId: account.id,
     });
@@ -254,7 +258,7 @@ kyc.post("/start", zValidator("json", startKYCSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to start KYC:", error);
+    logger.error("Failed to start KYC:", error);
     return c.json(
       {
         success: false,
@@ -284,7 +288,7 @@ kyc.get("/status", async (c) => {
     let kycRecord;
     try {
       kycRecord = await convex.query(api.kyc.getKYCByUser, {
-        userId: userId as any,
+        userId: toUserId(userId),
       });
     } catch {
       kycRecord = null;
@@ -363,7 +367,7 @@ kyc.get("/status", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get KYC status:", error);
+    logger.error("Failed to get KYC status:", error);
     return c.json(
       {
         success: false,
@@ -438,7 +442,7 @@ kyc.post("/resume", zValidator("json", resumeKYCSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to resume KYC:", error);
+    logger.error("Failed to resume KYC:", error);
     return c.json(
       {
         success: false,
@@ -477,7 +481,7 @@ kyc.post("/plaid/link-token", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to create Plaid link token:", error);
+    logger.error("Failed to create Plaid link token:", error);
     return c.json(
       {
         success: false,
@@ -545,7 +549,7 @@ kyc.post("/plaid/exchange", zValidator("json", plaidExchangeSchema), async (c) =
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to exchange Plaid token:", error);
+    logger.error("Failed to exchange Plaid token:", error);
     return c.json(
       {
         success: false,
@@ -651,7 +655,7 @@ kyc.post("/retry", zValidator("json", retryKYCSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to retry KYC step:", error);
+    logger.error("Failed to retry KYC step:", error);
     return c.json(
       {
         success: false,
@@ -754,7 +758,7 @@ kyc.get("/documents", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get documents:", error);
+    logger.error("Failed to get documents:", error);
     return c.json(
       {
         success: false,
@@ -835,7 +839,7 @@ kyc.get("/verifications", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get verifications:", error);
+    logger.error("Failed to get verifications:", error);
     return c.json(
       {
         success: false,
@@ -864,7 +868,7 @@ kyc.get("/limits", async (c) => {
     let kycRecord;
     try {
       kycRecord = await convex.query(api.kyc.getKYCByUser, {
-        userId: userId as any,
+        userId: toUserId(userId),
       });
     } catch {
       kycRecord = null;
@@ -904,7 +908,7 @@ kyc.get("/limits", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get limits:", error);
+    logger.error("Failed to get limits:", error);
     return c.json(
       {
         success: false,
@@ -963,7 +967,7 @@ kyc.post("/cancel", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to cancel KYC:", error);
+    logger.error("Failed to cancel KYC:", error);
     return c.json(
       {
         success: false,
@@ -1030,7 +1034,7 @@ kyc.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("Failed to start upgrade:", error);
+      logger.error("Failed to start upgrade:", error);
       return c.json(
         {
           success: false,

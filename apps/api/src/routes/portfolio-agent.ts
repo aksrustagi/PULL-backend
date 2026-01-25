@@ -13,6 +13,9 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("portfolio-agent");
 
 const app = new Hono<Env>();
 
@@ -144,7 +147,7 @@ app.get("/config", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Get agent config error:", error);
+    logger.error("Get agent config error:", error);
     return c.json(
       {
         success: false,
@@ -194,7 +197,7 @@ app.put("/config", zValidator("json", configureAgentSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Configure agent error:", error);
+    logger.error("Configure agent error:", error);
     return c.json(
       {
         success: false,
@@ -241,7 +244,7 @@ app.post("/activate", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Toggle agent error:", error);
+    logger.error("Toggle agent error:", error);
     return c.json(
       {
         success: false,
@@ -289,7 +292,7 @@ app.get("/strategies", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Get strategies error:", error);
+    logger.error("Get strategies error:", error);
     return c.json(
       {
         success: false,
@@ -337,7 +340,7 @@ app.post("/strategies/dca", zValidator("json", createDcaStrategySchema), async (
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Create DCA strategy error:", error);
+    logger.error("Create DCA strategy error:", error);
     return c.json(
       {
         success: false,
@@ -399,7 +402,7 @@ app.post("/strategies/rebalance", zValidator("json", createRebalanceStrategySche
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Create rebalance strategy error:", error);
+    logger.error("Create rebalance strategy error:", error);
     return c.json(
       {
         success: false,
@@ -447,7 +450,7 @@ app.post("/strategies/stop-loss", zValidator("json", createStopLossSchema), asyn
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Create stop-loss error:", error);
+    logger.error("Create stop-loss error:", error);
     return c.json(
       {
         success: false,
@@ -495,7 +498,7 @@ app.post("/strategies/take-profit", zValidator("json", createTakeProfitSchema), 
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Create take-profit error:", error);
+    logger.error("Create take-profit error:", error);
     return c.json(
       {
         success: false,
@@ -543,7 +546,7 @@ app.post("/strategies/opportunity", zValidator("json", createOpportunityStrategy
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Create opportunity strategy error:", error);
+    logger.error("Create opportunity strategy error:", error);
     return c.json(
       {
         success: false,
@@ -587,7 +590,7 @@ app.post("/strategies/:strategyId/pause", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Pause strategy error:", error);
+    logger.error("Pause strategy error:", error);
     return c.json(
       {
         success: false,
@@ -631,7 +634,7 @@ app.post("/strategies/:strategyId/resume", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Resume strategy error:", error);
+    logger.error("Resume strategy error:", error);
     return c.json(
       {
         success: false,
@@ -675,7 +678,7 @@ app.delete("/strategies/:strategyId", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Cancel strategy error:", error);
+    logger.error("Cancel strategy error:", error);
     return c.json(
       {
         success: false,
@@ -723,7 +726,7 @@ app.get("/actions", zValidator("query", getActionsSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Get actions error:", error);
+    logger.error("Get actions error:", error);
     return c.json(
       {
         success: false,
@@ -769,7 +772,7 @@ app.get("/actions/pending", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Get pending actions error:", error);
+    logger.error("Get pending actions error:", error);
     return c.json(
       {
         success: false,
@@ -820,7 +823,7 @@ app.post("/actions/:actionId/resolve", zValidator("json", resolveActionSchema), 
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Resolve action error:", error);
+    logger.error("Resolve action error:", error);
     return c.json(
       {
         success: false,
@@ -868,7 +871,7 @@ app.get("/briefs", zValidator("query", getBriefsSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Get briefs error:", error);
+    logger.error("Get briefs error:", error);
     return c.json(
       {
         success: false,
@@ -924,7 +927,7 @@ app.get("/briefs/today", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Get today's brief error:", error);
+    logger.error("Get today's brief error:", error);
     return c.json(
       {
         success: false,
@@ -967,7 +970,7 @@ app.post("/briefs/generate", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Generate brief error:", error);
+    logger.error("Generate brief error:", error);
     return c.json(
       {
         success: false,
@@ -1029,7 +1032,7 @@ app.get("/status", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Get agent status error:", error);
+    logger.error("Get agent status error:", error);
     return c.json(
       {
         success: false,
