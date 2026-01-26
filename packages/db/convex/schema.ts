@@ -3835,6 +3835,113 @@ export default defineSchema({
   // ============================================================================
 
   /**
+   * Trading Rooms - Social trading room for live discussions
+   */
+  tradingRooms: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    ownerId: v.id("users"),
+    type: v.union(
+      v.literal("public"),
+      v.literal("private"),
+      v.literal("premium")
+    ),
+    topic: v.optional(v.union(
+      v.literal("crypto"),
+      v.literal("stocks"),
+      v.literal("predictions"),
+      v.literal("rwa"),
+      v.literal("general")
+    )),
+    memberCount: v.number(),
+    maxMembers: v.optional(v.number()),
+    status: v.union(
+      v.literal("active"),
+      v.literal("archived"),
+      v.literal("suspended")
+    ),
+    settings: v.optional(v.object({
+      allowTradeSharing: v.optional(v.boolean()),
+      allowLinks: v.optional(v.boolean()),
+      slowMode: v.optional(v.number()),
+      requireApproval: v.optional(v.boolean()),
+    })),
+    imageUrl: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_type", ["type", "status"])
+    .index("by_topic", ["topic", "status"])
+    .index("by_member_count", ["memberCount"])
+    .searchIndex("search_name", { searchField: "name" }),
+
+  /**
+   * Trading Room Members - Room membership tracking
+   */
+  tradingRoomMembers: defineTable({
+    roomId: v.id("tradingRooms"),
+    userId: v.id("users"),
+    role: v.union(
+      v.literal("owner"),
+      v.literal("admin"),
+      v.literal("moderator"),
+      v.literal("member")
+    ),
+    status: v.union(
+      v.literal("active"),
+      v.literal("muted"),
+      v.literal("banned"),
+      v.literal("left")
+    ),
+    joinedAt: v.number(),
+    lastActiveAt: v.number(),
+    messageCount: v.optional(v.number()),
+  })
+    .index("by_room", ["roomId", "status"])
+    .index("by_user", ["userId", "status"])
+    .index("by_room_user", ["roomId", "userId"]),
+
+  /**
+   * Trading Room Messages - Chat messages in trading rooms
+   */
+  tradingRoomMessages: defineTable({
+    roomId: v.id("tradingRooms"),
+    senderId: v.id("users"),
+    content: v.string(),
+    type: v.union(
+      v.literal("text"),
+      v.literal("trade"),
+      v.literal("prediction"),
+      v.literal("image"),
+      v.literal("system")
+    ),
+    replyTo: v.optional(v.id("tradingRoomMessages")),
+    tradeData: v.optional(v.object({
+      symbol: v.string(),
+      action: v.union(v.literal("buy"), v.literal("sell")),
+      amount: v.optional(v.number()),
+      price: v.optional(v.number()),
+    })),
+    predictionData: v.optional(v.object({
+      eventId: v.string(),
+      outcome: v.string(),
+      confidence: v.optional(v.number()),
+    })),
+    reactions: v.optional(v.array(v.object({
+      emoji: v.string(),
+      userId: v.id("users"),
+    }))),
+    isEdited: v.optional(v.boolean()),
+    isDeleted: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_room", ["roomId", "createdAt"])
+    .index("by_sender", ["senderId"])
+    .index("by_room_type", ["roomId", "type"]),
+
+  /**
    * User Presence - Real-time collaboration and presence tracking
    */
   userPresence: defineTable({

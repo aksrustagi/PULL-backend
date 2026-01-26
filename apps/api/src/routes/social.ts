@@ -15,6 +15,8 @@ import {
   positionCommentsService,
   reputationService,
 } from "../services/social";
+import { getConvexClient, api } from "../lib/convex";
+import { getTradingRoomService } from "@pull/core/services/trading-room";
 
 const app = new Hono<Env>();
 
@@ -1081,21 +1083,23 @@ app.post("/rooms", zValidator("json", createRoomSchema), async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
-  const roomId = crypto.randomUUID();
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    const room = await tradingRoomService.createRoom(userId, body);
 
-  return c.json({
-    success: true,
-    data: {
-      id: roomId,
-      ownerId: userId,
-      ...body,
-      memberCount: 1,
-      status: "active",
-      createdAt: new Date().toISOString(),
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: room,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "CREATE_ROOM_FAILED", message: error instanceof Error ? error.message : "Failed to create room" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**
@@ -1105,12 +1109,31 @@ app.get("/rooms/:roomId", async (c) => {
   const roomId = c.req.param("roomId");
   const userId = c.get("userId");
 
-  // TODO: Implement with TradingRoomService
-  return c.json({
-    success: true,
-    data: null,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    const room = await tradingRoomService.getRoom(roomId, userId);
+
+    if (!room) {
+      return c.json({
+        success: false,
+        error: { code: "ROOM_NOT_FOUND", message: "Room not found" },
+        timestamp: new Date().toISOString(),
+      }, 404);
+    }
+
+    return c.json({
+      success: true,
+      data: room,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "GET_ROOM_FAILED", message: error instanceof Error ? error.message : "Failed to get room" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**
@@ -1118,15 +1141,28 @@ app.get("/rooms/:roomId", async (c) => {
  */
 app.get("/rooms", async (c) => {
   const query = c.req.query("q");
-  const type = c.req.query("type");
+  const type = c.req.query("type") as "public" | "private" | "premium" | undefined;
+  const topic = c.req.query("topic");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
+  const cursor = c.req.query("cursor");
 
-  // TODO: Implement with TradingRoomService
-  return c.json({
-    success: true,
-    data: { rooms: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    const result = await tradingRoomService.searchRooms({ query, type, topic, limit, cursor });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "SEARCH_ROOMS_FAILED", message: error instanceof Error ? error.message : "Failed to search rooms" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**
@@ -1142,12 +1178,23 @@ app.get("/rooms/me", async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
-  return c.json({
-    success: true,
-    data: { rooms: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    const rooms = await tradingRoomService.getMyRooms(userId);
+
+    return c.json({
+      success: true,
+      data: { rooms },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "GET_MY_ROOMS_FAILED", message: error instanceof Error ? error.message : "Failed to get rooms" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**
@@ -1156,12 +1203,23 @@ app.get("/rooms/me", async (c) => {
 app.get("/rooms/popular", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
-  // TODO: Implement with TradingRoomService
-  return c.json({
-    success: true,
-    data: { rooms: [] },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    const rooms = await tradingRoomService.getPopularRooms(limit);
+
+    return c.json({
+      success: true,
+      data: { rooms },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "GET_POPULAR_ROOMS_FAILED", message: error instanceof Error ? error.message : "Failed to get popular rooms" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**
@@ -1178,12 +1236,23 @@ app.post("/rooms/:roomId/join", async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
-  return c.json({
-    success: true,
-    data: { roomId, userId, status: "active" },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    const membership = await tradingRoomService.joinRoom(roomId, userId);
+
+    return c.json({
+      success: true,
+      data: membership,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "JOIN_ROOM_FAILED", message: error instanceof Error ? error.message : "Failed to join room" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**
@@ -1200,12 +1269,23 @@ app.post("/rooms/:roomId/leave", async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
-  return c.json({
-    success: true,
-    data: { left: true },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    await tradingRoomService.leaveRoom(roomId, userId);
+
+    return c.json({
+      success: true,
+      data: { left: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "LEAVE_ROOM_FAILED", message: error instanceof Error ? error.message : "Failed to leave room" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**
@@ -1224,12 +1304,23 @@ app.get("/rooms/:roomId/messages", async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
-  return c.json({
-    success: true,
-    data: { messages: [], cursor: undefined },
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    const result = await tradingRoomService.getMessages(roomId, userId, { limit, cursor });
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "GET_MESSAGES_FAILED", message: error instanceof Error ? error.message : "Failed to get messages" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**
@@ -1247,20 +1338,23 @@ app.post("/rooms/:roomId/messages", zValidator("json", sendMessageSchema), async
     );
   }
 
-  // TODO: Implement with TradingRoomService
-  const messageId = crypto.randomUUID();
+  try {
+    const convex = getConvexClient();
+    const tradingRoomService = getTradingRoomService(convex, api);
+    const message = await tradingRoomService.sendMessage(roomId, userId, body);
 
-  return c.json({
-    success: true,
-    data: {
-      id: messageId,
-      roomId,
-      senderId: userId,
-      ...body,
-      createdAt: new Date().toISOString(),
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: message,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: "SEND_MESSAGE_FAILED", message: error instanceof Error ? error.message : "Failed to send message" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 // ============================================================================
