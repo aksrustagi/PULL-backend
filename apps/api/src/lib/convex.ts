@@ -4,6 +4,7 @@
  */
 
 import { ConvexHttpClient } from "convex/browser";
+import type { FunctionReference } from "convex/server";
 import { api as generatedApi } from "@pull/db/convex/_generated/api";
 
 // Re-export api for typed access
@@ -30,11 +31,11 @@ export function getConvexClient(): ConvexHttpClient {
 
 // Export singleton instance for easy import
 export const convex = {
-  query: <T>(fn: any, args: Record<string, unknown>) => {
+  query: <T>(fn: FunctionReference<"query">, args: Record<string, unknown>) => {
     const client = getConvexClient();
     return client.query(fn, args) as Promise<T>;
   },
-  mutation: <T>(fn: any, args: Record<string, unknown>) => {
+  mutation: <T>(fn: FunctionReference<"mutation">, args: Record<string, unknown>) => {
     const client = getConvexClient();
     return client.mutation(fn, args) as Promise<T>;
   },

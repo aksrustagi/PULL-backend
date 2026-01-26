@@ -9,13 +9,14 @@ import {
   QueryCtx,
   MutationCtx,
 } from "../_generated/server";
+import type { PropertyValidators } from "convex/values";
 
 /**
  * Authenticated query - requires a valid user identity
  * Usage: export const myQuery = authenticatedQuery({ ... })
  */
-export function authenticatedQuery<Args extends Record<string, any>, Output>(config: {
-  args: any;
+export function authenticatedQuery<Args extends Record<string, unknown>, Output>(config: {
+  args: PropertyValidators;
   handler: (ctx: QueryCtx & { userId: string }, args: Args) => Promise<Output>;
 }) {
   return baseQuery({
@@ -35,8 +36,8 @@ export function authenticatedQuery<Args extends Record<string, any>, Output>(con
  * Authenticated mutation - requires a valid user identity
  * Usage: export const myMutation = authenticatedMutation({ ... })
  */
-export function authenticatedMutation<Args extends Record<string, any>, Output>(config: {
-  args: any;
+export function authenticatedMutation<Args extends Record<string, unknown>, Output>(config: {
+  args: PropertyValidators;
   handler: (ctx: MutationCtx & { userId: string }, args: Args) => Promise<Output>;
 }) {
   return baseMutation({
@@ -74,7 +75,7 @@ async function checkIsAdmin(ctx: QueryCtx | MutationCtx, userId: string): Promis
   }
 
   // Check against specific admin emails (could be env var in production)
-  const adminEmails = process.env.ADMIN_EMAILS?.split(",") ?? [];
+  const adminEmails = process.env["ADMIN_EMAILS"]?.split(",") ?? [];
   if (adminEmails.includes(user.email)) {
     return true;
   }
@@ -91,8 +92,8 @@ async function checkIsAdmin(ctx: QueryCtx | MutationCtx, userId: string): Promis
  * Admin query - requires admin role
  * Usage: export const myQuery = adminQuery({ ... })
  */
-export function adminQuery<Args extends Record<string, any>, Output>(config: {
-  args: any;
+export function adminQuery<Args extends Record<string, unknown>, Output>(config: {
+  args: PropertyValidators;
   handler: (ctx: QueryCtx & { userId: string }, args: Args) => Promise<Output>;
 }) {
   return baseQuery({
@@ -117,8 +118,8 @@ export function adminQuery<Args extends Record<string, any>, Output>(config: {
 /**
  * Admin mutation - requires admin role
  */
-export function adminMutation<Args extends Record<string, any>, Output>(config: {
-  args: any;
+export function adminMutation<Args extends Record<string, unknown>, Output>(config: {
+  args: PropertyValidators;
   handler: (ctx: MutationCtx & { userId: string }, args: Args) => Promise<Output>;
 }) {
   return baseMutation({
@@ -144,8 +145,8 @@ export function adminMutation<Args extends Record<string, any>, Output>(config: 
  * System mutation - for internal service-to-service calls only
  * Should be called with a service token, not a user token
  */
-export function systemMutation<Args extends Record<string, any>, Output>(config: {
-  args: any;
+export function systemMutation<Args extends Record<string, unknown>, Output>(config: {
+  args: PropertyValidators;
   handler: (ctx: MutationCtx, args: Args) => Promise<Output>;
 }) {
   return baseMutation({

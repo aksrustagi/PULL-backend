@@ -53,7 +53,7 @@ initTracerProvider({
 const stopUptime = startUptimeUpdates();
 
 import { initSentry, captureException } from "./lib/sentry";
-import { authMiddleware } from "./middleware/auth";
+import { authMiddleware, adminOnly } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { csrfProtection, sanitizeInput } from "./middleware/security";
 import { healthRoutes } from "./routes/health";
@@ -102,6 +102,7 @@ export type Env = {
     userId?: string;
     requestId: string;
     logger: ReturnType<typeof getLogger>;
+    sanitizedBody?: unknown;
   };
 };
 
@@ -241,8 +242,8 @@ app.route("/api/v1/watch-party", watchPartyRoutes);
 app.route("/api/v1/nfts", nftsRoutes);
 
 // Admin routes (require auth + admin role)
-// TODO: Add admin role check middleware
 app.use("/admin/*", authMiddleware);
+app.use("/admin/*", adminOnly);
 app.use("/admin/*", csrfProtection);
 app.use("/admin/*", sanitizeInput);
 app.route("/admin/analytics", analyticsRoutes);

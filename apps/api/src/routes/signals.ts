@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../index";
+import { convex, api } from "../lib/convex";
+import type { Id } from "@pull/db/convex/_generated/dataModel";
 
 const app = new Hono<Env>();
 
@@ -32,26 +34,40 @@ app.get("/", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const unseen = c.req.query("unseen") === "true";
 
-  // TODO: Fetch from Convex using signals:getSignals
-  // const signals = await convex.query(api.signals.getSignals, {
-  //   userId,
-  //   types,
-  //   minConfidence,
-  //   unseenOnly: unseen,
-  //   limit,
-  // });
+  try {
+    const signals = await convex.query(api.signals.getSignals, {
+      userId: userId as Id<"users">,
+      types,
+      minConfidence,
+      unseenOnly: unseen,
+      limit,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      signals: [],
-      pagination: {
-        limit,
-        hasMore: false,
+    return c.json({
+      success: true,
+      data: {
+        signals: signals ?? [],
+        pagination: {
+          limit,
+          hasMore: (signals?.length ?? 0) === limit,
+        },
       },
-    },
-    timestamp: new Date().toISOString(),
-  });
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching signals:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch signals",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -72,33 +88,56 @@ app.get("/:id", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex using signals:getSignalById
-  // const signal = await convex.query(api.signals.getSignalById, {
-  //   id: signalId,
-  //   userId,
-  // });
+  try {
+    const signal = await convex.query(api.signals.getSignalById, {
+      id: signalId as Id<"signals">,
+      userId: userId as Id<"users">,
+    });
 
-  // if (!signal) {
-  //   return c.json({
-  //     success: false,
-  //     error: { code: "NOT_FOUND", message: "Signal not found" },
-  //     timestamp: new Date().toISOString(),
-  //   }, 404);
-  // }
+    if (!signal) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "NOT_FOUND", message: "Signal not found" },
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
 
-  return c.json({
-    success: true,
-    data: {
-      signal: null,
-      relatedMarkets: [],
-      userActions: {
-        seen: false,
-        dismissed: false,
-        actedOn: false,
+    return c.json({
+      success: true,
+      data: {
+        signal,
+        relatedMarkets: signal.markets ?? [],
+        userActions: signal.userSignal
+          ? {
+              seen: signal.userSignal.seen,
+              dismissed: signal.userSignal.dismissed,
+              actedOn: signal.userSignal.actedOn,
+            }
+          : {
+              seen: false,
+              dismissed: false,
+              actedOn: false,
+            },
       },
-    },
-    timestamp: new Date().toISOString(),
-  });
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error fetching signal ${signalId}:`, error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch signal details",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -119,17 +158,45 @@ app.post("/:id/seen", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation signals:markSignalSeen
-  // await convex.mutation(api.signals.markSignalSeen, {
-  //   signalId,
-  //   userId,
-  // });
+  try {
+    const result = await convex.mutation(api.signals.markSignalSeen, {
+      signalId: signalId as Id<"signals">,
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: { signalId, seen: true },
-    timestamp: new Date().toISOString(),
-  });
+    if (!result) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "NOT_FOUND",
+            message: "Signal not found or not assigned to user",
+          },
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: { signalId, seen: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error marking signal ${signalId} as seen:`, error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_FAILED",
+          message: "Failed to mark signal as seen",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -150,17 +217,45 @@ app.post("/:id/dismiss", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation signals:dismissSignal
-  // await convex.mutation(api.signals.dismissSignal, {
-  //   signalId,
-  //   userId,
-  // });
+  try {
+    const result = await convex.mutation(api.signals.dismissSignal, {
+      signalId: signalId as Id<"signals">,
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: { signalId, dismissed: true },
-    timestamp: new Date().toISOString(),
-  });
+    if (!result) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "NOT_FOUND",
+            message: "Signal not found or not assigned to user",
+          },
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: { signalId, dismissed: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error dismissing signal ${signalId}:`, error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_FAILED",
+          message: "Failed to dismiss signal",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -181,17 +276,45 @@ app.post("/:id/acted", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation signals:markSignalActed
-  // await convex.mutation(api.signals.markSignalActed, {
-  //   signalId,
-  //   userId,
-  // });
+  try {
+    const result = await convex.mutation(api.signals.markSignalActed, {
+      signalId: signalId as Id<"signals">,
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: { signalId, actedOn: true },
-    timestamp: new Date().toISOString(),
-  });
+    if (!result) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "NOT_FOUND",
+            message: "Signal not found or not assigned to user",
+          },
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: { signalId, actedOn: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error marking signal ${signalId} as acted:`, error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_FAILED",
+          message: "Failed to mark signal as acted on",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -219,22 +342,50 @@ app.get("/insights", async (c) => {
   const type = c.req.query("type");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Fetch from Convex using signals:getUserInsights
-  // const insights = await convex.query(api.signals.getUserInsights, {
-  //   userId,
-  //   type,
-  //   activeOnly: true,
-  //   limit,
-  // });
+  try {
+    const insights = await convex.query(api.signals.getUserInsights, {
+      userId: userId as Id<"users">,
+      type: type || undefined,
+      activeOnly: true,
+      limit,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      insights: [],
-      todayBriefing: null,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    // Get today's briefing if it exists
+    const todayInsights = await convex.query(api.signals.getTodayInsights, {
+      userId: userId as Id<"users">,
+    });
+
+    const todayBriefing =
+      todayInsights && todayInsights.length > 0
+        ? {
+            count: todayInsights.length,
+            highPriority: todayInsights.filter((i: { priority: number }) => i.priority >= 4).length,
+            generatedAt: new Date().toISOString(),
+          }
+        : null;
+
+    return c.json({
+      success: true,
+      data: {
+        insights: insights ?? [],
+        todayBriefing,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching insights:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch insights",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -254,21 +405,55 @@ app.get("/insights/today", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex using signals:getTodayInsights
-  // const insights = await convex.query(api.signals.getTodayInsights, {
-  //   userId,
-  // });
+  try {
+    const insights = await convex.query(api.signals.getTodayInsights, {
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      greeting: "Good morning!",
-      summary: "No insights available yet.",
-      insights: [],
-      generatedAt: null,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    // Generate a personalized greeting based on time of day
+    const hour = new Date().getHours();
+    let greeting = "Good morning!";
+    if (hour >= 12 && hour < 17) {
+      greeting = "Good afternoon!";
+    } else if (hour >= 17) {
+      greeting = "Good evening!";
+    }
+
+    // Generate summary based on insights
+    let summary = "No insights available yet.";
+    if (insights && insights.length > 0) {
+      const highPriority = insights.filter((i: { priority: number }) => i.priority >= 4).length;
+      if (highPriority > 0) {
+        summary = `You have ${highPriority} high-priority insight${highPriority > 1 ? "s" : ""} and ${insights.length - highPriority} other insight${insights.length - highPriority !== 1 ? "s" : ""} today.`;
+      } else {
+        summary = `You have ${insights.length} insight${insights.length > 1 ? "s" : ""} to review today.`;
+      }
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        greeting,
+        summary,
+        insights: insights ?? [],
+        generatedAt: insights && insights.length > 0 ? new Date().toISOString() : null,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching today's insights:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch today's insights",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -289,17 +474,48 @@ app.post("/insights/:id/dismiss", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation signals:dismissInsight
-  // await convex.mutation(api.signals.dismissInsight, {
-  //   insightId,
-  //   userId,
-  // });
+  try {
+    await convex.mutation(api.signals.dismissInsight, {
+      insightId: insightId as Id<"userInsights">,
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: { insightId, dismissed: true },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: { insightId, dismissed: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error dismissing insight ${insightId}:`, error);
+
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+    if (errorMessage.includes("not found")) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "NOT_FOUND",
+            message: "Insight not found or does not belong to user",
+          },
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_FAILED",
+          message: "Failed to dismiss insight",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -316,21 +532,35 @@ app.get("/correlations/:ticker", async (c) => {
     : 0.5;
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Fetch from Convex using signals:getCorrelatedMarkets
-  // const correlations = await convex.query(api.signals.getCorrelatedMarkets, {
-  //   marketTicker: ticker,
-  //   minCorrelation,
-  //   limit,
-  // });
+  try {
+    const correlations = await convex.query(api.signals.getCorrelatedMarkets, {
+      marketTicker: ticker,
+      minCorrelation,
+      limit,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      market: ticker,
-      correlations: [],
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: {
+        market: ticker,
+        correlations: correlations ?? [],
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error fetching correlations for ${ticker}:`, error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch correlated markets",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -340,19 +570,33 @@ app.get("/correlations", async (c) => {
   const positive = c.req.query("positive");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Fetch from Convex using signals:getStrongestCorrelations
-  // const correlations = await convex.query(api.signals.getStrongestCorrelations, {
-  //   limit,
-  //   positive: positive === "true" ? true : positive === "false" ? false : undefined,
-  // });
+  try {
+    const correlations = await convex.query(api.signals.getStrongestCorrelations, {
+      limit,
+      positive: positive === "true" ? true : positive === "false" ? false : undefined,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      correlations: [],
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: {
+        correlations: correlations ?? [],
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching strongest correlations:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch correlations",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -376,27 +620,30 @@ app.get("/preferences", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex using signals:getUserPreferences
-  // const preferences = await convex.query(api.signals.getUserPreferences, {
-  //   userId,
-  // });
+  try {
+    const preferences = await convex.query(api.signals.getUserPreferences, {
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      emailAnalysisEnabled: false,
-      socialAnalysisEnabled: true,
-      marketAlertsEnabled: true,
-      dailyInsightsEnabled: true,
-      pushNotificationsEnabled: true,
-      minConfidenceThreshold: 50,
-      preferredUrgencyLevel: "all",
-      interests: [],
-      excludedMarkets: [],
-      timezone: "UTC",
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: preferences,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching signal preferences:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch preferences",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -439,17 +686,72 @@ app.put("/preferences", async (c) => {
     }
   }
 
-  // TODO: Call Convex mutation signals:updatePreferences
-  // await convex.mutation(api.signals.updatePreferences, {
-  //   userId,
-  //   ...updates,
-  // });
+  // Validate preferredUrgencyLevel if provided
+  if (
+    updates.preferredUrgencyLevel &&
+    !["all", "medium_high", "high_only"].includes(updates.preferredUrgencyLevel as string)
+  ) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "preferredUrgencyLevel must be 'all', 'medium_high', or 'high_only'",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      400
+    );
+  }
 
-  return c.json({
-    success: true,
-    data: { updated: true },
-    timestamp: new Date().toISOString(),
-  });
+  // Validate minConfidenceThreshold if provided
+  if (updates.minConfidenceThreshold !== undefined) {
+    const threshold = updates.minConfidenceThreshold as number;
+    if (typeof threshold !== "number" || threshold < 0 || threshold > 100) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "minConfidenceThreshold must be a number between 0 and 100",
+          },
+          timestamp: new Date().toISOString(),
+        },
+        400
+      );
+    }
+  }
+
+  try {
+    await convex.mutation(api.signals.updatePreferences, {
+      userId: userId as Id<"users">,
+      ...updates,
+    });
+
+    // Fetch updated preferences to return
+    const updatedPreferences = await convex.query(api.signals.getUserPreferences, {
+      userId: userId as Id<"users">,
+    });
+
+    return c.json({
+      success: true,
+      data: updatedPreferences,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error updating signal preferences:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "UPDATE_FAILED",
+          message: "Failed to update preferences",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -473,23 +775,30 @@ app.get("/stats", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex using signals:getSignalStats
-  // const stats = await convex.query(api.signals.getSignalStats, {
-  //   userId,
-  // });
+  try {
+    const stats = await convex.query(api.signals.getSignalStats, {
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      totalSignals: 0,
-      unseenSignals: 0,
-      highUrgencyUnseen: 0,
-      actedOnCount: 0,
-      activeInsights: 0,
-      actionRate: 0,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching signal stats:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_FAILED",
+          message: "Failed to fetch signal statistics",
+        },
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 export { app as signalsRoutes };

@@ -1,11 +1,67 @@
 import { Hono } from "hono";
+import type { Context, Next } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
 import { convex, api } from "../lib/convex";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
+import { redis } from "../lib/redis";
+import { Connection } from "@temporalio/client";
 
 const app = new Hono<Env>();
+
+// Helper to perform HTTP health check with timeout
+async function httpHealthCheck(
+  url: string,
+  options: {
+    headers?: Record<string, string>;
+    timeoutMs?: number;
+  } = {}
+): Promise<{ ok: boolean; latency: number; error?: string }> {
+  const timeoutMs = options.timeoutMs ?? 3000;
+  const start = Date.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: options.headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return {
+      ok: response.ok,
+      latency: Date.now() - start,
+      error: response.ok ? undefined : `HTTP ${response.status}`,
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    const latency = Date.now() - start;
+    if (error instanceof Error && error.name === "AbortError") {
+      return { ok: false, latency, error: `Timeout after ${timeoutMs}ms` };
+    }
+    return {
+      ok: false,
+      latency,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+// Helper to create a timeout promise
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorMessage: string
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    ),
+  ]);
+}
 
 // ============================================================================
 // MIDDLEWARE
@@ -15,7 +71,7 @@ const app = new Hono<Env>();
  * Admin-only middleware
  * Verifies the user is authenticated and has admin privileges
  */
-const adminOnly = async (c: any, next: any) => {
+const adminOnly = async (c: Context<Env>, next: Next) => {
   const userId = c.get("userId");
 
   if (!userId) {
@@ -1692,56 +1748,237 @@ app.get("/health/services", async (c) => {
     };
   }
 
-  // Check external services (these would be actual health checks in production)
-  // For now, we'll simulate health checks
+  // Check external services with actual HTTP health checks
+  const healthCheckPromises: Promise<void>[] = [];
 
-  // Alpaca (Trading)
-  services.alpaca = {
-    status: process.env.ALPACA_API_KEY ? "healthy" : "degraded",
-    latency: 50,
-  };
+  // Alpaca (Trading) - Check API status
+  if (process.env.ALPACA_API_KEY && process.env.ALPACA_API_SECRET) {
+    healthCheckPromises.push(
+      (async () => {
+        const baseUrl = process.env.ALPACA_BASE_URL || "https://paper-api.alpaca.markets";
+        const result = await httpHealthCheck(`${baseUrl}/v2/account`, {
+          headers: {
+            "APCA-API-KEY-ID": process.env.ALPACA_API_KEY!,
+            "APCA-API-SECRET-KEY": process.env.ALPACA_API_SECRET!,
+          },
+          timeoutMs: 3000,
+        });
+        services.alpaca = {
+          status: result.ok ? "healthy" : "down",
+          latency: result.latency,
+          error: result.error,
+        };
+      })()
+    );
+  } else {
+    services.alpaca = { status: "degraded", error: "Not configured" };
+  }
 
-  // Kalshi (Predictions)
-  services.kalshi = {
-    status: process.env.KALSHI_API_KEY ? "healthy" : "degraded",
-    latency: 75,
-  };
+  // Kalshi (Predictions) - Check API status
+  if (process.env.KALSHI_API_KEY) {
+    healthCheckPromises.push(
+      (async () => {
+        const baseUrl = process.env.KALSHI_API_URL || "https://trading-api.kalshi.com";
+        const result = await httpHealthCheck(`${baseUrl}/trade-api/v2/exchange/status`, {
+          headers: {
+            Authorization: `Bearer ${process.env.KALSHI_API_KEY}`,
+          },
+          timeoutMs: 3000,
+        });
+        services.kalshi = {
+          status: result.ok ? "healthy" : "down",
+          latency: result.latency,
+          error: result.error,
+        };
+      })()
+    );
+  } else {
+    services.kalshi = { status: "degraded", error: "Not configured" };
+  }
 
-  // Plaid (Banking)
-  services.plaid = {
-    status: process.env.PLAID_CLIENT_ID ? "healthy" : "degraded",
-    latency: 100,
-  };
+  // Plaid (Banking) - Check API status
+  if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
+    healthCheckPromises.push(
+      (async () => {
+        const env = process.env.PLAID_ENV || "sandbox";
+        const baseUrl = `https://${env}.plaid.com`;
+        const start = Date.now();
+        try {
+          const response = await fetch(`${baseUrl}/institutions/get`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              client_id: process.env.PLAID_CLIENT_ID,
+              secret: process.env.PLAID_SECRET,
+              count: 1,
+              offset: 0,
+              country_codes: ["US"],
+            }),
+            signal: AbortSignal.timeout(3000),
+          });
+          services.plaid = {
+            status: response.ok ? "healthy" : "down",
+            latency: Date.now() - start,
+            error: response.ok ? undefined : `HTTP ${response.status}`,
+          };
+        } catch (error) {
+          services.plaid = {
+            status: "down",
+            latency: Date.now() - start,
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      })()
+    );
+  } else {
+    services.plaid = { status: "degraded", error: "Not configured" };
+  }
 
-  // Persona (KYC)
-  services.persona = {
-    status: process.env.PERSONA_API_KEY ? "healthy" : "degraded",
-    latency: 80,
-  };
+  // Persona (KYC) - Check API status
+  if (process.env.PERSONA_API_KEY) {
+    healthCheckPromises.push(
+      (async () => {
+        const result = await httpHealthCheck("https://withpersona.com/api/v1/inquiries?page[size]=1", {
+          headers: {
+            Authorization: `Bearer ${process.env.PERSONA_API_KEY}`,
+            "Persona-Version": "2023-01-05",
+          },
+          timeoutMs: 3000,
+        });
+        services.persona = {
+          status: result.ok ? "healthy" : "down",
+          latency: result.latency,
+          error: result.error,
+        };
+      })()
+    );
+  } else {
+    services.persona = { status: "degraded", error: "Not configured" };
+  }
 
-  // Chainalysis (Compliance)
-  services.chainalysis = {
-    status: process.env.CHAINALYSIS_API_KEY ? "healthy" : "degraded",
-    latency: 120,
-  };
+  // Chainalysis (Compliance) - Check API status
+  if (process.env.CHAINALYSIS_API_KEY) {
+    healthCheckPromises.push(
+      (async () => {
+        const result = await httpHealthCheck("https://api.chainalysis.com/api/kyt/v2/users?limit=1", {
+          headers: {
+            Token: process.env.CHAINALYSIS_API_KEY!,
+          },
+          timeoutMs: 3000,
+        });
+        services.chainalysis = {
+          status: result.ok ? "healthy" : "down",
+          latency: result.latency,
+          error: result.error,
+        };
+      })()
+    );
+  } else {
+    services.chainalysis = { status: "degraded", error: "Not configured" };
+  }
 
-  // Nylas (Email)
-  services.nylas = {
-    status: process.env.NYLAS_CLIENT_ID ? "healthy" : "degraded",
-    latency: 90,
-  };
+  // Nylas (Email) - Check API status
+  if (process.env.NYLAS_API_KEY) {
+    healthCheckPromises.push(
+      (async () => {
+        const result = await httpHealthCheck("https://api.us.nylas.com/v3/grants?limit=1", {
+          headers: {
+            Authorization: `Bearer ${process.env.NYLAS_API_KEY}`,
+          },
+          timeoutMs: 3000,
+        });
+        services.nylas = {
+          status: result.ok ? "healthy" : "down",
+          latency: result.latency,
+          error: result.error,
+        };
+      })()
+    );
+  } else {
+    services.nylas = { status: "degraded", error: "Not configured" };
+  }
 
-  // Matrix (Messaging)
-  services.matrix = {
-    status: process.env.MATRIX_HOMESERVER_URL ? "healthy" : "degraded",
-    latency: 60,
-  };
+  // Matrix (Messaging) - Check homeserver status
+  if (process.env.MATRIX_HOMESERVER_URL) {
+    healthCheckPromises.push(
+      (async () => {
+        const homeserver = process.env.MATRIX_HOMESERVER_URL!.replace(/\/$/, "");
+        const result = await httpHealthCheck(`${homeserver}/_matrix/client/versions`, {
+          timeoutMs: 3000,
+        });
+        services.matrix = {
+          status: result.ok ? "healthy" : "down",
+          latency: result.latency,
+          error: result.error,
+        };
+      })()
+    );
+  } else {
+    services.matrix = { status: "degraded", error: "Not configured" };
+  }
 
-  // Temporal (Workflows)
-  services.temporal = {
-    status: process.env.TEMPORAL_ADDRESS ? "healthy" : "degraded",
-    latency: 40,
-  };
+  // Temporal (Workflows) - Check connection
+  if (process.env.TEMPORAL_ADDRESS) {
+    healthCheckPromises.push(
+      (async () => {
+        const start = Date.now();
+        try {
+          const connection = await withTimeout(
+            Connection.connect({ address: process.env.TEMPORAL_ADDRESS! }),
+            3000,
+            "Timeout after 3000ms"
+          );
+          await connection.close();
+          services.temporal = {
+            status: "healthy",
+            latency: Date.now() - start,
+          };
+        } catch (error) {
+          services.temporal = {
+            status: "down",
+            latency: Date.now() - start,
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      })()
+    );
+  } else {
+    services.temporal = { status: "degraded", error: "Not configured" };
+  }
+
+  // Check Redis
+  if (redis) {
+    healthCheckPromises.push(
+      (async () => {
+        const start = Date.now();
+        try {
+          const result = await withTimeout(
+            redis.ping(),
+            2000,
+            "Timeout after 2000ms"
+          );
+          services.redis = {
+            status: result === "PONG" ? "healthy" : "degraded",
+            latency: Date.now() - start,
+            error: result === "PONG" ? undefined : `Unexpected: ${result}`,
+          };
+        } catch (error) {
+          services.redis = {
+            status: "down",
+            latency: Date.now() - start,
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      })()
+    );
+  } else {
+    services.redis = { status: "degraded", error: "Not configured" };
+  }
+
+  // Wait for all health checks to complete
+  await Promise.allSettled(healthCheckPromises);
 
   // Calculate overall status
   const statuses = Object.values(services).map((s) => s.status);

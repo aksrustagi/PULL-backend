@@ -7,6 +7,12 @@ import { Hono } from "hono";
 import { Client } from "@temporalio/client";
 import { PlaidClient, type PlaidWebhookPayload } from "@pull/core/services/plaid";
 import { getLogger } from "@pull/core/services";
+import {
+  isWebhookEventProcessed,
+  storeWebhookEvent,
+  markWebhookProcessed,
+  generateCompositeEventId,
+} from "./idempotency";
 
 const plaid = new Hono();
 const logger = getLogger().child({ service: "plaid-webhook" });
@@ -31,12 +37,44 @@ function getTemporalClient(): Client {
   });
 }
 
-async function storeWebhookEvent(payload: PlaidWebhookPayload, rawPayload: string): Promise<void> {
-  // TODO: Store in Convex webhookEvents table
+/**
+ * Generate a unique event ID for Plaid webhooks
+ * Plaid doesn't provide a unique event ID, so we create one from available fields
+ */
+function generatePlaidEventId(payload: PlaidWebhookPayload): string {
+  return generateCompositeEventId(
+    payload.webhook_type,
+    payload.webhook_code,
+    payload.item_id,
+    payload.transfer_id,
+    payload.identity_verification_id,
+    // Use timestamp if available to help with uniqueness
+    String(Date.now())
+  );
+}
+
+async function storeWebhookEventLocal(payload: PlaidWebhookPayload, rawPayload: string): Promise<string | null> {
+  const eventId = generatePlaidEventId(payload);
   logger.info("Storing webhook event", {
     webhookType: payload.webhook_type,
     webhookCode: payload.webhook_code,
+    eventId,
   });
+  const eventType = `${payload.webhook_type}.${payload.webhook_code}`;
+  return await storeWebhookEvent("plaid", eventType, eventId, rawPayload);
+}
+
+async function isEventProcessed(payload: PlaidWebhookPayload): Promise<boolean> {
+  // For Plaid, we use a composite ID. Since Plaid may retry webhooks,
+  // we use item_id + webhook_type + webhook_code + any specific IDs
+  const eventId = generateCompositeEventId(
+    payload.webhook_type,
+    payload.webhook_code,
+    payload.item_id,
+    payload.transfer_id,
+    payload.identity_verification_id
+  );
+  return await isWebhookEventProcessed("plaid", eventId);
 }
 
 // ==========================================================================
@@ -73,29 +111,51 @@ plaid.post("/", async (c) => {
       itemId: payload.item_id,
     });
 
-    // Store raw event
-    await storeWebhookEvent(payload, rawBody);
+    // Check idempotency
+    const alreadyProcessed = await isEventProcessed(payload);
+    if (alreadyProcessed) {
+      logger.debug("Event already processed, skipping", {
+        webhookType: payload.webhook_type,
+        webhookCode: payload.webhook_code,
+        itemId: payload.item_id,
+      });
+      return c.json({ success: true, message: "Already processed" });
+    }
 
-    // Handle by webhook type
-    switch (payload.webhook_type) {
-      case "AUTH":
-        await handleAuthWebhook(payload);
-        break;
+    // Store raw event and get record ID for marking as processed
+    const recordId = await storeWebhookEventLocal(payload, rawBody);
 
-      case "IDENTITY_VERIFICATION":
-        await handleIdentityVerificationWebhook(payload);
-        break;
+    let processingError: string | undefined;
+    try {
+      // Handle by webhook type
+      switch (payload.webhook_type) {
+        case "AUTH":
+          await handleAuthWebhook(payload);
+          break;
 
-      case "TRANSFER":
-        await handleTransferWebhook(payload);
-        break;
+        case "IDENTITY_VERIFICATION":
+          await handleIdentityVerificationWebhook(payload);
+          break;
 
-      case "ITEM":
-        await handleItemWebhook(payload);
-        break;
+        case "TRANSFER":
+          await handleTransferWebhook(payload);
+          break;
 
-      default:
-        logger.info("Unhandled webhook type", { webhookType: payload.webhook_type });
+        case "ITEM":
+          await handleItemWebhook(payload);
+          break;
+
+        default:
+          logger.info("Unhandled webhook type", { webhookType: payload.webhook_type });
+      }
+    } catch (handlerError) {
+      processingError = handlerError instanceof Error ? handlerError.message : "Handler error";
+      throw handlerError;
+    } finally {
+      // Mark event as processed (with or without error)
+      if (recordId) {
+        await markWebhookProcessed(recordId, processingError);
+      }
     }
 
     return c.json({ success: true });

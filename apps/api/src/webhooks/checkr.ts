@@ -7,6 +7,11 @@ import { Hono } from "hono";
 import { Client } from "@temporalio/client";
 import { CheckrClient, type WebhookEvent } from "@pull/core/services/checkr";
 import { getLogger } from "@pull/core/services";
+import {
+  isWebhookEventProcessed,
+  storeWebhookEvent,
+  markWebhookProcessed,
+} from "./idempotency";
 
 const checkr = new Hono();
 const logger = getLogger().child({ service: "checkr-webhook" });
@@ -30,14 +35,13 @@ function getTemporalClient(): Client {
   });
 }
 
-async function storeWebhookEvent(event: WebhookEvent, rawPayload: string): Promise<void> {
-  // TODO: Store in Convex webhookEvents table
+async function storeWebhookEventLocal(event: WebhookEvent, rawPayload: string): Promise<string | null> {
   logger.info("Storing webhook event", { eventType: event.type, eventId: event.id });
+  return await storeWebhookEvent("checkr", event.type, event.id, rawPayload);
 }
 
 async function isEventProcessed(eventId: string): Promise<boolean> {
-  // TODO: Check if event was already processed (idempotency)
-  return false;
+  return await isWebhookEventProcessed("checkr", eventId);
 }
 
 // ==========================================================================
@@ -71,37 +75,48 @@ checkr.post("/", async (c) => {
       return c.json({ success: true, message: "Already processed" });
     }
 
-    // Store raw event
-    await storeWebhookEvent(event, rawBody);
+    // Store raw event and get record ID for marking as processed
+    const recordId = await storeWebhookEventLocal(event, rawBody);
 
-    // Handle event types
-    switch (event.type) {
-      case "report.completed":
-        await handleReportCompleted(event);
-        break;
+    let processingError: string | undefined;
+    try {
+      // Handle event types
+      switch (event.type) {
+        case "report.completed":
+          await handleReportCompleted(event);
+          break;
 
-      case "report.suspended":
-        await handleReportSuspended(event);
-        break;
+        case "report.suspended":
+          await handleReportSuspended(event);
+          break;
 
-      case "report.created":
-        logger.info("Report created", { reportId: event.data.object.id });
-        break;
+        case "report.created":
+          logger.info("Report created", { reportId: event.data.object.id });
+          break;
 
-      case "report.upgraded":
-        logger.info("Report upgraded", { reportId: event.data.object.id });
-        break;
+        case "report.upgraded":
+          logger.info("Report upgraded", { reportId: event.data.object.id });
+          break;
 
-      case "candidate.created":
-        logger.info("Candidate created", { candidateId: event.data.object.id });
-        break;
+        case "candidate.created":
+          logger.info("Candidate created", { candidateId: event.data.object.id });
+          break;
 
-      case "screening.completed":
-        logger.info("Screening completed", { screeningId: event.data.object.id });
-        break;
+        case "screening.completed":
+          logger.info("Screening completed", { screeningId: event.data.object.id });
+          break;
 
-      default:
-        logger.info("Unhandled event type", { eventType: event.type });
+        default:
+          logger.info("Unhandled event type", { eventType: event.type });
+      }
+    } catch (handlerError) {
+      processingError = handlerError instanceof Error ? handlerError.message : "Handler error";
+      throw handlerError;
+    } finally {
+      // Mark event as processed (with or without error)
+      if (recordId) {
+        await markWebhookProcessed(recordId, processingError);
+      }
     }
 
     return c.json({ success: true });

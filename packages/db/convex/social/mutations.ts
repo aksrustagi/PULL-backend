@@ -133,7 +133,10 @@ export const updateFollowSettings = mutation({
       throw new Error("Not following this user");
     }
 
-    const updates: any = {};
+    const updates: Partial<{
+      notificationsEnabled: boolean;
+      positionVisibility: "all" | "entry_only" | "none";
+    }> = {};
     if (args.notificationsEnabled !== undefined) {
       updates.notificationsEnabled = args.notificationsEnabled;
     }

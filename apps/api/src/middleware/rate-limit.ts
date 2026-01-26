@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import type { Env } from "../index";
+import { logger } from "@pull/core/services/logger";
 
 // Environment detection
 const isDevelopment = process.env.NODE_ENV === "development";
@@ -14,7 +15,7 @@ const isRedisConfigured = redisUrl && redisToken;
 
 // In production, Redis must be configured
 if (isProduction && !isRedisConfigured) {
-  console.error("CRITICAL: Redis is not configured in production. Rate limiting will reject all requests.");
+  logger.error("CRITICAL: Redis is not configured in production. Rate limiting will reject all requests.");
 }
 
 // Initialize Upstash Redis client (only if configured)
@@ -127,7 +128,7 @@ export function createFantasyRateLimit(tier: RateLimiterTier) {
       }
       await next();
     } catch (error) {
-      console.error(`Rate limit error (${tier}):`, error);
+      logger.error("Rate limit error", { tier, identifier, error });
       await next();
     }
   });
@@ -211,7 +212,7 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
     const path = c.req.path;
     const isSensitive = path.includes("/auth") || path.includes("/trading") || path.includes("/orders");
     if (isSensitive) {
-      console.error("Rate limit error on sensitive endpoint, blocking:", error);
+      logger.error("Rate limit error on sensitive endpoint, blocking request", { path, identifier, error });
       return c.json(
         {
           success: false,
@@ -222,7 +223,7 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
         503
       );
     }
-    console.error("Rate limit error, allowing through:", error);
+    logger.error("Rate limit error, allowing through", { path, identifier, error });
     await next();
   }
 });

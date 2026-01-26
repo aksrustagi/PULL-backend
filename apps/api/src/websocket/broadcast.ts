@@ -5,6 +5,7 @@
 
 import type { ServerWebSocket } from "bun";
 import type { WebSocketData } from "./server";
+import { logger } from "@pull/core/services/logger";
 
 // ============================================================================
 // Types
@@ -72,7 +73,7 @@ export class BroadcastManager {
       lastActivityAt: Date.now(),
     });
 
-    console.log(`[Broadcast] Connection registered: ${connectionId}`);
+    logger.info("Broadcast connection registered", { connectionId, userId });
   }
 
   /**
@@ -91,7 +92,7 @@ export class BroadcastManager {
     this.subscriptions.delete(connectionId);
     this.stats.delete(connectionId);
 
-    console.log(`[Broadcast] Connection unregistered: ${connectionId}`);
+    logger.info("Broadcast connection unregistered", { connectionId });
   }
 
   /**
@@ -134,7 +135,7 @@ export class BroadcastManager {
       stats.lastActivityAt = Date.now();
     }
 
-    console.log(`[Broadcast] ${connectionId} subscribed to ${channel}`);
+    logger.info("Broadcast subscription added", { connectionId, channel });
     return true;
   }
 
@@ -154,7 +155,7 @@ export class BroadcastManager {
         stats.lastActivityAt = Date.now();
       }
 
-      console.log(`[Broadcast] ${connectionId} unsubscribed from ${channel}`);
+      logger.info("Broadcast subscription removed", { connectionId, channel });
     }
 
     return removed;
@@ -233,7 +234,7 @@ export class BroadcastManager {
             }
           }
         } catch (error) {
-          console.error(`[Broadcast] Failed to send to ${connectionId}:`, error);
+          logger.error("Broadcast failed to send message", { connectionId, channel, error });
         }
       }
     }
@@ -273,7 +274,7 @@ export class BroadcastManager {
           stats.lastActivityAt = Date.now();
         }
       } catch (error) {
-        console.error(`[Broadcast] Failed to send to ${connectionId}:`, error);
+        logger.error("Broadcast failed to send to all", { connectionId, error });
       }
     }
 
@@ -298,7 +299,7 @@ export class BroadcastManager {
 
       return true;
     } catch (error) {
-      console.error(`[Broadcast] Failed to send to ${connectionId}:`, error);
+      logger.error("Broadcast failed to send to connection", { connectionId, error });
       return false;
     }
   }
@@ -445,7 +446,7 @@ export class BroadcastManager {
     }
 
     if (cleaned > 0) {
-      console.log(`[Broadcast] Cleaned up ${cleaned} stale connections`);
+      logger.info("Broadcast cleaned up stale connections", { cleanedCount: cleaned });
     }
 
     return cleaned;
@@ -468,7 +469,7 @@ export class BroadcastManager {
     this.subscriptions.clear();
     this.stats.clear();
 
-    console.log("[Broadcast] All connections closed");
+    logger.info("Broadcast all connections closed", { reason });
   }
 }
 

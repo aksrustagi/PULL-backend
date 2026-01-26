@@ -7,7 +7,7 @@
  * All export queries require admin authorization.
  */
 
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { adminQuery } from "./lib/auth";
 
@@ -73,8 +73,9 @@ export const exportOrders = adminQuery({
 
 /**
  * Export balances data for backup
+ * Requires admin authorization
  */
-export const exportBalances = query({
+export const exportBalances = adminQuery({
   args: {
     limit: v.optional(v.number()),
   },
@@ -93,8 +94,9 @@ export const exportBalances = query({
 
 /**
  * Export positions data for backup
+ * Requires admin authorization
  */
-export const exportPositions = query({
+export const exportPositions = adminQuery({
   args: {
     limit: v.optional(v.number()),
   },
@@ -113,8 +115,9 @@ export const exportPositions = query({
 
 /**
  * Export prediction events data
+ * Requires admin authorization
  */
-export const exportPredictionEvents = query({
+export const exportPredictionEvents = adminQuery({
   args: {
     limit: v.optional(v.number()),
   },
@@ -133,8 +136,9 @@ export const exportPredictionEvents = query({
 
 /**
  * Export audit logs for compliance
+ * Requires admin authorization
  */
-export const exportAuditLogs = query({
+export const exportAuditLogs = adminQuery({
   args: {
     limit: v.optional(v.number()),
     startDate: v.optional(v.number()),
@@ -215,8 +219,9 @@ export const completeBackupSnapshot = mutation({
 
 /**
  * Get backup history
+ * Requires admin authorization
  */
-export const getBackupHistory = query({
+export const getBackupHistory = adminQuery({
   args: {
     limit: v.optional(v.number()),
   },
@@ -231,8 +236,9 @@ export const getBackupHistory = query({
 
 /**
  * Get latest successful backup
+ * Requires admin authorization
  */
-export const getLatestBackup = query({
+export const getLatestBackup = adminQuery({
   args: {},
   handler: async (ctx) => {
     const snapshots = await ctx.db.query("backupSnapshots")
@@ -245,8 +251,9 @@ export const getLatestBackup = query({
 
 /**
  * Export complete database summary (for monitoring)
+ * Requires admin authorization
  */
-export const getDatabaseSummary = query({
+export const getDatabaseSummary = adminQuery({
   args: {},
   handler: async (ctx) => {
     // Count records in each table (sample-based for performance)

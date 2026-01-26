@@ -15,6 +15,7 @@ import {
   getStripeClient,
 } from "@pull/core/services/stripe";
 import type { CreateCheckoutSessionParams } from "@pull/core/services/stripe";
+import { logger } from "@pull/core/services/logger";
 
 const app = new Hono<Env>();
 
@@ -142,7 +143,7 @@ app.post("/deposit", zValidator("json", createDepositSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to create deposit session:", error);
+    logger.error("Failed to create deposit session", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -218,7 +219,7 @@ app.get("/deposit/:sessionId", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get session:", error);
+    logger.error("Failed to get session", { userId, sessionId, requestId, error });
     return c.json(
       {
         success: false,
@@ -402,7 +403,7 @@ app.post("/withdraw", zValidator("json", createWithdrawalSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to process withdrawal:", error);
+    logger.error("Failed to process withdrawal", { userId, amount: body.amount, requestId, error });
     return c.json(
       {
         success: false,
@@ -525,7 +526,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("Failed to setup payout account:", error);
+      logger.error("Failed to setup payout account", { userId, requestId, error });
       return c.json(
         {
           success: false,
@@ -617,7 +618,7 @@ app.get("/payout-account", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get payout account:", error);
+    logger.error("Failed to get payout account", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -694,7 +695,7 @@ app.get("/payout-account/dashboard", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to create dashboard link:", error);
+    logger.error("Failed to create dashboard link", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -787,7 +788,7 @@ app.post("/methods", zValidator("json", addPaymentMethodSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to attach payment method:", error);
+    logger.error("Failed to attach payment method", { userId, paymentMethodId: body.paymentMethodId, requestId, error });
     return c.json(
       {
         success: false,
@@ -888,7 +889,7 @@ app.get("/methods", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to list payment methods:", error);
+    logger.error("Failed to list payment methods", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -975,7 +976,7 @@ app.delete("/methods/:methodId", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to detach payment method:", error);
+    logger.error("Failed to detach payment method", { userId, methodId, requestId, error });
     return c.json(
       {
         success: false,
@@ -1054,7 +1055,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("Failed to create setup intent:", error);
+      logger.error("Failed to create setup intent", { userId, requestId, error });
       return c.json(
         {
           success: false,
@@ -1156,7 +1157,7 @@ app.get("/history", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get payment history:", error);
+    logger.error("Failed to get payment history", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -1207,7 +1208,7 @@ app.get("/balance", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get balance:", error);
+    logger.error("Failed to get balance", { userId, requestId, error });
     return c.json(
       {
         success: false,

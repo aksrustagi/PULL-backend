@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { convex, api } from "../lib/convex";
+import type { Id } from "@pull/db/convex/_generated/dataModel";
 
 const app = new Hono<Env>();
 
@@ -22,12 +24,21 @@ const purchaseInsuranceSchema = z.object({
   betId: z.string(),
   productId: z.string(),
   coverageAmount: z.number().positive(),
+  betAmount: z.number().positive(),
+  betOdds: z.number().positive(),
+  sport: z.string(),
+  event: z.string(),
+  market: z.string(),
+  selection: z.string(),
 });
 
 const claimInsuranceSchema = z.object({
   policyId: z.string(),
   claimReason: z.string().min(10).max(500),
   evidence: z.array(z.string()).optional(),
+  betResult: z.enum(["loss", "push", "partial_loss"]).optional(),
+  actualMargin: z.number().optional(),
+  eventOutcome: z.string().optional(),
 });
 
 const paginationSchema = z.object({
@@ -41,101 +52,34 @@ const paginationSchema = z.object({
 // ============================================================================
 
 app.get("/products", async (c) => {
-  const userId = c.get("userId");
+  const requestId = c.get("requestId");
+  const sport = c.req.query("sport");
+  const betType = c.req.query("betType");
 
-  // TODO: Call Convex query insurance.getProducts
-  const products = [
-    {
-      id: "prod_close_loss",
-      type: "close_loss" as const,
-      name: "Close Loss Protection",
-      description: "Get your stake back if you lose by 1 point or less",
-      premiumRate: 0.08, // 8% of stake
-      maxCoverage: 1000,
-      minOdds: 1.5,
-      maxOdds: 5.0,
-      eligibleBetTypes: ["spread", "total", "moneyline"],
-      eligibleSports: ["nba", "nfl", "mlb", "nhl"],
-      active: true,
-      popularityRank: 1,
-    },
-    {
-      id: "prod_push_protection",
-      type: "push_protection" as const,
-      name: "Push Protection",
-      description: "Get paid on pushes instead of getting stake returned",
-      premiumRate: 0.05, // 5% of stake
-      maxCoverage: 2000,
-      minOdds: 1.3,
-      maxOdds: 3.0,
-      eligibleBetTypes: ["spread", "total"],
-      eligibleSports: ["nba", "nfl", "ncaaf", "ncaab"],
-      active: true,
-      popularityRank: 2,
-    },
-    {
-      id: "prod_half_point",
-      type: "half_point" as const,
-      name: "Half-Point Coverage",
-      description: "Win if you would have won with a half-point better line",
-      premiumRate: 0.12, // 12% of stake
-      maxCoverage: 500,
-      minOdds: 1.8,
-      maxOdds: 2.2,
-      eligibleBetTypes: ["spread"],
-      eligibleSports: ["nba", "nfl"],
-      active: true,
-      popularityRank: 3,
-    },
-    {
-      id: "prod_bad_beat",
-      type: "bad_beat" as const,
-      name: "Bad Beat Insurance",
-      description: "Protection against devastating last-minute losses",
-      premiumRate: 0.15, // 15% of stake
-      maxCoverage: 5000,
-      minOdds: 1.5,
-      maxOdds: 10.0,
-      eligibleBetTypes: ["spread", "moneyline", "total"],
-      eligibleSports: ["nba", "nfl", "mlb"],
-      active: true,
-      popularityRank: 4,
-    },
-    {
-      id: "prod_overtime_loss",
-      type: "overtime_loss" as const,
-      name: "Overtime Loss Protection",
-      description: "Get refunded if your team loses in overtime",
-      premiumRate: 0.10, // 10% of stake
-      maxCoverage: 1000,
-      minOdds: 1.5,
-      maxOdds: 4.0,
-      eligibleBetTypes: ["moneyline"],
-      eligibleSports: ["nba", "nfl", "nhl"],
-      active: true,
-      popularityRank: 5,
-    },
-    {
-      id: "prod_garbage_time",
-      type: "garbage_time" as const,
-      name: "Garbage Time Coverage",
-      description: "Coverage for late-game meaningless points affecting your bet",
-      premiumRate: 0.07, // 7% of stake
-      maxCoverage: 750,
-      minOdds: 1.8,
-      maxOdds: 3.0,
-      eligibleBetTypes: ["spread", "total"],
-      eligibleSports: ["nba", "nfl"],
-      active: true,
-      popularityRank: 6,
-    },
-  ];
+  try {
+    const products = await convex.query(api.insurance.getProducts, {
+      sport: sport || undefined,
+      betType: betType || undefined,
+      isActive: true,
+    });
 
-  return c.json({
-    success: true,
-    data: products,
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: products,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error fetching insurance products:`, error);
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message: "Failed to fetch insurance products" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -146,10 +90,14 @@ app.get("/products", async (c) => {
 app.get("/quote", zValidator("query", z.object({
   betId: z.string(),
   productId: z.string(),
+  betAmount: z.coerce.number().positive(),
+  betOdds: z.coerce.number().positive(),
+  sport: z.string(),
   coverageAmount: z.coerce.number().positive().optional(),
 })), async (c) => {
   const userId = c.get("userId");
-  const { betId, productId, coverageAmount } = c.req.valid("query");
+  const requestId = c.get("requestId");
+  const { betId, productId, betAmount, betOdds, sport, coverageAmount } = c.req.valid("query");
 
   if (!userId) {
     return c.json(
@@ -161,32 +109,45 @@ app.get("/quote", zValidator("query", z.object({
     );
   }
 
-  // TODO: Call Convex query insurance.getQuote
-  const quote = {
-    betId,
-    productId,
-    productName: "Close Loss Protection",
-    stake: 100,
-    odds: 2.0,
-    sport: "nba",
-    betType: "spread",
-    coverageAmount: coverageAmount || 100,
-    basePremium: 8.00,
-    oddsAdjustment: 0.50, // Higher odds = higher risk
-    vipDiscount: -0.40, // Gold tier = 5% discount
-    finalPremium: 8.10,
-    maxPayout: 100,
-    eligible: true,
-    eligibilityReason: null,
-    expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
-    quoteId: `quote_${Date.now()}`,
-  };
+  try {
+    const result = await convex.query(api.insurance.getQuote, {
+      userId: userId as Id<"users">,
+      productId: productId as Id<"insuranceProducts">,
+      betId,
+      betAmount,
+      betOdds,
+      sport,
+      coverageAmount,
+    });
 
-  return c.json({
-    success: true,
-    data: quote,
-    timestamp: new Date().toISOString(),
-  });
+    if (!result.eligible) {
+      return c.json({
+        success: false,
+        error: {
+          code: "INELIGIBLE",
+          message: result.eligibilityReason || "Not eligible for this insurance product",
+        },
+        timestamp: new Date().toISOString(),
+      }, 400);
+    }
+
+    return c.json({
+      success: true,
+      data: result.quote,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error fetching insurance quote:`, error);
+    return c.json(
+      {
+        success: false,
+        error: { code: "QUOTE_FAILED", message: "Failed to generate insurance quote" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -196,6 +157,7 @@ app.get("/quote", zValidator("query", z.object({
 
 app.post("/purchase", zValidator("json", purchaseInsuranceSchema), async (c) => {
   const userId = c.get("userId");
+  const requestId = c.get("requestId");
   const body = c.req.valid("json");
 
   if (!userId) {
@@ -208,29 +170,97 @@ app.post("/purchase", zValidator("json", purchaseInsuranceSchema), async (c) => 
     );
   }
 
-  // TODO: Call Convex mutation insurance.purchasePolicy
-  const policy = {
-    policyId: `pol_${Date.now()}`,
-    betId: body.betId,
-    productId: body.productId,
-    productName: "Close Loss Protection",
-    coverageAmount: body.coverageAmount,
-    premiumPaid: 8.10,
-    status: "active" as const,
-    purchasedAt: Date.now(),
-    expiresAt: null, // Expires when bet settles
-    terms: {
-      triggerCondition: "Loss by 1 point or less",
-      payoutAmount: body.coverageAmount,
-      claimDeadline: "24 hours after bet settlement",
-    },
-  };
+  try {
+    // First get a quote to calculate the premium
+    const quoteResult = await convex.query(api.insurance.getQuote, {
+      userId: userId as Id<"users">,
+      productId: body.productId as Id<"insuranceProducts">,
+      betId: body.betId,
+      betAmount: body.betAmount,
+      betOdds: body.betOdds,
+      sport: body.sport,
+      coverageAmount: body.coverageAmount,
+    });
 
-  return c.json({
-    success: true,
-    data: policy,
-    timestamp: new Date().toISOString(),
-  });
+    if (!quoteResult.eligible || !quoteResult.quote) {
+      return c.json({
+        success: false,
+        error: {
+          code: "INELIGIBLE",
+          message: quoteResult.eligibilityReason || "Not eligible for this insurance product",
+        },
+        timestamp: new Date().toISOString(),
+      }, 400);
+    }
+
+    const quote = quoteResult.quote;
+
+    // Purchase the policy
+    const policy = await convex.mutation(api.insurance.purchasePolicy, {
+      userId: userId as Id<"users">,
+      productId: body.productId as Id<"insuranceProducts">,
+      betId: body.betId,
+      orderId: `ord_${Date.now()}`,
+      coverageAmount: body.coverageAmount,
+      premiumPaid: quote.finalPremium,
+      premiumBreakdown: {
+        basePremium: quote.basePremium,
+        oddsAdjustment: quote.oddsAdjustment,
+        vipDiscount: quote.vipDiscount,
+        finalPremium: quote.finalPremium,
+      },
+      betAmount: body.betAmount,
+      betOdds: body.betOdds,
+      sport: body.sport,
+      event: body.event,
+      market: body.market,
+      selection: body.selection,
+    });
+
+    return c.json({
+      success: true,
+      data: policy,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error purchasing insurance:`, error);
+
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+    if (errorMessage.includes("Insufficient balance")) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "INSUFFICIENT_BALANCE", message: "Insufficient balance for premium" },
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+        400
+      );
+    }
+
+    if (errorMessage.includes("not found") || errorMessage.includes("inactive")) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "PRODUCT_NOT_FOUND", message: "Insurance product not found or inactive" },
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: { code: "PURCHASE_FAILED", message: "Failed to purchase insurance" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -239,9 +269,10 @@ app.post("/purchase", zValidator("json", purchaseInsuranceSchema), async (c) => 
 // ============================================================================
 
 app.get("/policies", zValidator("query", paginationSchema.extend({
-  status: z.enum(["active", "claimed", "expired", "cancelled"]).optional(),
+  status: z.enum(["active", "pending_claim", "claimed", "expired", "cancelled", "void"]).optional(),
 })), async (c) => {
   const userId = c.get("userId");
+  const requestId = c.get("requestId");
   const { limit, cursor, status } = c.req.valid("query");
 
   if (!userId) {
@@ -254,77 +285,38 @@ app.get("/policies", zValidator("query", paginationSchema.extend({
     );
   }
 
-  // TODO: Call Convex query insurance.getUserPolicies
-  const policies = [
-    {
-      policyId: "pol_001",
-      betId: "bet_123",
-      productType: "close_loss" as const,
-      productName: "Close Loss Protection",
-      coverageAmount: 100,
-      premiumPaid: 8.10,
-      status: "active" as const,
-      purchasedAt: Date.now() - 3600000,
-      betDetails: {
-        event: "Lakers vs Celtics",
-        selection: "Lakers -3.5",
-        odds: 1.91,
-        stake: 100,
-        status: "pending",
-      },
-    },
-    {
-      policyId: "pol_002",
-      betId: "bet_122",
-      productType: "push_protection" as const,
-      productName: "Push Protection",
-      coverageAmount: 50,
-      premiumPaid: 2.50,
-      status: "claimed" as const,
-      purchasedAt: Date.now() - 86400000,
-      claimedAt: Date.now() - 43200000,
-      claimPayout: 50,
-      betDetails: {
-        event: "Chiefs vs Eagles",
-        selection: "Chiefs -7",
-        odds: 1.91,
-        stake: 50,
-        status: "push",
-      },
-    },
-    {
-      policyId: "pol_003",
-      betId: "bet_121",
-      productType: "bad_beat" as const,
-      productName: "Bad Beat Insurance",
-      coverageAmount: 200,
-      premiumPaid: 30.00,
-      status: "expired" as const,
-      purchasedAt: Date.now() - 172800000,
-      expiredAt: Date.now() - 86400000,
-      betDetails: {
-        event: "Patriots vs Bills",
-        selection: "Patriots ML",
-        odds: 2.50,
-        stake: 200,
-        status: "won",
-      },
-    },
-  ];
+  try {
+    // Convert cursor to offset for pagination
+    const offset = cursor ? parseInt(cursor, 10) : 0;
 
-  const filteredPolicies = status
-    ? policies.filter((p) => p.status === status)
-    : policies;
+    const result = await convex.query(api.insurance.getUserPolicies, {
+      userId: userId as Id<"users">,
+      status: status as any,
+      limit,
+      offset,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      items: filteredPolicies,
-      hasMore: false,
-      nextCursor: undefined,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: {
+        items: result.items,
+        hasMore: result.hasMore,
+        nextCursor: result.hasMore ? String(offset + limit) : undefined,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error fetching policies:`, error);
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message: "Failed to fetch insurance policies" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -334,6 +326,7 @@ app.get("/policies", zValidator("query", paginationSchema.extend({
 
 app.get("/policies/:policyId", async (c) => {
   const userId = c.get("userId");
+  const requestId = c.get("requestId");
   const policyId = c.req.param("policyId");
 
   if (!userId) {
@@ -346,42 +339,41 @@ app.get("/policies/:policyId", async (c) => {
     );
   }
 
-  // TODO: Call Convex query insurance.getPolicyById
-  const policy = {
-    policyId,
-    betId: "bet_123",
-    productType: "close_loss" as const,
-    productName: "Close Loss Protection",
-    coverageAmount: 100,
-    premiumPaid: 8.10,
-    status: "active" as const,
-    purchasedAt: Date.now() - 3600000,
-    terms: {
-      triggerCondition: "Loss by 1 point or less",
-      payoutAmount: 100,
-      claimDeadline: "24 hours after bet settlement",
-      exclusions: [
-        "Player prop bets",
-        "Live/in-play bets",
-        "Bets placed after game start",
-      ],
-    },
-    betDetails: {
-      event: "Lakers vs Celtics",
-      selection: "Lakers -3.5",
-      odds: 1.91,
-      stake: 100,
-      status: "pending",
-      eventDate: Date.now() + 7200000,
-    },
-    claimHistory: [],
-  };
+  try {
+    const policy = await convex.query(api.insurance.getPolicyById, {
+      policyId: policyId as Id<"insurancePolicies">,
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: policy,
-    timestamp: new Date().toISOString(),
-  });
+    if (!policy) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "NOT_FOUND", message: "Policy not found" },
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: policy,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error fetching policy:`, error);
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message: "Failed to fetch policy details" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -391,6 +383,7 @@ app.get("/policies/:policyId", async (c) => {
 
 app.post("/claim", zValidator("json", claimInsuranceSchema), async (c) => {
   const userId = c.get("userId");
+  const requestId = c.get("requestId");
   const body = c.req.valid("json");
 
   if (!userId) {
@@ -403,23 +396,85 @@ app.post("/claim", zValidator("json", claimInsuranceSchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation insurance.submitClaim
-  const claim = {
-    claimId: `clm_${Date.now()}`,
-    policyId: body.policyId,
-    status: "pending_review" as const,
-    submittedAt: Date.now(),
-    reason: body.claimReason,
-    evidence: body.evidence || [],
-    estimatedReviewTime: "1-2 hours",
-    message: "Your claim has been submitted and is under review",
-  };
+  try {
+    const claim = await convex.mutation(api.insurance.submitClaim, {
+      policyId: body.policyId as Id<"insurancePolicies">,
+      userId: userId as Id<"users">,
+      claimReason: body.claimReason,
+      evidence: body.evidence,
+      betResult: body.betResult,
+      actualMargin: body.actualMargin,
+      eventOutcome: body.eventOutcome,
+    });
 
-  return c.json({
-    success: true,
-    data: claim,
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: claim,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error submitting claim:`, error);
+
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+    if (errorMessage.includes("not found")) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "POLICY_NOT_FOUND", message: "Policy not found" },
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+        404
+      );
+    }
+
+    if (errorMessage.includes("Unauthorized")) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "You do not own this policy" },
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+        403
+      );
+    }
+
+    if (errorMessage.includes("not active")) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "POLICY_NOT_ACTIVE", message: "Policy is not active" },
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+        400
+      );
+    }
+
+    if (errorMessage.includes("expired")) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "POLICY_EXPIRED", message: "Policy has expired" },
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+        400
+      );
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: { code: "CLAIM_FAILED", message: "Failed to submit claim" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -428,9 +483,10 @@ app.post("/claim", zValidator("json", claimInsuranceSchema), async (c) => {
 // ============================================================================
 
 app.get("/claims", zValidator("query", paginationSchema.extend({
-  status: z.enum(["pending_review", "approved", "denied", "paid"]).optional(),
+  status: z.enum(["pending", "under_review", "approved", "denied", "paid", "disputed"]).optional(),
 })), async (c) => {
   const userId = c.get("userId");
+  const requestId = c.get("requestId");
   const { limit, cursor, status } = c.req.valid("query");
 
   if (!userId) {
@@ -443,43 +499,38 @@ app.get("/claims", zValidator("query", paginationSchema.extend({
     );
   }
 
-  // TODO: Call Convex query insurance.getUserClaims
-  const claims = [
-    {
-      claimId: "clm_001",
-      policyId: "pol_002",
-      productType: "push_protection" as const,
-      status: "paid" as const,
-      submittedAt: Date.now() - 86400000,
-      reviewedAt: Date.now() - 84600000,
-      paidAt: Date.now() - 82800000,
-      amount: 50,
-      reason: "Game ended in a push with Chiefs at -7",
-    },
-    {
-      claimId: "clm_002",
-      policyId: "pol_004",
-      productType: "close_loss" as const,
-      status: "denied" as const,
-      submittedAt: Date.now() - 172800000,
-      reviewedAt: Date.now() - 168000000,
-      denialReason: "Loss margin exceeded 1 point threshold (lost by 3)",
-    },
-  ];
+  try {
+    // Convert cursor to offset for pagination
+    const offset = cursor ? parseInt(cursor, 10) : 0;
 
-  const filteredClaims = status
-    ? claims.filter((cl) => cl.status === status)
-    : claims;
+    const result = await convex.query(api.insurance.getUserClaims, {
+      userId: userId as Id<"users">,
+      status: status as any,
+      limit,
+      offset,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      items: filteredClaims,
-      hasMore: false,
-      nextCursor: undefined,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: {
+        items: result.items,
+        hasMore: result.hasMore,
+        nextCursor: result.hasMore ? String(offset + limit) : undefined,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error fetching claims:`, error);
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message: "Failed to fetch insurance claims" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -489,6 +540,7 @@ app.get("/claims", zValidator("query", paginationSchema.extend({
 
 app.get("/credits", async (c) => {
   const userId = c.get("userId");
+  const requestId = c.get("requestId");
 
   if (!userId) {
     return c.json(
@@ -500,37 +552,28 @@ app.get("/credits", async (c) => {
     );
   }
 
-  // TODO: Call Convex query insurance.getCreditBalance
-  const credits = {
-    balance: 25.00,
-    lifetimeEarned: 75.00,
-    lifetimeUsed: 50.00,
-    pendingCredits: 0,
-    expiringCredits: {
-      amount: 10.00,
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-    },
-    recentTransactions: [
-      {
-        type: "earned" as const,
-        amount: 25.00,
-        reason: "Claim payout (Push Protection)",
-        date: Date.now() - 86400000,
-      },
-      {
-        type: "used" as const,
-        amount: -8.10,
-        reason: "Insurance premium payment",
-        date: Date.now() - 172800000,
-      },
-    ],
-  };
+  try {
+    const credits = await convex.query(api.insurance.getCreditBalance, {
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: credits,
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: credits,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error fetching credits:`, error);
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message: "Failed to fetch insurance credits" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -540,6 +583,7 @@ app.get("/credits", async (c) => {
 
 app.get("/stats", async (c) => {
   const userId = c.get("userId");
+  const requestId = c.get("requestId");
 
   if (!userId) {
     return c.json(
@@ -551,28 +595,28 @@ app.get("/stats", async (c) => {
     );
   }
 
-  // TODO: Call Convex query insurance.getUserStats
-  const stats = {
-    totalPolicies: 15,
-    activePolicies: 3,
-    totalPremiumsPaid: 145.50,
-    totalClaimsPaid: 125.00,
-    claimSuccessRate: 0.667, // 66.7%
-    avgPremiumPerPolicy: 9.70,
-    mostUsedProduct: "close_loss",
-    savingsFromInsurance: 125.00 - 145.50, // Net cost/benefit
-    monthlyStats: [
-      { month: "2024-01", policies: 5, premiums: 48.50, claims: 50.00 },
-      { month: "2024-02", policies: 6, premiums: 52.00, claims: 0 },
-      { month: "2024-03", policies: 4, premiums: 45.00, claims: 75.00 },
-    ],
-  };
+  try {
+    const stats = await convex.query(api.insurance.getUserStats, {
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: stats,
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`[${requestId}] Error fetching stats:`, error);
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message: "Failed to fetch insurance statistics" },
+        requestId,
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
+  }
 });
 
 export { app as insuranceRoutes };

@@ -2,8 +2,17 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { convex, api } from "../lib/convex";
+import type { Id } from "@pull/db/convex/_generated/dataModel";
 
 const app = new Hono<Env>();
+
+// Helper function to safely parse integers
+function parseIntSafe(value: string | undefined, defaultValue: number): number {
+  if (!value) return defaultValue;
+  const parsed = parseInt(value, 10);
+  return isNaN(parsed) ? defaultValue : parsed;
+}
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -120,30 +129,51 @@ app.get("/events", async (c) => {
   const geographicScope = c.req.query("scope");
   const state = c.req.query("state");
   const city = c.req.query("city");
-  const limit = parseInt(c.req.query("limit") ?? "50", 10);
+  const limit = parseIntSafe(c.req.query("limit"), 50);
 
-  // TODO: Fetch from Convex realEstate.getEvents
+  try {
+    const events = await convex.query(api.realEstate.getEvents, {
+      status: status || undefined,
+      category: category || undefined,
+      geographicScope: geographicScope || undefined,
+      state: state || undefined,
+      city: city || undefined,
+      limit,
+    });
 
-  return c.json({
-    success: true,
-    data: [],
-    filters: {
-      status,
-      category,
-      geographicScope,
-      state,
-      city,
-    },
-    pagination: {
-      page: 1,
-      pageSize: limit,
-      totalItems: 0,
-      totalPages: 0,
-      hasNextPage: false,
-      hasPreviousPage: false,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: events,
+      filters: {
+        status,
+        category,
+        geographicScope,
+        state,
+        city,
+      },
+      pagination: {
+        page: 1,
+        pageSize: limit,
+        totalItems: events.length,
+        totalPages: Math.ceil(events.length / limit),
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching real estate events:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch events",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -152,33 +182,39 @@ app.get("/events", async (c) => {
 app.get("/events/:ticker", async (c) => {
   const ticker = c.req.param("ticker");
 
-  // TODO: Fetch from Convex realEstate.getEventByTicker
-
-  return c.json({
-    success: true,
-    data: {
+  try {
+    const event = await convex.query(api.realEstate.getEventByTicker, {
       ticker,
-      title: "Will median home price in Miami exceed $600K by Q2 2025?",
-      description: "Prediction market for Miami-Dade County median home prices",
-      category: "median_price",
-      status: "open",
-      geographicScope: "city",
-      state: "FL",
-      city: "Miami",
-      targetMetric: "median_home_price",
-      targetValue: 600000,
-      comparisonOperator: "gt",
-      currentValue: 580000,
-      yesPrice: 0.65,
-      noPrice: 0.35,
-      totalVolume: 125000,
-      openInterest: 45000,
-      resolutionSource: "zillow",
-      resolutionDate: "2025-06-30T23:59:59Z",
-      dataPoints: [],
-    },
-    timestamp: new Date().toISOString(),
-  });
+    });
+
+    if (!event) {
+      return c.json(
+        {
+          success: false,
+          error: { code: "NOT_FOUND", message: "Event not found" },
+        },
+        404
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: event,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching event by ticker:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch event",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -188,16 +224,44 @@ app.get("/search", async (c) => {
   const query = c.req.query("q") ?? "";
   const category = c.req.query("category");
   const geographicScope = c.req.query("scope");
-  const limit = parseInt(c.req.query("limit") ?? "20", 10);
+  const limit = parseIntSafe(c.req.query("limit"), 20);
 
-  // TODO: Search via Convex realEstate.searchEvents
+  if (!query.trim()) {
+    return c.json({
+      success: true,
+      data: [],
+      query,
+      timestamp: new Date().toISOString(),
+    });
+  }
 
-  return c.json({
-    success: true,
-    data: [],
-    query,
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    const results = await convex.query(api.realEstate.searchEvents, {
+      query,
+      category: category || undefined,
+      geographicScope: geographicScope || undefined,
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: results,
+      query,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error searching events:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "SEARCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to search events",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -205,15 +269,32 @@ app.get("/search", async (c) => {
  */
 app.get("/trending", async (c) => {
   const category = c.req.query("category");
-  const limit = parseInt(c.req.query("limit") ?? "10", 10);
+  const limit = parseIntSafe(c.req.query("limit"), 10);
 
-  // TODO: Fetch from Convex realEstate.getTrendingMarkets
+  try {
+    const trending = await convex.query(api.realEstate.getTrendingMarkets, {
+      category: category || undefined,
+      limit,
+    });
 
-  return c.json({
-    success: true,
-    data: [],
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: trending,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching trending markets:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch trending markets",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -224,42 +305,91 @@ app.get("/markets/location", async (c) => {
   const state = c.req.query("state");
   const city = c.req.query("city");
   const status = c.req.query("status") ?? "open";
+  const limit = parseIntSafe(c.req.query("limit"), 50);
 
-  // TODO: Fetch from Convex realEstate.getEventsByLocation
-
-  return c.json({
-    success: true,
-    data: [],
-    filters: {
+  try {
+    const events = await convex.query(api.realEstate.getEventsByLocation, {
       geographicScope,
-      state,
-      city,
-      status,
-    },
-    timestamp: new Date().toISOString(),
-  });
+      state: state || undefined,
+      city: city || undefined,
+      status: status || undefined,
+      limit,
+    });
+
+    return c.json({
+      success: true,
+      data: events,
+      filters: {
+        geographicScope,
+        state,
+        city,
+        status,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching events by location:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch events by location",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
  * Get categories for real estate predictions
  */
 app.get("/categories", async (c) => {
-  return c.json({
-    success: true,
-    data: [
-      { id: "median_price", name: "Median Home Price", count: 0, icon: "dollar-sign" },
-      { id: "mortgage_rates", name: "Mortgage Rates", count: 0, icon: "percent" },
-      { id: "housing_inventory", name: "Housing Inventory", count: 0, icon: "home" },
-      { id: "development_sellout", name: "Development Sellout", count: 0, icon: "building" },
-      { id: "rent_prices", name: "Rent Prices", count: 0, icon: "key" },
-      { id: "days_on_market", name: "Days on Market", count: 0, icon: "clock" },
-      { id: "home_sales_volume", name: "Sales Volume", count: 0, icon: "trending-up" },
-      { id: "price_per_sqft", name: "Price per Sq Ft", count: 0, icon: "ruler" },
-      { id: "foreclosure_rate", name: "Foreclosure Rate", count: 0, icon: "alert-triangle" },
-      { id: "new_construction", name: "New Construction", count: 0, icon: "hammer" },
-    ],
-    timestamp: new Date().toISOString(),
-  });
+  try {
+    // Get all open events to count by category
+    const events = await convex.query(api.realEstate.getEvents, {
+      status: "open",
+      limit: 1000,
+    });
+
+    // Count events by category
+    const categoryCounts: Record<string, number> = {};
+    for (const event of events) {
+      categoryCounts[event.category] = (categoryCounts[event.category] || 0) + 1;
+    }
+
+    const categories = [
+      { id: "median_price", name: "Median Home Price", count: categoryCounts["median_price"] || 0, icon: "dollar-sign" },
+      { id: "mortgage_rates", name: "Mortgage Rates", count: categoryCounts["mortgage_rates"] || 0, icon: "percent" },
+      { id: "housing_inventory", name: "Housing Inventory", count: categoryCounts["housing_inventory"] || 0, icon: "home" },
+      { id: "development_sellout", name: "Development Sellout", count: categoryCounts["development_sellout"] || 0, icon: "building" },
+      { id: "rent_prices", name: "Rent Prices", count: categoryCounts["rent_prices"] || 0, icon: "key" },
+      { id: "days_on_market", name: "Days on Market", count: categoryCounts["days_on_market"] || 0, icon: "clock" },
+      { id: "home_sales_volume", name: "Sales Volume", count: categoryCounts["home_sales_volume"] || 0, icon: "trending-up" },
+      { id: "price_per_sqft", name: "Price per Sq Ft", count: categoryCounts["price_per_sqft"] || 0, icon: "ruler" },
+      { id: "foreclosure_rate", name: "Foreclosure Rate", count: categoryCounts["foreclosure_rate"] || 0, icon: "alert-triangle" },
+      { id: "new_construction", name: "New Construction", count: categoryCounts["new_construction"] || 0, icon: "hammer" },
+    ];
+
+    return c.json({
+      success: true,
+      data: categories,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch categories",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -269,19 +399,71 @@ app.post("/events", zValidator("json", createEventSchema), async (c) => {
   const userId = c.get("userId");
   const body = c.req.valid("json");
 
-  // TODO: Create via Convex realEstate.createEvent
-  // TODO: Check admin permissions
+  if (!userId) {
+    return c.json(
+      {
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "User not authenticated" },
+      },
+      401
+    );
+  }
 
-  return c.json({
-    success: true,
-    data: {
-      id: "re_event_" + Date.now(),
+  try {
+    const eventId = await convex.mutation(api.realEstate.createEvent, {
       ticker: body.ticker,
-      status: "draft",
-      createdAt: new Date().toISOString(),
-    },
-    timestamp: new Date().toISOString(),
-  }, 201);
+      title: body.title,
+      description: body.description,
+      category: body.category,
+      geographicScope: body.geographicScope,
+      country: "US",
+      state: body.state,
+      metro: body.metro,
+      city: body.city,
+      zipCode: body.zipCode,
+      targetMetric: body.targetMetric,
+      targetValue: body.targetValue,
+      comparisonOperator: body.comparisonOperator,
+      resolutionSource: body.resolutionSource,
+      resolutionDate: new Date(body.resolutionDate).getTime(),
+      openTime: new Date(body.openTime).getTime(),
+      closeTime: new Date(body.closeTime).getTime(),
+      tags: body.tags,
+      imageUrl: body.imageUrl,
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        id: eventId,
+        ticker: body.ticker,
+        status: "draft",
+        createdAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    }, 201);
+  } catch (error) {
+    console.error("Error creating event:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to create event";
+    let statusCode = 500;
+    let errorCode = "CREATE_ERROR";
+
+    if (errorMessage.includes("already exists")) {
+      statusCode = 409;
+      errorCode = "DUPLICATE";
+    }
+
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: errorCode,
+          message: errorMessage,
+        },
+      },
+      statusCode
+    );
+  }
 });
 
 // ============================================================================
@@ -295,32 +477,52 @@ app.get("/sentiment", async (c) => {
   const geographicScope = c.req.query("scope") ?? "city";
   const location = c.req.query("location") ?? "";
 
-  // TODO: Fetch from Convex realEstate.getMarketSentiment
+  if (!location) {
+    return c.json(
+      {
+        success: false,
+        error: { code: "INVALID_REQUEST", message: "Location is required" },
+      },
+      400
+    );
+  }
 
-  return c.json({
-    success: true,
-    data: {
+  try {
+    const sentiment = await convex.query(api.realEstate.getMarketSentiment, {
       geographicScope,
       location,
-      overallSentiment: 65,
-      buyerSentiment: 58,
-      sellerSentiment: 72,
-      investorSentiment: 61,
-      priceUpProbability: 0.62,
-      priceDownProbability: 0.38,
-      inventoryUpProbability: 0.45,
-      ratesDownProbability: 0.55,
-      predictionVolume: 1250000,
-      activeMarkets: 24,
-      uniqueTraders: 3420,
-      sentimentTrend: "bullish",
-      trendStrength: 72,
-      weekOverWeekChange: 3.5,
-      monthOverMonthChange: 8.2,
-      calculatedAt: new Date().toISOString(),
-    },
-    timestamp: new Date().toISOString(),
-  });
+    });
+
+    if (!sentiment) {
+      return c.json({
+        success: true,
+        data: null,
+        message: "No sentiment data available for this location",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        ...sentiment,
+        calculatedAt: sentiment.calculatedAt ? new Date(sentiment.calculatedAt).toISOString() : null,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching market sentiment:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch market sentiment",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -332,42 +534,60 @@ app.get("/index", async (c) => {
   const location = c.req.query("location");
   const includeHistory = c.req.query("history") === "true";
 
-  // TODO: Fetch from Convex realEstate.getPullIndex
+  try {
+    const index = await convex.query(api.realEstate.getPullIndex, {
+      ticker: ticker || undefined,
+      geographicScope: geographicScope || undefined,
+      location: location || undefined,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      name: "PULL Real Estate Index - National",
-      ticker: "PULL-RE-US",
-      geographicScope: "national",
-      location: "US",
-      value: 1245.67,
-      previousValue: 1232.45,
-      change: 13.22,
-      changePercent: 1.07,
-      trend: "up",
-      trendStrength: 68,
-      components: [
-        { category: "median_price", weight: 0.25, currentValue: 68, previousValue: 65, change: 3, changePercent: 4.6, sentiment: "bullish" },
-        { category: "mortgage_rates", weight: 0.20, currentValue: 45, previousValue: 48, change: -3, changePercent: -6.25, sentiment: "bearish" },
-        { category: "housing_inventory", weight: 0.15, currentValue: 52, previousValue: 50, change: 2, changePercent: 4.0, sentiment: "neutral" },
-        { category: "home_sales_volume", weight: 0.15, currentValue: 55, previousValue: 54, change: 1, changePercent: 1.85, sentiment: "neutral" },
-        { category: "days_on_market", weight: 0.10, currentValue: 62, previousValue: 60, change: 2, changePercent: 3.33, sentiment: "bullish" },
-        { category: "new_construction", weight: 0.15, currentValue: 48, previousValue: 47, change: 1, changePercent: 2.13, sentiment: "neutral" },
-      ],
-      marketSentiment: 65,
-      volatility: 12.5,
-      tradingVolume: 5420000,
-      activeMarkets: 156,
-      high52Week: 1312.45,
-      low52Week: 1089.23,
-      high52WeekDate: "2024-08-15T00:00:00Z",
-      low52WeekDate: "2024-02-10T00:00:00Z",
-      calculatedAt: new Date().toISOString(),
-      history: includeHistory ? [] : undefined,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    if (!index) {
+      return c.json({
+        success: true,
+        data: null,
+        message: "No index data available",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Fetch history if requested
+    let history = undefined;
+    if (includeHistory && index._id) {
+      try {
+        history = await convex.query(api.realEstate.getPullIndexHistory, {
+          indexId: index._id,
+          limit: 365,
+        });
+      } catch (historyError) {
+        console.error("Error fetching index history:", historyError);
+        // Continue without history
+      }
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        ...index,
+        high52WeekDate: index.high52WeekDate ? new Date(index.high52WeekDate).toISOString() : null,
+        low52WeekDate: index.low52WeekDate ? new Date(index.low52WeekDate).toISOString() : null,
+        calculatedAt: index.calculatedAt ? new Date(index.calculatedAt).toISOString() : null,
+        history: includeHistory ? history : undefined,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching PULL index:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch PULL index",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
@@ -401,23 +621,42 @@ app.get("/brokerages", async (c) => {
   const status = c.req.query("status") ?? "active";
   const tier = c.req.query("tier");
   const state = c.req.query("state");
-  const limit = parseInt(c.req.query("limit") ?? "50", 10);
+  const limit = parseIntSafe(c.req.query("limit"), 50);
 
-  // TODO: Fetch from Convex realEstate.getBrokerages
+  try {
+    const brokerages = await convex.query(api.realEstate.getBrokerages, {
+      status: status || undefined,
+      tier: tier || undefined,
+      state: state || undefined,
+      limit,
+    });
 
-  return c.json({
-    success: true,
-    data: [],
-    pagination: {
-      page: 1,
-      pageSize: limit,
-      totalItems: 0,
-      totalPages: 0,
-      hasNextPage: false,
-      hasPreviousPage: false,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: brokerages,
+      pagination: {
+        page: 1,
+        pageSize: limit,
+        totalItems: brokerages.length,
+        totalPages: Math.ceil(brokerages.length / limit),
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching brokerages:", error);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: "FETCH_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch brokerages",
+        },
+      },
+      500
+    );
+  }
 });
 
 /**
