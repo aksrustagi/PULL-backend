@@ -6,6 +6,9 @@ import { parseIntSafe } from "../utils/validation";
 import { convex, api } from "../lib/convex";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
 import { requireFeature } from "../lib/feature-flags";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("rwa");
 
 const app = new Hono<Env>();
 
@@ -41,7 +44,7 @@ app.get("/assets", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching assets:", error);
+    logger.error("Error fetching assets:", error);
     return c.json(
       {
         success: false,
@@ -82,7 +85,7 @@ app.get("/assets/:assetId", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching asset:", error);
+    logger.error("Error fetching asset:", error);
     return c.json(
       {
         success: false,
@@ -125,7 +128,7 @@ app.get("/search", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error searching assets:", error);
+    logger.error("Error searching assets:", error);
     return c.json(
       {
         success: false,
@@ -156,7 +159,7 @@ app.get("/listings", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching listings:", error);
+    logger.error("Error fetching listings:", error);
     return c.json(
       {
         success: false,
@@ -197,7 +200,7 @@ app.get("/ownership", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching ownership:", error);
+    logger.error("Error fetching ownership:", error);
     return c.json(
       {
         success: false,
@@ -251,7 +254,7 @@ app.post("/purchase", zValidator("json", purchaseSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error purchasing shares:", error);
+    logger.error("Error purchasing shares:", error);
 
     // Handle specific error messages from Convex
     const errorMessage = error instanceof Error ? error.message : "Failed to process purchase";

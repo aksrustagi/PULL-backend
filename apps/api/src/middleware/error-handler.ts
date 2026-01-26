@@ -1,6 +1,9 @@
 import { createMiddleware } from "hono/factory";
 import type { Env } from "../index";
 import { captureException } from "../lib/sentry";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("error-handler");
 
 export class AppError extends Error {
   constructor(
@@ -21,7 +24,7 @@ export const errorHandler = createMiddleware<Env>(async (c, next) => {
     const requestId = c.get("requestId") || crypto.randomUUID();
 
     // Log error
-    console.error(`[${requestId}] Error:`, error);
+    logger.error(`[${requestId}] Error:`, error);
 
     // Send to Sentry for error tracking
     captureException(error as Error, {

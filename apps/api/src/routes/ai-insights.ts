@@ -16,6 +16,9 @@ import {
   InsightTier,
 } from "@pull/core/services/ai-insights";
 import { requireFeature } from "../lib/feature-flags";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("ai-insights");
 
 const app = new Hono<Env>();
 
@@ -164,7 +167,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("Failed to generate insight:", error);
+      logger.error("Failed to generate insight:", error);
       return c.json(
         {
           success: false,
@@ -202,7 +205,7 @@ app.get("/feed", zValidator("query", GetFeedSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get feed:", error);
+    logger.error("Failed to get feed:", error);
     return c.json(
       {
         success: false,
@@ -258,7 +261,7 @@ app.get("/personalized", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get personalized feed:", error);
+    logger.error("Failed to get personalized feed:", error);
     return c.json(
       {
         success: false,
@@ -424,7 +427,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("Failed to generate bundle insights:", error);
+      logger.error("Failed to generate bundle insights:", error);
       // Refund credits
       // TODO: Implement refund
       return c.json(

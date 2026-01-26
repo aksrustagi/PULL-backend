@@ -3,6 +3,9 @@ import type { Env } from "../index";
 import { convex, api } from "../lib/convex";
 import { parseIntSafe } from "../utils/validation";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("predictions");
 
 const app = new Hono<Env>();
 
@@ -35,7 +38,7 @@ app.get("/events", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching prediction events:", error);
+    logger.error("Error fetching prediction events:", error);
     return c.json(
       {
         success: false,
@@ -81,7 +84,7 @@ app.get("/events/:ticker", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`Error fetching event ${ticker}:`, error);
+    logger.error(`Error fetching event ${ticker}:`, error);
     return c.json(
       {
         success: false,
@@ -127,7 +130,7 @@ app.get("/search", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error searching events:", error);
+    logger.error("Error searching events:", error);
     return c.json(
       {
         success: false,
@@ -173,7 +176,7 @@ app.get("/positions", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching user positions:", error);
+    logger.error("Error fetching user positions:", error);
     return c.json(
       {
         success: false,
@@ -219,7 +222,7 @@ app.get("/categories", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching categories:", error);
+    logger.error("Error fetching categories:", error);
     // Return default categories on error
     return c.json({
       success: true,
@@ -271,7 +274,7 @@ app.get("/events/:ticker/markets", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`Error fetching markets for event ${ticker}:`, error);
+    logger.error(`Error fetching markets for event ${ticker}:`, error);
     return c.json(
       {
         success: false,
@@ -317,7 +320,7 @@ app.get("/markets/:ticker", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`Error fetching market ${ticker}:`, error);
+    logger.error(`Error fetching market ${ticker}:`, error);
     return c.json(
       {
         success: false,

@@ -184,7 +184,7 @@ app.post("/deposit", zValidator("json", createDepositSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to create deposit session:", error);
+    logger.error("Failed to create deposit session", { error });
     return c.json(
       {
         success: false,
@@ -260,7 +260,7 @@ app.get("/deposit/:sessionId", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get session:", error);
+    logger.error("Failed to get session", { sessionId, error });
     return c.json(
       {
         success: false,
@@ -327,7 +327,7 @@ app.post("/withdraw", zValidator("json", createWithdrawalSchema), async (c) => {
     const checkoutService = getCheckoutService();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: userId as any });
+    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
     if (!user) {
       return c.json(
         {
@@ -355,7 +355,7 @@ app.post("/withdraw", zValidator("json", createWithdrawalSchema), async (c) => {
     }
 
     // Get user's connected account
-    const connectedAccountId = (user as any).stripeConnectedAccountId;
+    const connectedAccountId = (user as { stripeConnectedAccountId?: string }).stripeConnectedAccountId;
     if (!connectedAccountId) {
       return c.json(
         {
@@ -444,7 +444,7 @@ app.post("/withdraw", zValidator("json", createWithdrawalSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to process withdrawal:", error);
+    logger.error("Failed to process withdrawal", { userId, error });
     return c.json(
       {
         success: false,
@@ -520,7 +520,7 @@ app.post(
       const payoutService = getPayoutService();
 
       // Get user
-      const user = await convex.query(api.users.getById, { id: userId as any });
+      const user = await convex.query(api.users.getById, { id: toUserId(userId) });
       if (!user) {
         return c.json(
           {
@@ -532,7 +532,7 @@ app.post(
         );
       }
 
-      let accountId = (user as any).stripeConnectedAccountId;
+      let accountId = (user as { stripeConnectedAccountId?: string }).stripeConnectedAccountId;
 
       // Create connected account if doesn't exist
       if (!accountId) {
@@ -567,7 +567,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("Failed to setup payout account:", error);
+      logger.error("Failed to setup payout account", { userId, error });
       return c.json(
         {
           success: false,
@@ -607,7 +607,7 @@ app.get("/payout-account", async (c) => {
     const payoutService = getPayoutService();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: userId as any });
+    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
     if (!user) {
       return c.json(
         {
@@ -619,7 +619,7 @@ app.get("/payout-account", async (c) => {
       );
     }
 
-    const accountId = (user as any).stripeConnectedAccountId;
+    const accountId = (user as { stripeConnectedAccountId?: string }).stripeConnectedAccountId;
     if (!accountId) {
       return c.json({
         success: true,
@@ -659,7 +659,7 @@ app.get("/payout-account", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get payout account:", error);
+    logger.error("Failed to get payout account", { userId, error });
     return c.json(
       {
         success: false,
@@ -698,7 +698,7 @@ app.get("/payout-account/dashboard", async (c) => {
     const payoutService = getPayoutService();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: userId as any });
+    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
     if (!user) {
       return c.json(
         {
@@ -710,7 +710,7 @@ app.get("/payout-account/dashboard", async (c) => {
       );
     }
 
-    const accountId = (user as any).stripeConnectedAccountId;
+    const accountId = (user as { stripeConnectedAccountId?: string }).stripeConnectedAccountId;
     if (!accountId) {
       return c.json(
         {
@@ -736,7 +736,7 @@ app.get("/payout-account/dashboard", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to create dashboard link:", error);
+    logger.error("Failed to create dashboard link", { userId, error });
     return c.json(
       {
         success: false,
@@ -780,7 +780,7 @@ app.post("/methods", zValidator("json", addPaymentMethodSchema), async (c) => {
     const stripeClient = getStripeClient();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: userId as any });
+    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
     if (!user) {
       return c.json(
         {
@@ -829,7 +829,7 @@ app.post("/methods", zValidator("json", addPaymentMethodSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to attach payment method:", error);
+    logger.error("Failed to attach payment method", { userId, error });
     return c.json(
       {
         success: false,
@@ -868,7 +868,7 @@ app.get("/methods", async (c) => {
     const stripeClient = getStripeClient();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: userId as any });
+    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
     if (!user) {
       return c.json(
         {
@@ -930,7 +930,7 @@ app.get("/methods", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to list payment methods:", error);
+    logger.error("Failed to list payment methods", { userId, error });
     return c.json(
       {
         success: false,
@@ -983,7 +983,7 @@ app.delete("/methods/:methodId", async (c) => {
     }
 
     // Get user and verify ownership
-    const user = await convex.query(api.users.getById, { id: userId as any });
+    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
     if (!user) {
       return c.json(
         {
@@ -1017,7 +1017,7 @@ app.delete("/methods/:methodId", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to detach payment method:", error);
+    logger.error("Failed to detach payment method", { userId, methodId, error });
     return c.json(
       {
         success: false,
@@ -1060,7 +1060,7 @@ app.post(
       const stripeClient = getStripeClient();
 
       // Get user
-      const user = await convex.query(api.users.getById, { id: userId as any });
+      const user = await convex.query(api.users.getById, { id: toUserId(userId) });
       if (!user) {
         return c.json(
           {
@@ -1096,7 +1096,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("Failed to create setup intent:", error);
+      logger.error("Failed to create setup intent", { userId, error });
       return c.json(
         {
           success: false,
@@ -1198,7 +1198,7 @@ app.get("/history", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get payment history:", error);
+    logger.error("Failed to get payment history", { userId, error });
     return c.json(
       {
         success: false,
@@ -1249,7 +1249,7 @@ app.get("/balance", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Failed to get balance:", error);
+    logger.error("Failed to get balance", { userId, error });
     return c.json(
       {
         success: false,
