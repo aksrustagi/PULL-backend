@@ -916,3 +916,407 @@ export const getTradingPatterns = query({
       .first();
   },
 });
+
+// ============================================================================
+// TRADING ROOM QUERIES
+// ============================================================================
+
+/**
+ * Get trading room by ID
+ */
+export const getTradingRoom = query({
+  args: {
+    roomId: v.id("tradingRooms"),
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) return null;
+
+    // Get owner info
+    const owner = await ctx.db.get(room.ownerId);
+
+    // Get membership info if userId provided
+    let membership = null;
+    if (args.userId) {
+      membership = await ctx.db
+        .query("tradingRoomMembers")
+        .withIndex("by_room_user", (q) =>
+          q.eq("roomId", args.roomId).eq("userId", args.userId)
+        )
+        .unique();
+    }
+
+    return {
+      ...room,
+      owner,
+      membership,
+    };
+  },
+});
+
+/**
+ * Search trading rooms
+ */
+export const searchTradingRooms = query({
+  args: {
+    query: v.optional(v.string()),
+    type: v.optional(v.union(
+      v.literal("public"),
+      v.literal("private"),
+      v.literal("premium"),
+      v.literal("exclusive")
+    )),
+    assetClasses: v.optional(v.array(v.string())),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 20;
+
+    let roomsQuery = ctx.db.query("tradingRooms");
+
+    if (args.type) {
+      roomsQuery = roomsQuery.withIndex("by_type", (q) =>
+        q.eq("type", args.type).eq("status", "active")
+      );
+    } else {
+      roomsQuery = roomsQuery.withIndex("by_status", (q) =>
+        q.eq("status", "active")
+      );
+    }
+
+    const rooms = await roomsQuery.order("desc").take(limit + 1);
+
+    // Filter by asset classes if provided
+    let filteredRooms = rooms;
+    if (args.assetClasses && args.assetClasses.length > 0) {
+      filteredRooms = rooms.filter((room) =>
+        room.assetClasses.some((ac) => args.assetClasses!.includes(ac))
+      );
+    }
+
+    // Filter by search query if provided
+    if (args.query) {
+      const searchLower = args.query.toLowerCase();
+      filteredRooms = filteredRooms.filter(
+        (room) =>
+          room.name.toLowerCase().includes(searchLower) ||
+          room.description?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    const hasMore = filteredRooms.length > limit;
+    const items = hasMore ? filteredRooms.slice(0, limit) : filteredRooms;
+
+    // Fetch owner info for each room
+    const roomsWithOwners = await Promise.all(
+      items.map(async (room) => {
+        const owner = await ctx.db.get(room.ownerId);
+        return { ...room, owner };
+      })
+    );
+
+    return {
+      rooms: roomsWithOwners,
+      hasMore,
+      cursor: hasMore ? items[limit - 1]._id : undefined,
+    };
+  },
+});
+
+/**
+ * Get popular trading rooms
+ */
+export const getPopularTradingRooms = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 10;
+
+    const rooms = await ctx.db
+      .query("tradingRooms")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .order("desc")
+      .take(limit * 2);
+
+    // Sort by member count
+    const sortedRooms = rooms
+      .sort((a, b) => b.memberCount - a.memberCount)
+      .slice(0, limit);
+
+    // Fetch owner info
+    return await Promise.all(
+      sortedRooms.map(async (room) => {
+        const owner = await ctx.db.get(room.ownerId);
+        return { ...room, owner };
+      })
+    );
+  },
+});
+
+/**
+ * Get user's trading rooms
+ */
+export const getUserTradingRooms = query({
+  args: {
+    userId: v.id("users"),
+    role: v.optional(v.union(
+      v.literal("owner"),
+      v.literal("moderator"),
+      v.literal("contributor"),
+      v.literal("member"),
+      v.literal("viewer")
+    )),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 50;
+
+    const memberships = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_user", (q) =>
+        q.eq("userId", args.userId).eq("status", "active")
+      )
+      .order("desc")
+      .take(limit + 1);
+
+    // Filter by role if provided
+    let filteredMemberships = memberships;
+    if (args.role) {
+      filteredMemberships = memberships.filter((m) => m.role === args.role);
+    }
+
+    const hasMore = filteredMemberships.length > limit;
+    const items = hasMore ? filteredMemberships.slice(0, limit) : filteredMemberships;
+
+    // Fetch room data for each membership
+    const rooms = await Promise.all(
+      items.map(async (membership) => {
+        const room = await ctx.db.get(membership.roomId);
+        const owner = room ? await ctx.db.get(room.ownerId) : null;
+        return {
+          ...room,
+          owner,
+          membership,
+        };
+      })
+    );
+
+    return {
+      rooms: rooms.filter((r) => r !== null),
+      hasMore,
+      cursor: hasMore ? items[limit - 1]._id : undefined,
+    };
+  },
+});
+
+/**
+ * Get trading room members
+ */
+export const getTradingRoomMembers = query({
+  args: {
+    roomId: v.id("tradingRooms"),
+    status: v.optional(v.union(
+      v.literal("active"),
+      v.literal("pending"),
+      v.literal("banned"),
+      v.literal("left")
+    )),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 50;
+    const status = args.status ?? "active";
+
+    const members = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room", (q) =>
+        q.eq("roomId", args.roomId).eq("status", status)
+      )
+      .order("desc")
+      .take(limit + 1);
+
+    const hasMore = members.length > limit;
+    const items = hasMore ? members.slice(0, limit) : members;
+
+    // Fetch user data
+    const membersWithUsers = await Promise.all(
+      items.map(async (member) => {
+        const user = await ctx.db.get(member.userId);
+        const profile = await ctx.db
+          .query("traderProfiles")
+          .withIndex("by_user", (q) => q.eq("userId", member.userId))
+          .unique();
+        return { ...member, user, traderProfile: profile };
+      })
+    );
+
+    return {
+      members: membersWithUsers,
+      hasMore,
+      cursor: hasMore ? items[limit - 1]._id : undefined,
+    };
+  },
+});
+
+/**
+ * Get trading room messages
+ */
+export const getTradingRoomMessages = query({
+  args: {
+    roomId: v.id("tradingRooms"),
+    type: v.optional(v.union(
+      v.literal("text"),
+      v.literal("position_share"),
+      v.literal("trade_share"),
+      v.literal("analysis"),
+      v.literal("alert"),
+      v.literal("system")
+    )),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 50;
+
+    let messagesQuery;
+    if (args.type) {
+      messagesQuery = ctx.db
+        .query("tradingRoomMessages")
+        .withIndex("by_room_type", (q) =>
+          q.eq("roomId", args.roomId).eq("type", args.type)
+        );
+    } else {
+      messagesQuery = ctx.db
+        .query("tradingRoomMessages")
+        .withIndex("by_room", (q) => q.eq("roomId", args.roomId));
+    }
+
+    const messages = await messagesQuery
+      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .order("desc")
+      .take(limit + 1);
+
+    const hasMore = messages.length > limit;
+    const items = hasMore ? messages.slice(0, limit) : messages;
+
+    // Fetch sender data
+    const messagesWithSenders = await Promise.all(
+      items.map(async (message) => {
+        const sender = await ctx.db.get(message.senderId);
+        return { ...message, sender };
+      })
+    );
+
+    return {
+      messages: messagesWithSenders,
+      hasMore,
+      cursor: hasMore ? items[limit - 1]._id : undefined,
+    };
+  },
+});
+
+/**
+ * Get trading room stats
+ */
+export const getTradingRoomStats = query({
+  args: {
+    roomId: v.id("tradingRooms"),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) return null;
+
+    // Get active members count
+    const activeMembers = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room", (q) =>
+        q.eq("roomId", args.roomId).eq("status", "active")
+      )
+      .collect();
+
+    // Get recent messages count (last 24 hours)
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const recentMessages = await ctx.db
+      .query("tradingRoomMessages")
+      .withIndex("by_room", (q) => q.eq("roomId", args.roomId))
+      .filter((q) => q.gte(q.field("createdAt"), oneDayAgo))
+      .collect();
+
+    // Get position shares count (last 24 hours)
+    const positionShares = recentMessages.filter(
+      (m) => m.type === "position_share" || m.type === "trade_share"
+    );
+
+    // Get top contributors
+    const memberStats = activeMembers
+      .sort((a, b) => b.positionsSharedCount - a.positionsSharedCount)
+      .slice(0, 5);
+
+    const topContributors = await Promise.all(
+      memberStats.map(async (member) => {
+        const user = await ctx.db.get(member.userId);
+        return {
+          userId: member.userId,
+          username: user?.username,
+          displayName: user?.displayName,
+          avatarUrl: user?.avatarUrl,
+          positionsShared: member.positionsSharedCount,
+          messagesCount: member.messagesCount,
+        };
+      })
+    );
+
+    return {
+      roomId: args.roomId,
+      memberCount: room.memberCount,
+      activeMemberCount: activeMembers.length,
+      totalMessages: room.totalMessages,
+      totalPositionsShared: room.totalPositionsShared,
+      messagesLast24h: recentMessages.length,
+      positionSharesLast24h: positionShares.length,
+      topContributors,
+      lastActivityAt: room.lastActivityAt,
+    };
+  },
+});
+
+/**
+ * Get room member by room and user
+ */
+export const getTradingRoomMember = query({
+  args: {
+    roomId: v.id("tradingRooms"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room_user", (q) =>
+        q.eq("roomId", args.roomId).eq("userId", args.userId)
+      )
+      .unique();
+  },
+});
+
+/**
+ * Count rooms owned by user
+ */
+export const countUserOwnedRooms = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const rooms = await ctx.db
+      .query("tradingRooms")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.userId))
+      .filter((q) => q.neq(q.field("status"), "archived"))
+      .collect();
+
+    return rooms.length;
+  },
+});
