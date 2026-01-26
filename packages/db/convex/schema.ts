@@ -70,6 +70,14 @@ export default defineSchema({
     walletAddress: v.optional(v.string()),
     passwordHash: v.optional(v.string()),
 
+    // Role-based access control
+    role: v.optional(v.union(
+      v.literal("user"),
+      v.literal("moderator"),
+      v.literal("admin"),
+      v.literal("superadmin")
+    )),
+
     // Referral
     referralCode: v.string(),
     referredBy: v.optional(v.id("users")),
@@ -86,6 +94,7 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_kyc_status", ["kycStatus"])
     .index("by_referrer", ["referredBy"])
+    .index("by_role", ["role"])
     .searchIndex("search_users", {
       searchField: "displayName",
       filterFields: ["status", "kycTier"],
@@ -3822,6 +3831,642 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   // ============================================================================
+  // VIRAL GROWTH & SOCIAL FEATURES (Feature Set 19-25)
+  // ============================================================================
+
+  /**
+   * User Presence - Real-time collaboration and presence tracking
+   */
+  userPresence: defineTable({
+    userId: v.id("users"),
+    roomId: v.string(),
+    roomType: v.union(
+      v.literal("roster"),
+      v.literal("trade"),
+      v.literal("waiver"),
+      v.literal("draft"),
+      v.literal("lineup")
+    ),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    status: v.union(v.literal("active"), v.literal("idle"), v.literal("away")),
+    cursorX: v.optional(v.number()),
+    cursorY: v.optional(v.number()),
+    cursorElement: v.optional(v.string()),
+    lastHeartbeat: v.number(),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_room", ["roomId"])
+    .index("by_user", ["userId"])
+    .index("by_room_and_status", ["roomId", "status"]),
+
+  /**
+   * Collaboration Sessions - CRDT-based collaboration
+   */
+  collaborationSessions: defineTable({
+    sessionId: v.string(),
+    roomId: v.string(),
+    participants: v.array(v.id("users")),
+    activeEditors: v.array(v.id("users")),
+    conflictResolutionStrategy: v.union(
+      v.literal("last-write-wins"),
+      v.literal("crdt")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_room", ["roomId"])
+    .index("by_session", ["sessionId"]),
+
+  /**
+   * Trade Analysis - AI-powered trade analysis results
+   */
+  tradeAnalysis: defineTable({
+    tradeId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.string(),
+    teamIdOffering: v.string(),
+    teamIdReceiving: v.string(),
+    fairnessScore: v.number(),
+    recommendation: v.union(
+      v.literal("accept"),
+      v.literal("reject"),
+      v.literal("counter"),
+      v.literal("needs_review")
+    ),
+    teamOfferingGrade: v.string(),
+    teamReceivingGrade: v.string(),
+    reasoning: v.string(),
+    valueGap: v.number(),
+    collusionRisk: v.number(),
+    vetoLikelihood: v.number(),
+    sportSpecificAnalysis: v.any(),
+    createdAt: v.number(),
+  })
+    .index("by_trade", ["tradeId"])
+    .index("by_league", ["leagueId"])
+    .index("by_collusion_risk", ["collusionRisk"]),
+
+  /**
+   * Collusion Flags - Suspicious trade detection
+   */
+  collusionFlags: defineTable({
+    tradeId: v.string(),
+    leagueId: v.string(),
+    flagged: v.boolean(),
+    confidenceScore: v.number(),
+    reasons: v.array(v.string()),
+    recommendedAction: v.union(
+      v.literal("allow"),
+      v.literal("review"),
+      v.literal("veto")
+    ),
+    reviewers: v.optional(v.array(v.id("users"))),
+    createdAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+  })
+    .index("by_trade", ["tradeId"])
+    .index("by_league", ["leagueId"])
+    .index("by_flagged", ["flagged", "leagueId"]),
+
+  /**
+   * Voice Commands - Processed voice interactions
+   */
+  voiceCommands: defineTable({
+    commandId: v.string(),
+    userId: v.id("users"),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.optional(v.string()),
+    teamId: v.optional(v.string()),
+    rawTranscript: v.string(),
+    parsedAction: v.union(
+      v.literal("set_lineup"),
+      v.literal("add_player"),
+      v.literal("drop_player"),
+      v.literal("trade"),
+      v.literal("query_stats"),
+      v.literal("get_recap"),
+      v.literal("other")
+    ),
+    parsedEntities: v.any(),
+    confidence: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    result: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Audio Recaps - Generated audio summaries
+   */
+  audioRecaps: defineTable({
+    recapId: v.string(),
+    userId: v.id("users"),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.string(),
+    recapType: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("trade"),
+      v.literal("matchup")
+    ),
+    textContent: v.string(),
+    audioUrl: v.optional(v.string()),
+    duration: v.optional(v.number()),
+    voice: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_league", ["leagueId"])
+    .index("by_type", ["recapType"]),
+
+  /**
+   * Screenshot Analysis - Computer vision results
+   */
+  screenshotAnalysis: defineTable({
+    analysisId: v.string(),
+    userId: v.id("users"),
+    imageUrl: v.string(),
+    analysisType: v.union(
+      v.literal("trade_screenshot"),
+      v.literal("jersey_scan"),
+      v.literal("tv_sync"),
+      v.literal("lineup_screenshot")
+    ),
+    sport: v.optional(
+      v.union(
+        v.literal("nfl"),
+        v.literal("nba"),
+        v.literal("mlb"),
+        v.literal("golf"),
+        v.literal("ncaa")
+      )
+    ),
+    extractedData: v.any(),
+    confidence: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_type", ["analysisType"]),
+
+  /**
+   * Injury Risk Scores - ML-based injury predictions
+   */
+  injuryRiskScores: defineTable({
+    playerId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    riskScore: v.number(),
+    riskLevel: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("critical")
+    ),
+    factors: v.array(v.any()),
+    predictionType: v.optional(v.string()),
+    probabilityPercent: v.number(),
+    timeframe: v.union(
+      v.literal("thisWeek"),
+      v.literal("thisMonth"),
+      v.literal("thisSeason")
+    ),
+    insurancePrice: v.optional(v.number()),
+    lastUpdated: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_risk_level", ["riskLevel"])
+    .index("by_sport", ["sport", "riskLevel"]),
+
+  /**
+   * Injury History - Historical injury tracking
+   */
+  injuryHistory: defineTable({
+    playerId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    injuryDate: v.number(),
+    injuryType: v.string(),
+    bodyPart: v.string(),
+    severity: v.union(
+      v.literal("minor"),
+      v.literal("moderate"),
+      v.literal("major"),
+      v.literal("career_threatening")
+    ),
+    gamesMissed: v.number(),
+    recoveryTime: v.optional(v.number()),
+    circumstances: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_date", ["injuryDate"]),
+
+  /**
+   * User Connections - Social graph relationships
+   */
+  userConnections: defineTable({
+    userId: v.id("users"),
+    connectedUserId: v.id("users"),
+    connectionType: v.union(
+      v.literal("friend"),
+      v.literal("league_mate"),
+      v.literal("competitor"),
+      v.literal("pending")
+    ),
+    source: v.union(
+      v.literal("contact_import"),
+      v.literal("mutual_league"),
+      v.literal("search"),
+      v.literal("recommendation")
+    ),
+    commonLeagues: v.array(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_connected_user", ["connectedUserId"])
+    .index("by_type", ["connectionType"]),
+
+  /**
+   * League Reputation - Trust and quality scores
+   */
+  leagueReputation: defineTable({
+    leagueId: v.string(),
+    reputationScore: v.number(),
+    completionRate: v.number(),
+    payoutHistory: v.union(
+      v.literal("perfect"),
+      v.literal("good"),
+      v.literal("issues"),
+      v.literal("unknown")
+    ),
+    activityLevel: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+    memberRetention: v.number(),
+    averageTenure: v.number(),
+    verified: v.boolean(),
+    badges: v.array(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_score", ["reputationScore"]),
+
+  /**
+   * Contact Imports - Phone/email contact matching
+   */
+  contactImports: defineTable({
+    importId: v.string(),
+    userId: v.id("users"),
+    source: v.union(v.literal("google"), v.literal("apple"), v.literal("csv")),
+    contactsFound: v.number(),
+    matchedUsers: v.array(v.id("users")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Virtual Cards - PULL credit cards
+   * NOTE: Card data is tokenized via Stripe. We only store references, never raw card numbers.
+   */
+  virtualCards: defineTable({
+    cardId: v.string(),
+    userId: v.id("users"),
+    stripeCardToken: v.string(), // Stripe token reference, NOT raw card number
+    last4: v.string(), // Safe to store for display
+    expiryMonth: v.number(),
+    expiryYear: v.number(),
+    balance: v.number(),
+    cashbackRate: v.number(),
+    status: v.union(v.literal("active"), v.literal("suspended"), v.literal("closed")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Tax Documents - 1099s and tax forms
+   */
+  taxDocuments: defineTable({
+    documentId: v.string(),
+    userId: v.id("users"),
+    taxYear: v.number(),
+    documentType: v.union(
+      v.literal("1099-MISC"),
+      v.literal("1099-K"),
+      v.literal("W-9")
+    ),
+    totalWinnings: v.number(),
+    totalWithheld: v.number(),
+    fileUrl: v.string(),
+    status: v.union(v.literal("draft"), v.literal("final"), v.literal("amended")),
+    generatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_year", ["taxYear"]),
+
+  /**
+   * Crypto Wallets - Connected blockchain wallets
+   */
+  cryptoWallets: defineTable({
+    walletId: v.string(),
+    userId: v.id("users"),
+    walletAddress: v.string(),
+    blockchain: v.union(
+      v.literal("bitcoin"),
+      v.literal("ethereum"),
+      v.literal("solana"),
+      v.literal("polygon")
+    ),
+    balances: v.any(), // JSON with BTC, ETH, USDC, SOL
+    connectedAt: v.number(),
+    verified: v.boolean(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_wallet", ["walletAddress"]),
+
+  /**
+   * User Streaks - Login and activity streaks
+   */
+  userStreaks: defineTable({
+    userId: v.id("users"),
+    currentStreak: v.number(),
+    longestStreak: v.number(),
+    lastLoginDate: v.number(),
+    multiplier: v.number(),
+    rewards: v.array(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  /**
+   * Season Passes - Battle pass system
+   */
+  seasonPasses: defineTable({
+    passId: v.string(),
+    userId: v.id("users"),
+    season: v.string(),
+    tier: v.union(v.literal("free"), v.literal("premium")),
+    currentLevel: v.number(),
+    currentXP: v.number(),
+    xpToNextLevel: v.number(),
+    rewards: v.array(v.any()),
+    purchasedAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_season", ["season"]),
+
+  /**
+   * Achievements - Unlockable achievements
+   */
+  achievements: defineTable({
+    achievementId: v.string(),
+    name: v.string(),
+    description: v.string(),
+    icon: v.string(),
+    category: v.union(
+      v.literal("trading"),
+      v.literal("social"),
+      v.literal("performance"),
+      v.literal("participation"),
+      v.literal("special")
+    ),
+    sport: v.optional(
+      v.union(
+        v.literal("nfl"),
+        v.literal("nba"),
+        v.literal("mlb"),
+        v.literal("golf"),
+        v.literal("ncaa"),
+        v.literal("all")
+      )
+    ),
+    xpReward: v.number(),
+    rarity: v.union(
+      v.literal("common"),
+      v.literal("rare"),
+      v.literal("epic"),
+      v.literal("legendary")
+    ),
+    criteria: v.any(),
+    createdAt: v.number(),
+  })
+    .index("by_category", ["category"])
+    .index("by_rarity", ["rarity"]),
+
+  /**
+   * Year In Review - Shareable season summaries
+   */
+  yearInReview: defineTable({
+    reviewId: v.string(),
+    userId: v.id("users"),
+    year: v.number(),
+    stats: v.any(), // JSON with all stats
+    highlights: v.array(v.string()),
+    shareableImageUrl: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_year", ["year"]),
+
+  /**
+   * League Trophies - Championship NFTs
+   */
+  leagueTrophies: defineTable({
+    trophyId: v.string(),
+    leagueId: v.string(),
+    seasonId: v.string(),
+    winnerId: v.id("users"),
+    trophyType: v.union(
+      v.literal("champion"),
+      v.literal("runner_up"),
+      v.literal("third_place"),
+      v.literal("most_points"),
+      v.literal("best_trade")
+    ),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    mintedNFT: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_winner", ["winnerId"]),
+
+  /**
+   * Playoff Simulations - Monte Carlo results
+   */
+  playoffSimulations: defineTable({
+    simulationId: v.string(),
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    iterations: v.number(),
+    results: v.any(), // JSON with probabilities
+    scenarioBreakdown: v.array(v.any()),
+    runDate: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Bench Analysis - Points left on bench tracking
+   */
+  benchAnalysis: defineTable({
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    season: v.string(),
+    totalPointsLeftOnBench: v.number(),
+    averagePointsLeftPerWeek: v.number(),
+    worstWeek: v.any(),
+    costlyDecisions: v.array(v.any()),
+    rankInLeague: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Draft Grades - Hindsight draft analysis
+   */
+  draftGrades: defineTable({
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    season: v.string(),
+    originalGrade: v.string(),
+    hindsightGrade: v.string(),
+    picks: v.array(v.any()),
+    valueAdded: v.number(),
+    steals: v.array(v.any()),
+    busts: v.array(v.any()),
+    overallRank: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Self Exclusions - Responsible gaming
+   */
+  selfExclusions: defineTable({
+    exclusionId: v.string(),
+    userId: v.id("users"),
+    startDate: v.number(),
+    endDate: v.number(),
+    type: v.union(v.literal("temporary"), v.literal("permanent")),
+    reason: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("expired"), v.literal("revoked")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Deposit Limits - Spending controls
+   */
+  depositLimits: defineTable({
+    limitId: v.string(),
+    userId: v.id("users"),
+    limitType: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly")),
+    amount: v.number(),
+    currentSpent: v.number(),
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Session Limits - Time controls
+   */
+  sessionLimits: defineTable({
+    limitId: v.string(),
+    userId: v.id("users"),
+    maxDurationMinutes: v.number(),
+    currentSessionStart: v.optional(v.number()),
+    warningThresholdMinutes: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    createdAt: v.number(),
   // BACKUP & RECOVERY TABLES
   // ============================================================================
 
@@ -6706,6 +7351,675 @@ export default defineSchema({
   })
     .index("by_user", ["userId"]),
 
+  // ============================================================================
+  // 10X FEATURE ENHANCEMENT TABLES
+  // ============================================================================
+
+  /**
+   * User Presence - Real-time collaboration and presence tracking
+   */
+  userPresence: defineTable({
+    userId: v.id("users"),
+    roomId: v.string(),
+    roomType: v.union(
+      v.literal("roster"),
+      v.literal("trade"),
+      v.literal("waiver"),
+      v.literal("draft"),
+      v.literal("lineup")
+    ),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    status: v.union(v.literal("active"), v.literal("idle"), v.literal("away")),
+    cursorX: v.optional(v.number()),
+    cursorY: v.optional(v.number()),
+    cursorElement: v.optional(v.string()),
+    lastHeartbeat: v.number(),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_room", ["roomId"])
+    .index("by_user", ["userId"])
+    .index("by_room_and_status", ["roomId", "status"]),
+
+  /**
+   * Collaboration Sessions - CRDT-based collaboration
+   */
+  collaborationSessions: defineTable({
+    sessionId: v.string(),
+    roomId: v.string(),
+    participants: v.array(v.id("users")),
+    activeEditors: v.array(v.id("users")),
+    conflictResolutionStrategy: v.union(
+      v.literal("last-write-wins"),
+      v.literal("crdt")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_room", ["roomId"])
+    .index("by_session", ["sessionId"]),
+
+  /**
+   * Trade Analysis - AI-powered trade analysis results
+   */
+  tradeAnalysis: defineTable({
+    tradeId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.string(),
+    teamIdOffering: v.string(),
+    teamIdReceiving: v.string(),
+    fairnessScore: v.number(),
+    recommendation: v.union(
+      v.literal("accept"),
+      v.literal("reject"),
+      v.literal("counter"),
+      v.literal("needs_review")
+    ),
+    teamOfferingGrade: v.string(),
+    teamReceivingGrade: v.string(),
+    reasoning: v.string(),
+    valueGap: v.number(),
+    collusionRisk: v.number(),
+    vetoLikelihood: v.number(),
+    sportSpecificAnalysis: v.any(),
+    createdAt: v.number(),
+  })
+    .index("by_trade", ["tradeId"])
+    .index("by_league", ["leagueId"])
+    .index("by_collusion_risk", ["collusionRisk"]),
+
+  /**
+   * Collusion Flags - Suspicious trade detection
+   */
+  collusionFlags: defineTable({
+    tradeId: v.string(),
+    leagueId: v.string(),
+    flagged: v.boolean(),
+    confidenceScore: v.number(),
+    reasons: v.array(v.string()),
+    recommendedAction: v.union(
+      v.literal("allow"),
+      v.literal("review"),
+      v.literal("veto")
+    ),
+    reviewers: v.optional(v.array(v.id("users"))),
+    createdAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+  })
+    .index("by_trade", ["tradeId"])
+    .index("by_league", ["leagueId"])
+    .index("by_flagged", ["flagged", "leagueId"]),
+
+  /**
+   * Voice Commands - Processed voice interactions
+   */
+  voiceCommands: defineTable({
+    commandId: v.string(),
+    userId: v.id("users"),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.optional(v.string()),
+    teamId: v.optional(v.string()),
+    rawTranscript: v.string(),
+    parsedAction: v.union(
+      v.literal("set_lineup"),
+      v.literal("add_player"),
+      v.literal("drop_player"),
+      v.literal("trade"),
+      v.literal("query_stats"),
+      v.literal("get_recap"),
+      v.literal("other")
+    ),
+    parsedEntities: v.any(),
+    confidence: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    result: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Audio Recaps - Generated audio summaries
+   */
+  audioRecaps: defineTable({
+    recapId: v.string(),
+    userId: v.id("users"),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.string(),
+    recapType: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("trade"),
+      v.literal("matchup")
+    ),
+    textContent: v.string(),
+    audioUrl: v.optional(v.string()),
+    duration: v.optional(v.number()),
+    voice: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_league", ["leagueId"])
+    .index("by_type", ["recapType"]),
+
+  /**
+   * Screenshot Analysis - Computer vision results
+   */
+  screenshotAnalysis: defineTable({
+    analysisId: v.string(),
+    userId: v.id("users"),
+    imageUrl: v.string(),
+    analysisType: v.union(
+      v.literal("trade_screenshot"),
+      v.literal("jersey_scan"),
+      v.literal("tv_sync"),
+      v.literal("lineup_screenshot")
+    ),
+    sport: v.optional(
+      v.union(
+        v.literal("nfl"),
+        v.literal("nba"),
+        v.literal("mlb"),
+        v.literal("golf"),
+        v.literal("ncaa")
+      )
+    ),
+    extractedData: v.any(),
+    confidence: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_type", ["analysisType"]),
+
+  /**
+   * Injury Risk Scores - ML-based injury predictions
+   */
+  injuryRiskScores: defineTable({
+    playerId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    riskScore: v.number(),
+    riskLevel: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("critical")
+    ),
+    factors: v.array(v.any()),
+    predictionType: v.optional(v.string()),
+    probabilityPercent: v.number(),
+    timeframe: v.union(
+      v.literal("thisWeek"),
+      v.literal("thisMonth"),
+      v.literal("thisSeason")
+    ),
+    insurancePrice: v.optional(v.number()),
+    lastUpdated: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_risk_level", ["riskLevel"])
+    .index("by_sport", ["sport", "riskLevel"]),
+
+  /**
+   * Injury History - Historical injury tracking
+   */
+  injuryHistory: defineTable({
+    playerId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    injuryDate: v.number(),
+    injuryType: v.string(),
+    bodyPart: v.string(),
+    severity: v.union(
+      v.literal("minor"),
+      v.literal("moderate"),
+      v.literal("major"),
+      v.literal("career_threatening")
+    ),
+    gamesMissed: v.number(),
+    recoveryTime: v.optional(v.number()),
+    circumstances: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_date", ["injuryDate"]),
+
+  /**
+   * User Connections - Social graph relationships
+   */
+  userConnections: defineTable({
+    userId: v.id("users"),
+    connectedUserId: v.id("users"),
+    connectionType: v.union(
+      v.literal("friend"),
+      v.literal("league_mate"),
+      v.literal("competitor"),
+      v.literal("pending")
+    ),
+    source: v.union(
+      v.literal("contact_import"),
+      v.literal("mutual_league"),
+      v.literal("search"),
+      v.literal("recommendation")
+    ),
+    commonLeagues: v.array(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_connected_user", ["connectedUserId"])
+    .index("by_type", ["connectionType"]),
+
+  /**
+   * League Reputation - Trust and quality scores
+   */
+  leagueReputation: defineTable({
+    leagueId: v.string(),
+    reputationScore: v.number(),
+    completionRate: v.number(),
+    payoutHistory: v.union(
+      v.literal("perfect"),
+      v.literal("good"),
+      v.literal("issues"),
+      v.literal("unknown")
+    ),
+    activityLevel: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+    memberRetention: v.number(),
+    averageTenure: v.number(),
+    verified: v.boolean(),
+    badges: v.array(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_score", ["reputationScore"]),
+
+  /**
+   * Contact Imports - Phone/email contact matching
+   */
+  contactImports: defineTable({
+    importId: v.string(),
+    userId: v.id("users"),
+    source: v.union(v.literal("google"), v.literal("apple"), v.literal("csv")),
+    contactsFound: v.number(),
+    matchedUsers: v.array(v.id("users")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Virtual Cards - PULL credit cards
+   * NOTE: Card data is tokenized via Stripe. We only store references, never raw card numbers.
+   */
+  virtualCards: defineTable({
+    cardId: v.string(),
+    userId: v.id("users"),
+    stripeCardToken: v.string(), // Stripe token reference, NOT raw card number
+    last4: v.string(), // Safe to store for display
+    expiryMonth: v.number(),
+    expiryYear: v.number(),
+    balance: v.number(),
+    cashbackRate: v.number(),
+    status: v.union(v.literal("active"), v.literal("suspended"), v.literal("closed")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Tax Documents - 1099s and tax forms
+   */
+  taxDocuments: defineTable({
+    documentId: v.string(),
+    userId: v.id("users"),
+    taxYear: v.number(),
+    documentType: v.union(
+      v.literal("1099-MISC"),
+      v.literal("1099-K"),
+      v.literal("W-9")
+    ),
+    totalWinnings: v.number(),
+    totalWithheld: v.number(),
+    fileUrl: v.string(),
+    status: v.union(v.literal("draft"), v.literal("final"), v.literal("amended")),
+    generatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_year", ["taxYear"]),
+
+  /**
+   * Crypto Wallets - Connected blockchain wallets
+   */
+  cryptoWallets: defineTable({
+    walletId: v.string(),
+    userId: v.id("users"),
+    walletAddress: v.string(),
+    blockchain: v.union(
+      v.literal("bitcoin"),
+      v.literal("ethereum"),
+      v.literal("solana"),
+      v.literal("polygon")
+    ),
+    balances: v.any(), // JSON with BTC, ETH, USDC, SOL
+    connectedAt: v.number(),
+    verified: v.boolean(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_wallet", ["walletAddress"]),
+
+  /**
+   * Season Passes - Battle pass system
+   */
+  seasonPasses: defineTable({
+    passId: v.string(),
+    userId: v.id("users"),
+    season: v.string(),
+    tier: v.union(v.literal("free"), v.literal("premium")),
+    currentLevel: v.number(),
+    currentXP: v.number(),
+    xpToNextLevel: v.number(),
+    rewards: v.array(v.any()),
+    purchasedAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_season", ["season"]),
+
+  /**
+   * Year In Review - Shareable season summaries
+   */
+  yearInReview: defineTable({
+    reviewId: v.string(),
+    userId: v.id("users"),
+    year: v.number(),
+    stats: v.any(), // JSON with all stats
+    highlights: v.array(v.string()),
+    shareableImageUrl: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_year", ["year"]),
+
+  /**
+   * League Trophies - Championship NFTs
+   */
+  leagueTrophies: defineTable({
+    trophyId: v.string(),
+    leagueId: v.string(),
+    seasonId: v.string(),
+    winnerId: v.id("users"),
+    trophyType: v.union(
+      v.literal("champion"),
+      v.literal("runner_up"),
+      v.literal("third_place"),
+      v.literal("most_points"),
+      v.literal("best_trade")
+    ),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    mintedNFT: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_winner", ["winnerId"]),
+
+  /**
+   * Playoff Simulations - Monte Carlo results
+   */
+  playoffSimulations: defineTable({
+    simulationId: v.string(),
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    iterations: v.number(),
+    results: v.any(), // JSON with probabilities
+    scenarioBreakdown: v.array(v.any()),
+    runDate: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Bench Analysis - Points left on bench tracking
+   */
+  benchAnalysis: defineTable({
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    season: v.string(),
+    totalPointsLeftOnBench: v.number(),
+    averagePointsLeftPerWeek: v.number(),
+    worstWeek: v.any(),
+    costlyDecisions: v.array(v.any()),
+    rankInLeague: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Draft Grades - Hindsight draft analysis
+   */
+  draftGrades: defineTable({
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    season: v.string(),
+    originalGrade: v.string(),
+    hindsightGrade: v.string(),
+    picks: v.array(v.any()),
+    valueAdded: v.number(),
+    steals: v.array(v.any()),
+    busts: v.array(v.any()),
+    overallRank: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Self Exclusions - Responsible gaming
+   */
+  selfExclusions: defineTable({
+    exclusionId: v.string(),
+    userId: v.id("users"),
+    startDate: v.number(),
+    endDate: v.number(),
+    type: v.union(v.literal("temporary"), v.literal("permanent")),
+    reason: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("expired"), v.literal("revoked")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Deposit Limits - Spending controls
+   */
+  depositLimits: defineTable({
+    limitId: v.string(),
+    userId: v.id("users"),
+    limitType: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly")),
+    amount: v.number(),
+    currentSpent: v.number(),
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Session Limits - Time controls
+   */
+  sessionLimits: defineTable({
+    limitId: v.string(),
+    userId: v.id("users"),
+    maxDurationMinutes: v.number(),
+    currentSessionStart: v.optional(v.number()),
+    warningThresholdMinutes: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  /**
+   * Geo Checks - Location verification logs
+   * NOTE: For privacy, we store location at city/state level only, NOT precise coordinates.
+   * Coordinates are used for the check but never persisted. IP addresses are hashed.
+   */
+  geoChecks: defineTable({
+    checkId: v.string(),
+    userId: v.id("users"),
+    ipAddressHash: v.string(), // Hashed, not plaintext
+    country: v.string(),
+    state: v.optional(v.string()),
+    city: v.optional(v.string()),
+    allowed: v.boolean(),
+    reason: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_allowed", ["allowed"]),
+
+  /**
+   * Audit Logs - Complete audit trail
+   */
+  auditLogs: defineTable({
+    logId: v.string(),
+    entityType: v.union(
+      v.literal("market"),
+      v.literal("trade"),
+      v.literal("transaction"),
+      v.literal("settlement")
+    ),
+    entityId: v.string(),
+    action: v.string(),
+    userId: v.optional(v.id("users")),
+    before: v.optional(v.any()),
+    after: v.optional(v.any()),
+    metadata: v.optional(v.any()),
+    timestamp: v.number(),
+  })
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_user", ["userId"])
+    .index("by_timestamp", ["timestamp"]),
+
+  /**
+   * Coordinates are used for the check but never persisted. IP addresses are hashed.
+   */
+  geoChecks: defineTable({
+    checkId: v.string(),
+    userId: v.id("users"),
+    ipAddressHash: v.string(), // Hashed, not plaintext
+    country: v.string(),
+    state: v.optional(v.string()),
+    city: v.optional(v.string()),
+    allowed: v.boolean(),
+    reason: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_allowed", ["allowed"]),
+
+  /**
+   * Audit Logs - Complete audit trail
+   */
+  auditLogs: defineTable({
+    logId: v.string(),
+    entityType: v.union(
+      v.literal("market"),
+      v.literal("trade"),
+      v.literal("transaction"),
+      v.literal("settlement")
+    ),
+    entityId: v.string(),
+    action: v.string(),
+    userId: v.optional(v.id("users")),
+    before: v.optional(v.any()),
+    after: v.optional(v.any()),
+    metadata: v.optional(v.any()),
+    timestamp: v.number(),
+  })
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_user", ["userId"])
+    .index("by_timestamp", ["timestamp"]),
+
   /**
    * Copilot Alerts - Push notifications for insights
    */
@@ -7353,4 +8667,686 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_type", ["userId", "streakType"])
     .index("by_current_streak", ["currentStreak"]),
+
+  // ============================================================================
+  // 10X FEATURE ENHANCEMENT TABLES
+  // ============================================================================
+
+  /**
+   * User Presence - Real-time collaboration and presence tracking
+   */
+  userPresence: defineTable({
+    userId: v.id("users"),
+    roomId: v.string(),
+    roomType: v.union(
+      v.literal("roster"),
+      v.literal("trade"),
+      v.literal("waiver"),
+      v.literal("draft"),
+      v.literal("lineup")
+    ),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    status: v.union(v.literal("active"), v.literal("idle"), v.literal("away")),
+    cursorX: v.optional(v.number()),
+    cursorY: v.optional(v.number()),
+    cursorElement: v.optional(v.string()),
+    lastHeartbeat: v.number(),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_room", ["roomId"])
+    .index("by_user", ["userId"])
+    .index("by_room_and_status", ["roomId", "status"]),
+
+  /**
+   * Collaboration Sessions - CRDT-based collaboration
+   */
+  collaborationSessions: defineTable({
+    sessionId: v.string(),
+    roomId: v.string(),
+    participants: v.array(v.id("users")),
+    activeEditors: v.array(v.id("users")),
+    conflictResolutionStrategy: v.union(
+      v.literal("last-write-wins"),
+      v.literal("crdt")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_room", ["roomId"])
+    .index("by_session", ["sessionId"]),
+
+  /**
+   * Trade Analysis - AI-powered trade analysis results
+   */
+  tradeAnalysis: defineTable({
+    tradeId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.string(),
+    teamIdOffering: v.string(),
+    teamIdReceiving: v.string(),
+    fairnessScore: v.number(),
+    recommendation: v.union(
+      v.literal("accept"),
+      v.literal("reject"),
+      v.literal("counter"),
+      v.literal("needs_review")
+    ),
+    teamOfferingGrade: v.string(),
+    teamReceivingGrade: v.string(),
+    reasoning: v.string(),
+    valueGap: v.number(),
+    collusionRisk: v.number(),
+    vetoLikelihood: v.number(),
+    sportSpecificAnalysis: v.any(),
+    createdAt: v.number(),
+  })
+    .index("by_trade", ["tradeId"])
+    .index("by_league", ["leagueId"])
+    .index("by_collusion_risk", ["collusionRisk"]),
+
+  /**
+   * Collusion Flags - Suspicious trade detection
+   */
+  collusionFlags: defineTable({
+    tradeId: v.string(),
+    leagueId: v.string(),
+    flagged: v.boolean(),
+    confidenceScore: v.number(),
+    reasons: v.array(v.string()),
+    recommendedAction: v.union(
+      v.literal("allow"),
+      v.literal("review"),
+      v.literal("veto")
+    ),
+    reviewers: v.optional(v.array(v.id("users"))),
+    createdAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+  })
+    .index("by_trade", ["tradeId"])
+    .index("by_league", ["leagueId"])
+    .index("by_flagged", ["flagged", "leagueId"]),
+
+  /**
+   * Voice Commands - Processed voice interactions
+   */
+  voiceCommands: defineTable({
+    commandId: v.string(),
+    userId: v.id("users"),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.optional(v.string()),
+    teamId: v.optional(v.string()),
+    rawTranscript: v.string(),
+    parsedAction: v.union(
+      v.literal("set_lineup"),
+      v.literal("add_player"),
+      v.literal("drop_player"),
+      v.literal("trade"),
+      v.literal("query_stats"),
+      v.literal("get_recap"),
+      v.literal("other")
+    ),
+    parsedEntities: v.any(),
+    confidence: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    result: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Audio Recaps - Generated audio summaries
+   */
+  audioRecaps: defineTable({
+    recapId: v.string(),
+    userId: v.id("users"),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    leagueId: v.string(),
+    recapType: v.union(
+      v.literal("daily"),
+      v.literal("weekly"),
+      v.literal("trade"),
+      v.literal("matchup")
+    ),
+    textContent: v.string(),
+    audioUrl: v.optional(v.string()),
+    duration: v.optional(v.number()),
+    voice: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_league", ["leagueId"])
+    .index("by_type", ["recapType"]),
+
+  /**
+   * Screenshot Analysis - Computer vision results
+   */
+  screenshotAnalysis: defineTable({
+    analysisId: v.string(),
+    userId: v.id("users"),
+    imageUrl: v.string(),
+    analysisType: v.union(
+      v.literal("trade_screenshot"),
+      v.literal("jersey_scan"),
+      v.literal("tv_sync"),
+      v.literal("lineup_screenshot")
+    ),
+    sport: v.optional(
+      v.union(
+        v.literal("nfl"),
+        v.literal("nba"),
+        v.literal("mlb"),
+        v.literal("golf"),
+        v.literal("ncaa")
+      )
+    ),
+    extractedData: v.any(),
+    confidence: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_type", ["analysisType"]),
+
+  /**
+   * Injury Risk Scores - ML-based injury predictions
+   */
+  injuryRiskScores: defineTable({
+    playerId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    riskScore: v.number(),
+    riskLevel: v.union(
+      v.literal("low"),
+      v.literal("medium"),
+      v.literal("high"),
+      v.literal("critical")
+    ),
+    factors: v.array(v.any()),
+    predictionType: v.optional(v.string()),
+    probabilityPercent: v.number(),
+    timeframe: v.union(
+      v.literal("thisWeek"),
+      v.literal("thisMonth"),
+      v.literal("thisSeason")
+    ),
+    insurancePrice: v.optional(v.number()),
+    lastUpdated: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_risk_level", ["riskLevel"])
+    .index("by_sport", ["sport", "riskLevel"]),
+
+  /**
+   * Injury History - Historical injury tracking
+   */
+  injuryHistory: defineTable({
+    playerId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    injuryDate: v.number(),
+    injuryType: v.string(),
+    bodyPart: v.string(),
+    severity: v.union(
+      v.literal("minor"),
+      v.literal("moderate"),
+      v.literal("major"),
+      v.literal("career_threatening")
+    ),
+    gamesMissed: v.number(),
+    recoveryTime: v.optional(v.number()),
+    circumstances: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_player", ["playerId"])
+    .index("by_date", ["injuryDate"]),
+
+  /**
+   * User Connections - Social graph relationships
+   */
+  userConnections: defineTable({
+    userId: v.id("users"),
+    connectedUserId: v.id("users"),
+    connectionType: v.union(
+      v.literal("friend"),
+      v.literal("league_mate"),
+      v.literal("competitor"),
+      v.literal("pending")
+    ),
+    source: v.union(
+      v.literal("contact_import"),
+      v.literal("mutual_league"),
+      v.literal("search"),
+      v.literal("recommendation")
+    ),
+    commonLeagues: v.array(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_connected_user", ["connectedUserId"])
+    .index("by_type", ["connectionType"]),
+
+  /**
+   * League Reputation - Trust and quality scores
+   */
+  leagueReputation: defineTable({
+    leagueId: v.string(),
+    reputationScore: v.number(),
+    completionRate: v.number(),
+    payoutHistory: v.union(
+      v.literal("perfect"),
+      v.literal("good"),
+      v.literal("issues"),
+      v.literal("unknown")
+    ),
+    activityLevel: v.union(v.literal("high"), v.literal("medium"), v.literal("low")),
+    memberRetention: v.number(),
+    averageTenure: v.number(),
+    verified: v.boolean(),
+    badges: v.array(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_score", ["reputationScore"]),
+
+  /**
+   * Contact Imports - Phone/email contact matching
+   */
+  contactImports: defineTable({
+    importId: v.string(),
+    userId: v.id("users"),
+    source: v.union(v.literal("google"), v.literal("apple"), v.literal("csv")),
+    contactsFound: v.number(),
+    matchedUsers: v.array(v.id("users")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Virtual Cards - PULL credit cards
+   * NOTE: Card data is tokenized via Stripe. We only store references, never raw card numbers.
+   */
+  virtualCards: defineTable({
+    cardId: v.string(),
+    userId: v.id("users"),
+    stripeCardToken: v.string(), // Stripe token reference, NOT raw card number
+    last4: v.string(), // Safe to store for display
+    expiryMonth: v.number(),
+    expiryYear: v.number(),
+    balance: v.number(),
+    cashbackRate: v.number(),
+    status: v.union(v.literal("active"), v.literal("suspended"), v.literal("closed")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Tax Documents - 1099s and tax forms
+   */
+  taxDocuments: defineTable({
+    documentId: v.string(),
+    userId: v.id("users"),
+    taxYear: v.number(),
+    documentType: v.union(
+      v.literal("1099-MISC"),
+      v.literal("1099-K"),
+      v.literal("W-9")
+    ),
+    totalWinnings: v.number(),
+    totalWithheld: v.number(),
+    fileUrl: v.string(),
+    status: v.union(v.literal("draft"), v.literal("final"), v.literal("amended")),
+    generatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_year", ["taxYear"]),
+
+  /**
+   * Crypto Wallets - Connected blockchain wallets
+   */
+  cryptoWallets: defineTable({
+    walletId: v.string(),
+    userId: v.id("users"),
+    walletAddress: v.string(),
+    blockchain: v.union(
+      v.literal("bitcoin"),
+      v.literal("ethereum"),
+      v.literal("solana"),
+      v.literal("polygon")
+    ),
+    balances: v.any(), // JSON with BTC, ETH, USDC, SOL
+    connectedAt: v.number(),
+    verified: v.boolean(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_wallet", ["walletAddress"]),
+
+  /**
+   * User Streaks - Login and activity streaks
+   */
+  userStreaks: defineTable({
+    userId: v.id("users"),
+    currentStreak: v.number(),
+    longestStreak: v.number(),
+    lastLoginDate: v.number(),
+    multiplier: v.number(),
+    rewards: v.array(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  /**
+   * Season Passes - Battle pass system
+   */
+  seasonPasses: defineTable({
+    passId: v.string(),
+    userId: v.id("users"),
+    season: v.string(),
+    tier: v.union(v.literal("free"), v.literal("premium")),
+    currentLevel: v.number(),
+    currentXP: v.number(),
+    xpToNextLevel: v.number(),
+    rewards: v.array(v.any()),
+    purchasedAt: v.optional(v.number()),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_season", ["season"]),
+
+  /**
+   * Achievements - Unlockable achievements
+   */
+  achievements: defineTable({
+    achievementId: v.string(),
+    name: v.string(),
+    description: v.string(),
+    icon: v.string(),
+    category: v.union(
+      v.literal("trading"),
+      v.literal("social"),
+      v.literal("performance"),
+      v.literal("participation"),
+      v.literal("special")
+    ),
+    sport: v.optional(
+      v.union(
+        v.literal("nfl"),
+        v.literal("nba"),
+        v.literal("mlb"),
+        v.literal("golf"),
+        v.literal("ncaa"),
+        v.literal("all")
+      )
+    ),
+    xpReward: v.number(),
+    rarity: v.union(
+      v.literal("common"),
+      v.literal("rare"),
+      v.literal("epic"),
+      v.literal("legendary")
+    ),
+    criteria: v.any(),
+    createdAt: v.number(),
+  })
+    .index("by_category", ["category"])
+    .index("by_rarity", ["rarity"]),
+
+  /**
+   * Year In Review - Shareable season summaries
+   */
+  yearInReview: defineTable({
+    reviewId: v.string(),
+    userId: v.id("users"),
+    year: v.number(),
+    stats: v.any(), // JSON with all stats
+    highlights: v.array(v.string()),
+    shareableImageUrl: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_year", ["year"]),
+
+  /**
+   * League Trophies - Championship NFTs
+   */
+  leagueTrophies: defineTable({
+    trophyId: v.string(),
+    leagueId: v.string(),
+    seasonId: v.string(),
+    winnerId: v.id("users"),
+    trophyType: v.union(
+      v.literal("champion"),
+      v.literal("runner_up"),
+      v.literal("third_place"),
+      v.literal("most_points"),
+      v.literal("best_trade")
+    ),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    mintedNFT: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_league", ["leagueId"])
+    .index("by_winner", ["winnerId"]),
+
+  /**
+   * Playoff Simulations - Monte Carlo results
+   */
+  playoffSimulations: defineTable({
+    simulationId: v.string(),
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    iterations: v.number(),
+    results: v.any(), // JSON with probabilities
+    scenarioBreakdown: v.array(v.any()),
+    runDate: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Bench Analysis - Points left on bench tracking
+   */
+  benchAnalysis: defineTable({
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    season: v.string(),
+    totalPointsLeftOnBench: v.number(),
+    averagePointsLeftPerWeek: v.number(),
+    worstWeek: v.any(),
+    costlyDecisions: v.array(v.any()),
+    rankInLeague: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Draft Grades - Hindsight draft analysis
+   */
+  draftGrades: defineTable({
+    teamId: v.string(),
+    leagueId: v.string(),
+    sport: v.union(
+      v.literal("nfl"),
+      v.literal("nba"),
+      v.literal("mlb"),
+      v.literal("golf"),
+      v.literal("ncaa")
+    ),
+    season: v.string(),
+    originalGrade: v.string(),
+    hindsightGrade: v.string(),
+    picks: v.array(v.any()),
+    valueAdded: v.number(),
+    steals: v.array(v.any()),
+    busts: v.array(v.any()),
+    overallRank: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_league", ["leagueId"]),
+
+  /**
+   * Self Exclusions - Responsible gaming
+   */
+  selfExclusions: defineTable({
+    exclusionId: v.string(),
+    userId: v.id("users"),
+    startDate: v.number(),
+    endDate: v.number(),
+    type: v.union(v.literal("temporary"), v.literal("permanent")),
+    reason: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("expired"), v.literal("revoked")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Deposit Limits - Spending controls
+   */
+  depositLimits: defineTable({
+    limitId: v.string(),
+    userId: v.id("users"),
+    limitType: v.union(v.literal("daily"), v.literal("weekly"), v.literal("monthly")),
+    amount: v.number(),
+    currentSpent: v.number(),
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  /**
+   * Session Limits - Time controls
+   */
+  sessionLimits: defineTable({
+    limitId: v.string(),
+    userId: v.id("users"),
+    maxDurationMinutes: v.number(),
+    currentSessionStart: v.optional(v.number()),
+    warningThresholdMinutes: v.number(),
+    status: v.union(v.literal("active"), v.literal("paused")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  /**
+   * Geo Checks - Location verification logs
+   * NOTE: For privacy, we store location at city/state level only, NOT precise coordinates.
+   * Coordinates are used for the check but never persisted. IP addresses are hashed.
+   */
+  geoChecks: defineTable({
+    checkId: v.string(),
+    userId: v.id("users"),
+    ipAddressHash: v.string(), // Hashed, not plaintext
+    country: v.string(),
+    state: v.optional(v.string()),
+    city: v.optional(v.string()),
+    allowed: v.boolean(),
+    reason: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_allowed", ["allowed"]),
+
+  /**
+   * Audit Logs - Complete audit trail
+   */
+  auditLogs: defineTable({
+    logId: v.string(),
+    entityType: v.union(
+      v.literal("market"),
+      v.literal("trade"),
+      v.literal("transaction"),
+      v.literal("settlement")
+    ),
+    entityId: v.string(),
+    action: v.string(),
+    userId: v.optional(v.id("users")),
+    before: v.optional(v.any()),
+    after: v.optional(v.any()),
+    metadata: v.optional(v.any()),
+    timestamp: v.number(),
+  })
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_user", ["userId"])
+    .index("by_timestamp", ["timestamp"]),
 });

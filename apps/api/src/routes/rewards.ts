@@ -4,6 +4,10 @@ import { z } from "zod";
 import type { Env } from "../index";
 import { parseIntSafe } from "../utils/validation";
 import { convex, api } from "../lib/convex";
+import { toUserId, toRewardId } from "../lib/convex-types";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("rewards");
 
 const app = new Hono<Env>();
 
@@ -27,7 +31,7 @@ app.get("/balance", async (c) => {
 
   try {
     const balance = await convex.query(api.rewards.getBalance, {
-      userId: userId as any,
+      userId: toUserId(userId),
     });
 
     return c.json({
@@ -36,7 +40,7 @@ app.get("/balance", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`[${requestId}] Error fetching balance:`, error);
+    logger.error(`[${requestId}] Error fetching balance:`, error);
     return c.json(
       {
         success: false,
@@ -75,7 +79,7 @@ app.get("/history", async (c) => {
     const calculatedOffset = offset || (page - 1) * limit;
 
     const result = await convex.query(api.rewards.getHistory, {
-      userId: userId as any,
+      userId: toUserId(userId),
       type: type || undefined,
       limit,
       offset: calculatedOffset,
@@ -98,7 +102,7 @@ app.get("/history", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`[${requestId}] Error fetching history:`, error);
+    logger.error(`[${requestId}] Error fetching history:`, error);
     return c.json(
       {
         success: false,
@@ -131,7 +135,7 @@ app.get("/catalog", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`[${requestId}] Error fetching catalog:`, error);
+    logger.error(`[${requestId}] Error fetching catalog:`, error);
     return c.json(
       {
         success: false,
@@ -181,8 +185,8 @@ app.post("/redeem", zValidator("json", redeemSchema), async (c) => {
 
   try {
     const result = await convex.mutation(api.rewards.redeem, {
-      userId: userId as any,
-      rewardId: body.rewardId as any,
+      userId: toUserId(userId),
+      rewardId: toRewardId(body.rewardId),
       quantity: body.quantity,
       shippingAddress: body.shippingAddress,
     });
@@ -197,7 +201,7 @@ app.post("/redeem", zValidator("json", redeemSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`[${requestId}] Error redeeming reward:`, error);
+    logger.error(`[${requestId}] Error redeeming reward:`, error);
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
@@ -282,7 +286,7 @@ app.get("/leaderboard", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`[${requestId}] Error fetching leaderboard:`, error);
+    logger.error(`[${requestId}] Error fetching leaderboard:`, error);
     return c.json(
       {
         success: false,
@@ -315,7 +319,7 @@ app.post("/daily-streak", async (c) => {
 
   try {
     const result = await convex.mutation(api.rewards.claimDailyStreak, {
-      userId: userId as any,
+      userId: toUserId(userId),
     });
 
     return c.json({
@@ -327,7 +331,7 @@ app.post("/daily-streak", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error(`[${requestId}] Error claiming daily streak:`, error);
+    logger.error(`[${requestId}] Error claiming daily streak:`, error);
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
 

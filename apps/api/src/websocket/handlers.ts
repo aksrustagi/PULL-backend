@@ -13,6 +13,9 @@ import {
   createAuthenticatedUser,
   type WebSocketPermissions,
 } from "./auth";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("ws-handlers");
 
 // ============================================================================
 // Types
@@ -88,7 +91,7 @@ export async function handleMessage(
   try {
     await handler(ws, message);
   } catch (error) {
-    console.error(`[WS Handler] Error handling ${message.type}:`, error);
+    logger.error(`[WS Handler] Error handling ${message.type}:`, error);
     sendError(ws, "HANDLER_ERROR", "Internal handler error", message.id);
   }
 }

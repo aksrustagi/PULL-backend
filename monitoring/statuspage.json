@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "PULL Status Page Configuration",
+  "description": "Configuration for public status page and uptime monitoring",
+
+  "statuspage": {
+    "provider": "betterstack",
+    "config": {
+      "name": "PULL Status",
+      "subdomain": "status.pull.app",
+      "timezone": "America/New_York",
+      "theme": {
+        "primaryColor": "#6366f1",
+        "backgroundColor": "#0f0f23",
+        "textColor": "#ffffff"
+      }
+    }
+  },
+
+  "monitors": [
+    {
+      "name": "API Health",
+      "url": "https://api.pull.app/health",
+      "type": "http",
+      "method": "GET",
+      "interval": 60,
+      "timeout": 10,
+      "expectedStatus": 200,
+      "expectedBody": "\"status\":\"ok\"",
+      "regions": ["us-east", "us-west", "eu-west"],
+      "alertChannels": ["slack", "pagerduty", "email"],
+      "priority": "critical"
+    },
+    {
+      "name": "API Authentication",
+      "url": "https://api.pull.app/api/v1/auth/health",
+      "type": "http",
+      "method": "GET",
+      "interval": 60,
+      "timeout": 10,
+      "expectedStatus": 200,
+      "regions": ["us-east"],
+      "priority": "critical"
+    },
+    {
+      "name": "Predictions API",
+      "url": "https://api.pull.app/api/v1/predictions/events",
+      "type": "http",
+      "method": "GET",
+      "interval": 120,
+      "timeout": 15,
+      "expectedStatus": [200, 401],
+      "regions": ["us-east", "us-west"],
+      "priority": "high"
+    },
+    {
+      "name": "Trading API",
+      "url": "https://api.pull.app/api/v1/trading/health",
+      "type": "http",
+      "method": "GET",
+      "interval": 60,
+      "timeout": 10,
+      "expectedStatus": 200,
+      "regions": ["us-east"],
+      "priority": "critical"
+    },
+    {
+      "name": "Payments API",
+      "url": "https://api.pull.app/api/v1/payments/health",
+      "type": "http",
+      "method": "GET",
+      "interval": 60,
+      "timeout": 10,
+      "expectedStatus": 200,
+      "regions": ["us-east"],
+      "priority": "critical"
+    },
+    {
+      "name": "WebSocket Server",
+      "url": "wss://api.pull.app/ws",
+      "type": "websocket",
+      "interval": 120,
+      "timeout": 15,
+      "regions": ["us-east"],
+      "priority": "high"
+    },
+    {
+      "name": "Web App",
+      "url": "https://pull.app",
+      "type": "http",
+      "method": "GET",
+      "interval": 60,
+      "timeout": 15,
+      "expectedStatus": 200,
+      "regions": ["us-east", "us-west", "eu-west"],
+      "priority": "high"
+    },
+    {
+      "name": "Stripe Webhooks",
+      "url": "https://api.pull.app/webhooks/stripe",
+      "type": "http",
+      "method": "POST",
+      "interval": 300,
+      "timeout": 10,
+      "expectedStatus": [400, 401],
+      "regions": ["us-east"],
+      "priority": "medium",
+      "note": "Expects 400/401 without valid signature"
+    },
+    {
+      "name": "Database (Convex)",
+      "url": "https://api.pull.app/health/db",
+      "type": "http",
+      "method": "GET",
+      "interval": 60,
+      "timeout": 10,
+      "expectedStatus": 200,
+      "regions": ["us-east"],
+      "priority": "critical"
+    },
+    {
+      "name": "Redis Cache",
+      "url": "https://api.pull.app/health/redis",
+      "type": "http",
+      "method": "GET",
+      "interval": 60,
+      "timeout": 10,
+      "expectedStatus": 200,
+      "regions": ["us-east"],
+      "priority": "high"
+    }
+  ],
+
+  "components": [
+    {
+      "name": "Core API",
+      "description": "Main API endpoints for authentication, trading, and payments",
+      "monitors": ["API Health", "API Authentication", "Trading API", "Payments API"],
+      "displayOrder": 1
+    },
+    {
+      "name": "Prediction Markets",
+      "description": "Event listings, market data, and order management",
+      "monitors": ["Predictions API"],
+      "displayOrder": 2
+    },
+    {
+      "name": "Real-time Services",
+      "description": "WebSocket connections and live data feeds",
+      "monitors": ["WebSocket Server"],
+      "displayOrder": 3
+    },
+    {
+      "name": "Web Application",
+      "description": "Main web interface at pull.app",
+      "monitors": ["Web App"],
+      "displayOrder": 4
+    },
+    {
+      "name": "Payment Processing",
+      "description": "Stripe integration and webhook processing",
+      "monitors": ["Payments API", "Stripe Webhooks"],
+      "displayOrder": 5
+    },
+    {
+      "name": "Infrastructure",
+      "description": "Database and caching services",
+      "monitors": ["Database (Convex)", "Redis Cache"],
+      "displayOrder": 6
+    }
+  ],
+
+  "alerting": {
+    "channels": {
+      "slack": {
+        "webhookUrl": "${SLACK_WEBHOOK_URL}",
+        "channel": "#alerts-production",
+        "username": "PULL Status Bot",
+        "notifyOn": ["down", "degraded", "recovered"]
+      },
+      "pagerduty": {
+        "integrationKey": "${PAGERDUTY_INTEGRATION_KEY}",
+        "notifyOn": ["down"]
+      },
+      "email": {
+        "recipients": ["oncall@pull.app", "engineering@pull.app"],
+        "notifyOn": ["down", "recovered"]
+      }
+    },
+    "escalation": {
+      "level1": {
+        "delay": 0,
+        "channels": ["slack"]
+      },
+      "level2": {
+        "delay": 300,
+        "channels": ["pagerduty", "email"]
+      },
+      "level3": {
+        "delay": 900,
+        "channels": ["pagerduty"],
+        "additionalRecipients": ["cto@pull.app"]
+      }
+    }
+  },
+
+  "maintenance": {
+    "scheduledWindows": [
+      {
+        "name": "Weekly Maintenance",
+        "schedule": "0 4 * * 0",
+        "duration": 60,
+        "timezone": "America/New_York",
+        "components": ["Infrastructure"],
+        "autoNotify": true
+      }
+    ],
+    "templates": {
+      "scheduled": {
+        "title": "Scheduled Maintenance",
+        "body": "We will be performing scheduled maintenance on {{components}}. Expected duration: {{duration}} minutes."
+      },
+      "unscheduled": {
+        "title": "Service Disruption",
+        "body": "We are currently experiencing issues with {{components}}. Our team is investigating."
+      },
+      "resolved": {
+        "title": "Issue Resolved",
+        "body": "The issue affecting {{components}} has been resolved. All services are now operating normally."
+      }
+    }
+  },
+
+  "sla": {
+    "target": 99.9,
+    "excludeScheduledMaintenance": true,
+    "calculationPeriod": "monthly",
+    "components": {
+      "Core API": 99.99,
+      "Prediction Markets": 99.9,
+      "Payment Processing": 99.99,
+      "Web Application": 99.9
+    }
+  },
+
+  "integrations": {
+    "betterstack": {
+      "apiKey": "${BETTERSTACK_API_KEY}",
+      "teamId": "${BETTERSTACK_TEAM_ID}"
+    },
+    "datadog": {
+      "apiKey": "${DATADOG_API_KEY}",
+      "appKey": "${DATADOG_APP_KEY}",
+      "site": "datadoghq.com"
+    },
+    "pagerduty": {
+      "apiKey": "${PAGERDUTY_API_KEY}"
+    }
+  }
+}

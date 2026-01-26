@@ -7,6 +7,9 @@ import { convex, api } from "../lib/convex";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
 import { redis } from "../lib/redis";
 import { Connection } from "@temporalio/client";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("admin");
 
 const app = new Hono<Env>();
 
@@ -125,7 +128,7 @@ const adminOnly = async (c: Context<Env>, next: Next) => {
 
     await next();
   } catch (error) {
-    console.error("Admin middleware error:", error);
+    logger.error("Admin middleware error:", error);
     return c.json(
       {
         success: false,

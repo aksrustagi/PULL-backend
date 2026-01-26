@@ -2,7 +2,9 @@ import { createMiddleware } from "hono/factory";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import type { Env } from "../index";
-import { logger } from "@pull/core/services/logger";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("rate-limit");
 
 // Environment detection
 const isDevelopment = process.env.NODE_ENV === "development";

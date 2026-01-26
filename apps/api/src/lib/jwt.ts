@@ -11,6 +11,9 @@ import {
   ACCESS_TOKEN_EXPIRY,
   REFRESH_TOKEN_EXPIRY,
 } from "./jwt-config";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("jwt");
 
 /**
  * JWT Token Claims
@@ -121,7 +124,7 @@ export async function verifyAccessToken(
     return { userId: payload.sub, claims: payload };
   } catch (error) {
     if (error instanceof jose.errors.JWTExpired) {
-      console.debug("Access token expired");
+      logger.debug("Access token expired");
     }
     return null;
   }
@@ -150,7 +153,7 @@ export async function verifyRefreshToken(
     };
   } catch (error) {
     if (error instanceof jose.errors.JWTExpired) {
-      console.debug("Refresh token expired");
+      logger.debug("Refresh token expired");
     }
     return null;
   }

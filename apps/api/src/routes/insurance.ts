@@ -4,8 +4,12 @@ import { z } from "zod";
 import type { Env } from "../index";
 import { convex, api } from "../lib/convex";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all insurance routes - feature is not production-ready
+app.use("*", requireFeature("insurance", "Insurance"));
 
 // ============================================================================
 // Validation Schemas

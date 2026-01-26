@@ -7,8 +7,15 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../../index";
 import { getSportsDataService } from "@pull/core/services/sports-data";
+import { requireFeature } from "../../lib/feature-flags";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("fantasy-players");
 
 const app = new Hono<Env>();
+
+// Protect all fantasy routes - feature is not production-ready
+app.use("*", requireFeature("fantasy_leagues", "Fantasy Leagues"));
 
 // =============================================================================
 // SCHEMAS
@@ -134,7 +141,7 @@ app.get("/", zValidator("query", searchPlayersSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching players:", error);
+    logger.error("Error fetching players:", error);
     return c.json(
       {
         success: false,
@@ -434,7 +441,7 @@ app.get("/nfl/games", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error fetching games:", error);
+    logger.error("Error fetching games:", error);
     return c.json(
       {
         success: false,

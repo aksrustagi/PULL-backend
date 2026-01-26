@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Env } from "../index";
 import { getConvexClient } from "../lib/convex";
 import { api } from "@pull/db/convex/_generated/api";
+import { toUserId, toOrderId } from "../lib/convex-types";
 
 const app = new Hono<Env>();
 
@@ -50,7 +51,7 @@ app.post("/orders", zValidator("json", createOrderSchema), async (c) => {
 
     // Create order via Convex
     const result = await convex.mutation(api.orders.createOrder, {
-      userId: userId as any,
+      userId: toUserId(userId),
       assetClass: body.assetClass,
       symbol: body.symbol,
       side: body.side,
@@ -97,8 +98,8 @@ app.post("/orders", zValidator("json", createOrderSchema), async (c) => {
  */
 app.get("/orders", async (c) => {
   const userId = c.get("userId");
-  const status = c.req.query("status") as any;
-  const assetClass = c.req.query("assetClass") as any;
+  const status = c.req.query("status") as "pending" | "submitted" | "accepted" | "partial_fill" | "filled" | "cancelled" | "rejected" | "expired" | undefined;
+  const assetClass = c.req.query("assetClass") as "crypto" | "prediction" | "stock" | "rwa" | undefined;
   const symbol = c.req.query("symbol");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
@@ -174,7 +175,7 @@ app.get("/orders/:orderId", async (c) => {
     const convex = getConvexClient();
 
     const order = await convex.query(api.orders.getOrderById, {
-      orderId: orderId as any,
+      orderId: toOrderId(orderId),
     });
 
     if (!order) {
@@ -231,7 +232,7 @@ app.delete("/orders/:orderId", async (c) => {
     const convex = getConvexClient();
 
     const result = await convex.mutation(api.orders.cancelOrder, {
-      orderId: orderId as any,
+      orderId: toOrderId(orderId),
       reason,
     });
 
@@ -281,7 +282,7 @@ app.get("/orders/:orderId/fills", async (c) => {
     const convex = getConvexClient();
 
     const order = await convex.query(api.orders.getOrderWithFills, {
-      orderId: orderId as any,
+      orderId: toOrderId(orderId),
     });
 
     if (!order) {
@@ -400,7 +401,7 @@ app.get("/buying-power", async (c) => {
     const convex = getConvexClient();
 
     const balances = await convex.query(api.balances.getByUser, {
-      userId: userId as any,
+      userId: toUserId(userId),
     });
 
     // Find USD balance
@@ -505,7 +506,7 @@ app.post("/orders/:orderId/fill", zValidator("json", z.object({
     const convex = getConvexClient();
 
     const result = await convex.mutation(api.orders.fillOrder, {
-      orderId: orderId as any,
+      orderId: toOrderId(orderId),
       quantity: body.quantity,
       price: body.price,
       fee: body.fee,

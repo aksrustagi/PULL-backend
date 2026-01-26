@@ -55,7 +55,9 @@ const stopUptime = startUptimeUpdates();
 import { initSentry, captureException } from "./lib/sentry";
 import { authMiddleware, adminOnly } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
+import { adminMiddleware, superadminMiddleware } from "./middleware/admin";
 import { csrfProtection, sanitizeInput } from "./middleware/security";
+import { requireFeature, isFeatureEnabled, notImplemented } from "./lib/feature-flags";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
 import { tradingRoutes } from "./routes/trading";
@@ -93,6 +95,19 @@ import { insuranceRoutes } from "./routes/insurance";
 import { propsRoutes } from "./routes/props";
 import { watchPartyRoutes } from "./routes/watch-party";
 import { nftsRoutes } from "./routes/nfts";
+
+// 10x Feature Enhancement Routes
+import presenceRoutes from "./routes/presence";
+import tradeAdvisorRoutes from "./routes/trade-advisor";
+import voiceRoutes from "./routes/voice";
+import visionRoutes from "./routes/vision";
+import injuriesRoutes from "./routes/injuries";
+import socialGraphRoutes from "./routes/social-graph";
+import financeRoutes from "./routes/finance";
+import analyticsEnhancedRoutes from "./routes/analytics";
+import engagementRoutes from "./routes/engagement";
+import complianceRoutes from "./routes/compliance";
+import widgetsRoutes from "./routes/widgets";
 import { appRouter } from "./trpc/router";
 import { createContext } from "./trpc/context";
 
@@ -131,24 +146,26 @@ app.use("*", createLoggingMiddleware({
 app.use("*", createLoggerContextMiddleware());
 
 app.use("*", secureHeaders());
+
+// CORS configuration from environment
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:3000,https://pull.app").split(",");
+const CORS_SUBDOMAIN_PATTERN = process.env.CORS_SUBDOMAIN_PATTERN || "pull.app";
+
 app.use(
   "*",
   cors({
     origin: (origin) => {
-      const allowed = [
-        "http://localhost:3000",
-        "https://pull.app",
-      ];
-      if (allowed.includes(origin)) return origin;
-      // Match subdomains of pull.app
-      if (/^https:\/\/[\w-]+\.pull\.app$/.test(origin)) return origin;
+      if (CORS_ORIGINS.includes(origin)) return origin;
+      // Match subdomains of configured domain
+      const pattern = new RegExp(`^https:\\/\\/[\\w-]+\\.${CORS_SUBDOMAIN_PATTERN.replace(/\./g, "\\.")}$`);
+      if (pattern.test(origin)) return origin;
       return undefined;
     },
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Correlation-ID"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Correlation-ID", "X-CSRF-Token"],
     exposeHeaders: ["X-Request-ID", "X-Correlation-ID", "X-Trace-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
     credentials: true,
-    maxAge: 86400,
+    maxAge: parseInt(process.env.CORS_MAX_AGE || "86400", 10),
   })
 );
 
@@ -198,59 +215,126 @@ app.route("/docs", docsRoutes);
 // Server-Sent Events (SSE) for real-time data (public access with optional auth)
 app.route("/sse", sseRoutes);
 
+// CSRF protection for state-changing requests
+app.use("/api/*", csrfProtection);
+
 // Protected routes - auth first, then CSRF/sanitization, then rate limit (so userId is available)
 app.use("/api/v1/*", authMiddleware);
 app.use("/api/v1/*", csrfProtection);
 app.use("/api/v1/*", sanitizeInput);
 app.use("/api/v1/*", rateLimitMiddleware);
+// Core trading and predictions - PRODUCTION READY
 app.route("/api/v1/trading", tradingRoutes);
 app.route("/api/v1/predictions", predictionsRoutes);
+
+// Real estate predictions (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/real-estate/*", requireFeature("real_estate", "Real Estate Predictions"));
 app.route("/api/v1/real-estate", realEstateRoutes);
+
+// RWA tokenization (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/rwa/*", requireFeature("rwa_tokenization", "RWA Tokenization"));
 app.route("/api/v1/rwa", rwaRoutes);
+
+// Core rewards - PRODUCTION READY
 app.route("/api/v1/rewards", rewardsRoutes);
+
+// Fantasy features (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/fantasy/*", requireFeature("fantasy_leagues", "Fantasy Sports"));
 app.route("/api/v1/fantasy", fantasyRoutes);
+
 app.route("/api/v1/signals", signalsRoutes);
+
+// Data flywheel (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/data/*", requireFeature("data_flywheel", "Data Flywheel"));
 app.route("/api/v1/data", dataFlywheelRoutes);
+
+// Social trading (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/social/*", requireFeature("social_trading", "Social Trading"));
 app.route("/api/v1/social", socialRoutes);
+
+// Core KYC and payments - PRODUCTION READY
 app.route("/api/v1/kyc", kycRoutes);
 app.route("/api/v1/portfolio-agent", portfolioAgentRoutes);
 app.route("/api/v1/gamification", gamificationRoutes);
 app.route("/api/v1/payments", paymentsRoutes);
 
-// AI Insights & Sports routes
+// AI Insights & Sports routes (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/ai-insights/*", requireFeature("ai_insights", "AI Insights"));
 app.route("/api/v1/ai-insights", aiInsightsRoutes);
+
+app.use("/api/v1/ncaa/*", requireFeature("ncaa_brackets", "NCAA Basketball"));
 app.route("/api/v1/ncaa", ncaaRoutes);
+
+app.use("/api/v1/golf/*", requireFeature("golf", "Golf"));
 app.route("/api/v1/golf", golfRoutes);
+
+app.use("/api/v1/nba/*", requireFeature("nba", "NBA"));
 app.route("/api/v1/nba", nbaRoutes);
+
+app.use("/api/v1/mlb/*", requireFeature("mlb", "MLB"));
 app.route("/api/v1/mlb", mlbRoutes);
 
-// Viral Growth Engine routes
+// Viral Growth Engine routes (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/viral/*", requireFeature("viral_growth", "Viral Growth"));
 app.route("/api/v1/viral", viralGrowthRoutes);
 
-// Killer Features routes
+// Killer Features routes (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/stories/*", requireFeature("stories", "Stories"));
 app.route("/api/v1/stories", storiesRoutes);
+
+app.use("/api/v1/battles/*", requireFeature("cash_battles", "Cash Battles"));
 app.route("/api/v1/battles", cashBattlesRoutes);
+
+app.use("/api/v1/squads/*", requireFeature("squads", "Squads"));
 app.route("/api/v1/squads", squadsRoutes);
+
+app.use("/api/v1/copilot/*", requireFeature("ai_copilot", "AI Copilot"));
 app.route("/api/v1/copilot", aiCopilotRoutes);
+
 app.route("/api/v1/streaks", streaksRoutes);
 
-// VIP & Premium Features routes
+// VIP & Premium Features routes (feature-flagged - NOT PRODUCTION READY)
+app.use("/api/v1/vip/*", requireFeature("vip", "VIP"));
 app.route("/api/v1/vip", vipRoutes);
+
+app.use("/api/v1/insurance/*", requireFeature("insurance", "Bet Insurance"));
 app.route("/api/v1/insurance", insuranceRoutes);
+
+app.use("/api/v1/props/*", requireFeature("props_builder", "Props Builder"));
 app.route("/api/v1/props", propsRoutes);
+
+app.use("/api/v1/watch-party/*", requireFeature("watch_party", "Watch Party"));
 app.route("/api/v1/watch-party", watchPartyRoutes);
+
+app.use("/api/v1/nfts/*", requireFeature("nfts", "NFTs"));
 app.route("/api/v1/nfts", nftsRoutes);
+
+// 10x Feature Enhancement Routes
+app.route("/api/v1/presence", presenceRoutes);
+app.route("/api/v1/trade-advisor", tradeAdvisorRoutes);
+app.route("/api/v1/voice", voiceRoutes);
+app.route("/api/v1/vision", visionRoutes);
+app.route("/api/v1/injuries", injuriesRoutes);
+app.route("/api/v1/social-graph", socialGraphRoutes); // Changed from /social to avoid conflict
+app.route("/api/v1/finance", financeRoutes);
+app.route("/api/v1/analytics-advanced", analyticsEnhancedRoutes); // Changed from /analytics to avoid conflict
+app.route("/api/v1/engagement", engagementRoutes);
+app.route("/api/v1/compliance", complianceRoutes);
+app.route("/api/v1/widgets", widgetsRoutes);
 
 // Admin routes (require auth + admin role)
 app.use("/admin/*", authMiddleware);
-app.use("/admin/*", adminOnly);
+app.use("/admin/*", adminMiddleware);
 app.use("/admin/*", csrfProtection);
 app.use("/admin/*", sanitizeInput);
 app.route("/admin/analytics", analyticsRoutes);
 app.route("/admin/experiments", experimentsRoutes);
+// Backup routes require superadmin
+app.use("/admin/backup/*", superadminMiddleware);
 app.route("/admin/backup", backupRoutes);
 
 app.use("/api/admin/*", authMiddleware);
+app.use("/api/admin/*", adminMiddleware);
 app.use("/api/admin/*", csrfProtection);
 app.use("/api/admin/*", sanitizeInput);
 app.route("/api/admin", adminRoutes);
