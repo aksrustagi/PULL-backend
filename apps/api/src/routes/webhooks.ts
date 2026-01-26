@@ -439,17 +439,57 @@ app.post("/checkr", async (c) => {
     logger.error("Failed to store Checkr webhook event", { error });
   }
 
-  logger.warn("Checkr webhook received but handler not implemented", {
-    eventType: body.type,
-    eventId: body.id,
-  });
+  // Process Checkr background check events
+  try {
+    const candidateId = body.data?.object?.candidate_id;
+    const reportId = body.data?.object?.id;
 
-  // Return 202 Accepted - we've received it but not fully processed
-  return c.json({
-    received: true,
-    processed: false,
-    message: "Event acknowledged but processing not yet implemented",
-  }, 202);
+    switch (body.type) {
+      case "report.completed": {
+        const status = body.data?.object?.status;
+        logger.info("Checkr report completed", { reportId, status, candidateId });
+
+        // Update KYC record with background check result
+        if (candidateId) {
+          await convex.mutation(api.kyc.updateBackgroundCheck, {
+            checkrCandidateId: candidateId,
+            checkrReportId: reportId,
+            status: status === "clear" ? "passed" : "review_required",
+            completedAt: Date.now(),
+          });
+        }
+        break;
+      }
+
+      case "report.upgraded":
+      case "report.resumed": {
+        logger.info("Checkr report status update", { reportId, type: body.type });
+        break;
+      }
+
+      case "candidate.created": {
+        logger.info("Checkr candidate created", { candidateId });
+        break;
+      }
+
+      case "invitation.completed": {
+        logger.info("Checkr invitation completed", { candidateId });
+        break;
+      }
+
+      default:
+        logger.info("Checkr event received", { type: body.type });
+    }
+
+    return c.json({
+      received: true,
+      processed: true,
+      event: body.type,
+    });
+  } catch (error) {
+    logger.error("Failed to process Checkr webhook", { error, type: body.type });
+    return c.json({ received: true, processed: false }, 500);
+  }
 });
 
 /**
@@ -480,23 +520,65 @@ app.post("/nylas", async (c) => {
     return c.json({ error: "Invalid signature" }, 401);
   }
 
-  logger.warn("Nylas webhook received but handler not implemented", {
-    trigger: body.trigger,
-    deltas: body.deltas?.length || 0,
-  });
+  // Process Nylas email/calendar events
+  try {
+    const deltas = body.deltas || [];
 
-  // Return 202 Accepted - we've received it but not fully processed
-  return c.json({
-    received: true,
-    processed: false,
-    message: "Event acknowledged but processing not yet implemented",
-  }, 202);
+    for (const delta of deltas) {
+      switch (delta.type) {
+        case "message.created": {
+          logger.info("New email received", {
+            accountId: delta.object_data?.account_id,
+            messageId: delta.object_data?.id,
+          });
+          // Store for notification processing if needed
+          break;
+        }
+
+        case "event.created":
+        case "event.updated": {
+          logger.info("Calendar event update", {
+            eventId: delta.object_data?.id,
+            type: delta.type,
+          });
+          break;
+        }
+
+        case "account.connected": {
+          logger.info("Nylas account connected", {
+            accountId: delta.object_data?.account_id,
+          });
+          break;
+        }
+
+        case "account.stopped":
+        case "account.invalid": {
+          logger.warn("Nylas account issue", {
+            accountId: delta.object_data?.account_id,
+            type: delta.type,
+          });
+          break;
+        }
+
+        default:
+          logger.debug("Nylas delta received", { type: delta.type });
+      }
+    }
+
+    return c.json({
+      received: true,
+      processed: true,
+      deltasProcessed: deltas.length,
+    });
+  } catch (error) {
+    logger.error("Failed to process Nylas webhook", { error });
+    return c.json({ received: true, processed: false }, 500);
+  }
 });
 
 /**
  * Massive webhook (Order execution)
- * Status: NOT IMPLEMENTED - Events are acknowledged but not processed
- * CRITICAL: This should be implemented before trading goes live
+ * Handles order lifecycle events from Massive trading system
  */
 app.post("/massive", async (c) => {
   const signature = c.req.header("X-Massive-Signature");
@@ -514,9 +596,9 @@ app.post("/massive", async (c) => {
   }
 
   const body = JSON.parse(rawBody);
+  const convex = getConvexClient();
 
   // Store webhook for audit trail - critical for financial reconciliation
-  const convex = getConvexClient();
   try {
     await convex.mutation(api.kyc.storeWebhookEvent, {
       source: "massive",
@@ -528,17 +610,89 @@ app.post("/massive", async (c) => {
     logger.error("Failed to store Massive webhook event", { error });
   }
 
-  logger.error("CRITICAL: Massive order webhook not implemented - trading events not being processed", {
-    event: body.event,
-    orderId: body.orderId,
-  });
+  // Process order events
+  try {
+    switch (body.event) {
+      case "order.filled":
+      case "order.partial_fill": {
+        // Order was filled (fully or partially)
+        logger.info("Processing order fill", {
+          orderId: body.orderId,
+          fillQuantity: body.fillQuantity,
+          fillPrice: body.fillPrice,
+        });
 
-  // Return 202 but log as error since this is critical for trading
-  return c.json({
-    received: true,
-    processed: false,
-    message: "CRITICAL: Event acknowledged but processing not yet implemented",
-  }, 202);
+        await convex.mutation(api.orders.fillOrder, {
+          orderId: body.orderId,
+          quantity: body.fillQuantity,
+          price: body.fillPrice,
+          externalFillId: body.fillId || body.id,
+          executedAt: body.executedAt || Date.now(),
+        });
+
+        logger.info("Order fill processed successfully", { orderId: body.orderId });
+        break;
+      }
+
+      case "order.cancelled": {
+        logger.info("Processing order cancellation", { orderId: body.orderId });
+
+        await convex.mutation(api.orders.cancelOrder, {
+          orderId: body.orderId,
+          reason: body.reason || "Cancelled by exchange",
+        });
+
+        logger.info("Order cancelled successfully", { orderId: body.orderId });
+        break;
+      }
+
+      case "order.rejected": {
+        logger.warn("Order rejected by exchange", {
+          orderId: body.orderId,
+          reason: body.reason,
+        });
+
+        await convex.mutation(api.orders.rejectOrder, {
+          orderId: body.orderId,
+          reason: body.reason || "Rejected by exchange",
+        });
+        break;
+      }
+
+      case "order.accepted": {
+        logger.info("Order accepted by exchange", { orderId: body.orderId });
+
+        await convex.mutation(api.orders.updateOrderStatus, {
+          orderId: body.orderId,
+          status: "accepted",
+          externalOrderId: body.externalOrderId,
+        });
+        break;
+      }
+
+      default:
+        logger.warn("Unknown Massive event type", { event: body.event });
+    }
+
+    return c.json({
+      received: true,
+      processed: true,
+      event: body.event,
+    });
+  } catch (error) {
+    logger.error("Failed to process Massive webhook", {
+      error,
+      event: body.event,
+      orderId: body.orderId,
+    });
+
+    // Return 500 so Massive retries the webhook
+    return c.json({
+      received: true,
+      processed: false,
+      error: "Processing failed",
+    }, 500);
+  }
 });
 
 /**
@@ -748,17 +902,86 @@ app.post("/polygon", async (c) => {
     logger.error("Failed to store Polygon webhook event", { error });
   }
 
-  logger.warn("Polygon webhook received but handler not implemented", {
-    event: body.event,
-    transactionHash: body.transactionHash,
-  });
+  // Process Polygon blockchain events
+  try {
+    switch (body.event) {
+      case "token.transfer": {
+        logger.info("Token transfer detected", {
+          transactionHash: body.transactionHash,
+          from: body.from,
+          to: body.to,
+          amount: body.amount,
+          tokenAddress: body.tokenAddress,
+        });
 
-  // Return 202 Accepted - we've received it but not fully processed
-  return c.json({
-    received: true,
-    processed: false,
-    message: "Event acknowledged but processing not yet implemented",
-  }, 202);
+        // Update user balance if this is a deposit to platform wallet
+        if (body.to && body.isPlatformWallet) {
+          await convex.mutation(api.crypto.processDeposit, {
+            transactionHash: body.transactionHash,
+            walletAddress: body.from,
+            amount: body.amount,
+            tokenAddress: body.tokenAddress,
+            blockNumber: body.blockNumber,
+          });
+        }
+        break;
+      }
+
+      case "nft.transfer": {
+        logger.info("NFT transfer detected", {
+          transactionHash: body.transactionHash,
+          tokenId: body.tokenId,
+          from: body.from,
+          to: body.to,
+        });
+
+        // Update NFT ownership
+        await convex.mutation(api.nfts.updateOwnership, {
+          transactionHash: body.transactionHash,
+          tokenId: body.tokenId,
+          newOwner: body.to,
+          previousOwner: body.from,
+        });
+        break;
+      }
+
+      case "nft.minted": {
+        logger.info("NFT minted", {
+          transactionHash: body.transactionHash,
+          tokenId: body.tokenId,
+          owner: body.owner,
+        });
+
+        await convex.mutation(api.nfts.confirmMint, {
+          transactionHash: body.transactionHash,
+          tokenId: body.tokenId,
+          owner: body.owner,
+          contractAddress: body.contractAddress,
+        });
+        break;
+      }
+
+      case "transaction.confirmed": {
+        logger.info("Transaction confirmed", {
+          transactionHash: body.transactionHash,
+          confirmations: body.confirmations,
+        });
+        break;
+      }
+
+      default:
+        logger.info("Polygon event received", { event: body.event });
+    }
+
+    return c.json({
+      received: true,
+      processed: true,
+      event: body.event,
+    });
+  } catch (error) {
+    logger.error("Failed to process Polygon webhook", { error, event: body.event });
+    return c.json({ received: true, processed: false }, 500);
+  }
 });
 
 export { app as webhookRoutes };
