@@ -369,3 +369,259 @@ Get started: ${loginUrl}
     text,
   });
 }
+
+/**
+ * Send KYC approved email
+ */
+export async function sendKYCApprovedEmail(
+  email: string,
+  tier: string,
+  displayName?: string
+): Promise<boolean> {
+  const greeting = displayName ? `Hi ${displayName}` : "Hi there";
+  const dashboardUrl = `${APP_URL}/dashboard`;
+
+  const tierBenefits: Record<string, string[]> = {
+    basic: ["Trade up to $1,000/day", "Access to prediction markets", "Basic rewards"],
+    intermediate: ["Trade up to $10,000/day", "Access to all markets", "Enhanced rewards", "Priority support"],
+    advanced: ["Trade up to $100,000/day", "Access to all markets", "Premium rewards", "VIP support", "Lower fees"],
+  };
+
+  const benefits = tierBenefits[tier] || tierBenefits.basic;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYC Approved</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 28px;">✓ Verified!</h1>
+    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Your identity has been verified</p>
+  </div>
+
+  <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+    <p style="font-size: 16px;">${greeting},</p>
+
+    <p style="font-size: 16px;">Great news! Your identity verification is complete and you've been approved for <strong>${tier.charAt(0).toUpperCase() + tier.slice(1)} tier</strong> access.</p>
+
+    <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+      <p style="font-size: 14px; color: #155724; margin: 0 0 10px 0;"><strong>Your benefits:</strong></p>
+      <ul style="font-size: 14px; color: #155724; margin: 0; padding-left: 20px;">
+        ${benefits.map(b => `<li>${b}</li>`).join('')}
+      </ul>
+    </div>
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${dashboardUrl}" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Start Trading</a>
+    </div>
+
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+    <p style="font-size: 12px; color: #999; text-align: center;">
+      &copy; ${new Date().getFullYear()} PULL. All rights reserved.
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const text = `
+${greeting},
+
+Great news! Your identity verification is complete and you've been approved for ${tier} tier access.
+
+Your benefits:
+${benefits.map(b => `- ${b}`).join('\n')}
+
+Start trading now: ${dashboardUrl}
+
+- The PULL Team
+  `.trim();
+
+  return sendEmail({
+    to: email,
+    subject: "✓ KYC Approved - You're verified on PULL!",
+    html,
+    text,
+  });
+}
+
+/**
+ * Send KYC declined email
+ */
+export async function sendKYCDeclinedEmail(
+  email: string,
+  reason: string,
+  displayName?: string
+): Promise<boolean> {
+  const greeting = displayName ? `Hi ${displayName}` : "Hi there";
+  const retryUrl = `${APP_URL}/kyc/retry`;
+  const supportUrl = `${APP_URL}/support`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KYC Update Required</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 28px;">PULL</h1>
+    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Verification Update</p>
+  </div>
+
+  <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+    <p style="font-size: 16px;">${greeting},</p>
+
+    <p style="font-size: 16px;">We were unable to verify your identity with the information provided. Don't worry - you can try again!</p>
+
+    <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; margin: 20px 0;">
+      <p style="font-size: 14px; color: #856404; margin: 0;"><strong>Reason:</strong> ${reason}</p>
+    </div>
+
+    <p style="font-size: 14px; color: #666;"><strong>Common issues and fixes:</strong></p>
+    <ul style="font-size: 14px; color: #666;">
+      <li>Ensure your ID is not expired</li>
+      <li>Take photos in good lighting</li>
+      <li>Make sure all text is clearly readable</li>
+      <li>Your selfie should match your ID photo</li>
+    </ul>
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${retryUrl}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Try Again</a>
+    </div>
+
+    <p style="font-size: 14px; color: #666;">Need help? <a href="${supportUrl}" style="color: #667eea;">Contact support</a></p>
+
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+    <p style="font-size: 12px; color: #999; text-align: center;">
+      &copy; ${new Date().getFullYear()} PULL. All rights reserved.
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const text = `
+${greeting},
+
+We were unable to verify your identity with the information provided. Don't worry - you can try again!
+
+Reason: ${reason}
+
+Common issues and fixes:
+- Ensure your ID is not expired
+- Take photos in good lighting
+- Make sure all text is clearly readable
+- Your selfie should match your ID photo
+
+Try again: ${retryUrl}
+
+Need help? Contact support: ${supportUrl}
+
+- The PULL Team
+  `.trim();
+
+  return sendEmail({
+    to: email,
+    subject: "Action Required: Complete your PULL verification",
+    html,
+    text,
+  });
+}
+
+/**
+ * Send KYC reminder email (for expired or incomplete verification)
+ */
+export async function sendKYCReminderEmail(
+  email: string,
+  type: "expired" | "incomplete",
+  displayName?: string
+): Promise<boolean> {
+  const greeting = displayName ? `Hi ${displayName}` : "Hi there";
+  const kycUrl = `${APP_URL}/kyc`;
+
+  const messages = {
+    expired: {
+      title: "Verification Expired",
+      body: "Your identity verification has expired. To continue using all PULL features, please complete verification again.",
+      cta: "Re-verify Now",
+    },
+    incomplete: {
+      title: "Complete Your Verification",
+      body: "You started the verification process but didn't finish. Complete it now to unlock all PULL features!",
+      cta: "Continue Verification",
+    },
+  };
+
+  const msg = messages[type];
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${msg.title}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+    <h1 style="color: white; margin: 0; font-size: 28px;">PULL</h1>
+    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">${msg.title}</p>
+  </div>
+
+  <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+    <p style="font-size: 16px;">${greeting},</p>
+
+    <p style="font-size: 16px;">${msg.body}</p>
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${kycUrl}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">${msg.cta}</a>
+    </div>
+
+    <p style="font-size: 14px; color: #666;">Verification unlocks:</p>
+    <ul style="font-size: 14px; color: #666;">
+      <li>Higher trading limits</li>
+      <li>Withdrawals to your bank</li>
+      <li>Premium features</li>
+    </ul>
+
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+
+    <p style="font-size: 12px; color: #999; text-align: center;">
+      &copy; ${new Date().getFullYear()} PULL. All rights reserved.
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const text = `
+${greeting},
+
+${msg.body}
+
+${msg.cta}: ${kycUrl}
+
+Verification unlocks:
+- Higher trading limits
+- Withdrawals to your bank
+- Premium features
+
+- The PULL Team
+  `.trim();
+
+  return sendEmail({
+    to: email,
+    subject: `${msg.title} - Complete your PULL verification`,
+    html,
+    text,
+  });
+}

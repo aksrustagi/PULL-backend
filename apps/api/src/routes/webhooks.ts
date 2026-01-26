@@ -6,6 +6,7 @@ import { PersonaClient } from "@pull/core/services/persona";
 import type { WebhookPayload, Inquiry, Verification } from "@pull/core/services/persona/types";
 import { getLogger } from "@pull/core/services";
 import { toUserId } from "../lib/convex-types";
+import { sendKYCApprovedEmail, sendKYCDeclinedEmail, sendKYCReminderEmail } from "../lib/email";
 
 const app = new Hono();
 const logger = getLogger().child({ service: "webhooks" });
@@ -245,8 +246,16 @@ app.post("/persona", async (c) => {
             inquiryId: event.inquiryId,
           });
 
-          // TODO: Send approval email notification
-          // TODO: Signal Temporal workflow if running
+          // Send approval email notification
+          try {
+            const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+            if (user?.email) {
+              await sendKYCApprovedEmail(user.email, approvedTier, user.displayName);
+              logger.info("KYC approval email sent", { userId, email: user.email });
+            }
+          } catch (emailError) {
+            logger.error("Failed to send KYC approval email", { userId, error: emailError });
+          }
         }
         break;
       }
@@ -272,7 +281,16 @@ app.post("/persona", async (c) => {
             reason: reviewerComment,
           });
 
-          // TODO: Send decline email notification with reason
+          // Send decline email notification with reason
+          try {
+            const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+            if (user?.email) {
+              await sendKYCDeclinedEmail(user.email, reviewerComment ?? "Verification could not be completed", user.displayName);
+              logger.info("KYC decline email sent", { userId, email: user.email });
+            }
+          } catch (emailError) {
+            logger.error("Failed to send KYC decline email", { userId, error: emailError });
+          }
         }
         break;
       }
@@ -313,7 +331,16 @@ app.post("/persona", async (c) => {
             inquiryId: event.inquiryId,
           });
 
-          // TODO: Send reminder email to complete KYC
+          // Send reminder email to complete KYC
+          try {
+            const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+            if (user?.email) {
+              await sendKYCReminderEmail(user.email, "expired", user.displayName);
+              logger.info("KYC expiry reminder email sent", { userId, email: user.email });
+            }
+          } catch (emailError) {
+            logger.error("Failed to send KYC expiry email", { userId, error: emailError });
+          }
         }
         break;
       }
