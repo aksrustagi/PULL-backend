@@ -4,6 +4,11 @@ import { z } from "zod";
 import type { Env } from "../index";
 import { engagementService } from "@pull/core/services/engagement";
 import { requireFeature } from "../lib/feature-flags";
+import { getConvexClient, api } from "../lib/convex";
+import type { Id } from "@pull/db/convex/_generated/dataModel";
+import { getLogger } from "@pull/core/services";
+
+const logger = getLogger("engagement");
 
 const app = new Hono<Env>();
 
@@ -45,15 +50,88 @@ app.post("/claim-daily", zValidator("json", claimDailySchema), async (c) => {
 
   const { challengeId } = c.req.valid("json");
 
-  // TODO: Implement daily challenge claiming
-  const xpEarned = 50;
-  await engagementService.addXP(userId, xpEarned, "daily_challenge");
+  try {
+    const convex = getConvexClient();
 
-  return c.json({
-    success: true,
-    data: { xpEarned, message: "Daily challenge claimed" },
-    timestamp: new Date().toISOString(),
-  });
+    // Get today's date key for idempotency
+    const today = new Date().toISOString().split("T")[0];
+    const claimKey = challengeId ?? `daily-${today}`;
+
+    // Check if already claimed today
+    const existingClaim = await convex.query(api.rewards.getDailyClaim, {
+      userId: userId as Id<"users">,
+      claimKey,
+    });
+
+    if (existingClaim) {
+      return c.json({
+        success: false,
+        error: { code: "ALREADY_CLAIMED", message: "Daily challenge already claimed" },
+        timestamp: new Date().toISOString(),
+      }, 400);
+    }
+
+    // Get challenge details (if specific challenge requested)
+    let xpReward = 50; // Default daily XP
+    let challengeName = "Daily Login";
+
+    if (challengeId) {
+      const challenge = await convex.query(api.rewards.getChallenge, {
+        challengeId: challengeId as Id<"challenges">,
+      });
+
+      if (!challenge) {
+        return c.json({
+          success: false,
+          error: { code: "CHALLENGE_NOT_FOUND", message: "Challenge not found" },
+          timestamp: new Date().toISOString(),
+        }, 404);
+      }
+
+      // Verify challenge is completable
+      if (challenge.status !== "active") {
+        return c.json({
+          success: false,
+          error: { code: "CHALLENGE_INACTIVE", message: "Challenge is not active" },
+          timestamp: new Date().toISOString(),
+        }, 400);
+      }
+
+      xpReward = challenge.xpReward ?? 50;
+      challengeName = challenge.name ?? "Daily Challenge";
+    }
+
+    // Record the claim
+    await convex.mutation(api.rewards.recordDailyClaim, {
+      userId: userId as Id<"users">,
+      claimKey,
+      xpEarned: xpReward,
+      challengeId: challengeId as Id<"challenges"> | undefined,
+    });
+
+    // Award XP
+    await engagementService.addXP(userId, xpReward, "daily_challenge");
+
+    logger.info("Daily challenge claimed", { userId, challengeId, xpReward });
+
+    return c.json({
+      success: true,
+      data: {
+        xpEarned: xpReward,
+        challengeName,
+        message: "Daily challenge claimed successfully",
+        claimedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Failed to claim daily challenge", { userId, challengeId, error });
+    return c.json({
+      success: false,
+      error: { code: "CLAIM_FAILED", message: error instanceof Error ? error.message : "Failed to claim challenge" },
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
 });
 
 /**

@@ -17,6 +17,8 @@ import {
 } from "@pull/core/services/ai-insights";
 import { requireFeature } from "../lib/feature-flags";
 import { getLogger } from "@pull/core/services";
+import { getConvexClient, api } from "../lib/convex";
+import type { Id } from "@pull/db/convex/_generated/dataModel";
 
 const logger = getLogger("ai-insights");
 
@@ -65,18 +67,73 @@ const UpdatePreferencesSchema = z.object({
 // ============================================================================
 
 async function getUserTier(userId: string): Promise<InsightTier> {
-  // TODO: Fetch from database
-  return "free";
+  try {
+    const convex = getConvexClient();
+    const user = await convex.query(api.users.getUser, { userId: userId as Id<"users"> });
+
+    if (!user) return "free";
+
+    // Map KYC tier to insight tier
+    switch (user.kycTier) {
+      case "premium":
+      case "institutional":
+        return "pro";
+      case "verified":
+        return "premium";
+      default:
+        return "free";
+    }
+  } catch (error) {
+    logger.error("Failed to get user tier", { userId, error });
+    return "free";
+  }
 }
 
 async function getUserCredits(userId: string): Promise<number> {
-  // TODO: Fetch from database
-  return 5;
+  try {
+    const convex = getConvexClient();
+    const balance = await convex.query(api.rewards.getUserCredits, {
+      userId: userId as Id<"users">,
+      creditType: "ai_insights"
+    });
+    return balance ?? 5; // Default 5 free credits
+  } catch (error) {
+    logger.error("Failed to get user credits", { userId, error });
+    return 0;
+  }
 }
 
 async function deductCredits(userId: string, amount: number): Promise<boolean> {
-  // TODO: Implement credit deduction
-  return true;
+  try {
+    const convex = getConvexClient();
+    await convex.mutation(api.rewards.deductCredits, {
+      userId: userId as Id<"users">,
+      amount,
+      creditType: "ai_insights",
+      reason: "AI insight generation",
+    });
+    return true;
+  } catch (error) {
+    logger.error("Failed to deduct credits", { userId, amount, error });
+    return false;
+  }
+}
+
+async function refundCredits(userId: string, amount: number): Promise<boolean> {
+  try {
+    const convex = getConvexClient();
+    await convex.mutation(api.rewards.addCredits, {
+      userId: userId as Id<"users">,
+      amount,
+      creditType: "ai_insights",
+      reason: "Refund - AI insight generation failed",
+    });
+    logger.info("Credits refunded", { userId, amount });
+    return true;
+  } catch (error) {
+    logger.error("Failed to refund credits", { userId, amount, error });
+    return false;
+  }
 }
 
 // ============================================================================
@@ -428,8 +485,8 @@ app.post(
       });
     } catch (error) {
       logger.error("Failed to generate bundle insights:", error);
-      // Refund credits
-      // TODO: Implement refund
+      // Refund credits on failure
+      await refundCredits(userId, bundle.creditCost);
       return c.json(
         {
           success: false,
