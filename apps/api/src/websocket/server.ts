@@ -13,9 +13,7 @@ import {
 import { getBroadcastManager, initBroadcastManager, type BroadcastManager } from "./broadcast";
 import { handleMessage, sendResponse, sendError } from "./handlers";
 import { initRedisPubSub, type RedisPubSub, type PriceUpdate } from "@pull/core/services/redis";
-import { getLogger } from "@pull/core/services";
-
-const logger = getLogger("websocket");
+import { logger } from "@pull/core/services/logger";
 
 // ============================================================================
 // Types
@@ -130,7 +128,7 @@ export class WebSocketServer {
       this.broadcast.cleanupStaleConnections(this.config.idleTimeout * 1000);
     }, 60000);
 
-    logger.info("Server components started");
+    logger.info("WebSocket server components started");
   }
 
   /**
@@ -154,7 +152,7 @@ export class WebSocketServer {
 
     this.broadcast.closeAll("Server shutdown");
 
-    logger.info("Server components stopped");
+    logger.info("WebSocket server components stopped");
   }
 
   // ==========================================================================
@@ -165,7 +163,7 @@ export class WebSocketServer {
    * Handle new WebSocket connection
    */
   private async handleOpen(ws: ServerWebSocket<WebSocketData>): Promise<void> {
-    logger.info("New connection", { connectionId: ws.data.connectionId });
+    logger.info("WebSocket connection opened", { connectionId: ws.data.connectionId, userId: ws.data.userId });
 
     // Register with broadcast manager
     this.broadcast.registerConnection(ws);
@@ -203,7 +201,7 @@ export class WebSocketServer {
     code: number,
     reason: string
   ): void {
-    logger.info("Connection closed", { connectionId: ws.data.connectionId, code, reason });
+    logger.info("WebSocket connection closed", { connectionId: ws.data.connectionId, code, reason });
     this.broadcast.unregisterConnection(ws.data.connectionId);
   }
 
@@ -347,7 +345,7 @@ export class WebSocketServer {
       this.messageCountOut++;
     });
 
-    logger.info("Redis Pub/Sub bridge established");
+    logger.info("WebSocket Redis Pub/Sub bridge established");
   }
 
   // ==========================================================================

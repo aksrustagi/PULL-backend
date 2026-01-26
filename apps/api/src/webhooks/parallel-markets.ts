@@ -7,6 +7,11 @@ import { Hono } from "hono";
 import { Client } from "@temporalio/client";
 import { ParallelMarketsClient, type WebhookEvent } from "@pull/core/services/parallel-markets";
 import { getLogger } from "@pull/core/services";
+import {
+  isWebhookEventProcessed,
+  storeWebhookEvent,
+  markWebhookProcessed,
+} from "./idempotency";
 
 const parallelMarkets = new Hono();
 const logger = getLogger().child({ service: "parallel-markets-webhook" });
@@ -30,14 +35,13 @@ function getTemporalClient(): Client {
   });
 }
 
-async function storeWebhookEvent(event: WebhookEvent, rawPayload: string): Promise<void> {
-  // TODO: Store in Convex webhookEvents table
+async function storeWebhookEventLocal(event: WebhookEvent, rawPayload: string): Promise<string | null> {
   logger.info("Storing webhook event", { eventType: event.type, eventId: event.id });
+  return await storeWebhookEvent("parallel_markets", event.type, event.id, rawPayload);
 }
 
 async function isEventProcessed(eventId: string): Promise<boolean> {
-  // TODO: Check if event was already processed (idempotency)
-  return false;
+  return await isWebhookEventProcessed("parallel_markets", eventId);
 }
 
 // ==========================================================================
@@ -72,45 +76,56 @@ parallelMarkets.post("/", async (c) => {
       return c.json({ success: true, message: "Already processed" });
     }
 
-    // Store raw event
-    await storeWebhookEvent(event, rawBody);
+    // Store raw event and get record ID for marking as processed
+    const recordId = await storeWebhookEventLocal(event, rawBody);
 
-    // Handle event types
-    switch (event.type) {
-      case "accreditation.approved":
-        await handleAccreditationApproved(event);
-        break;
+    let processingError: string | undefined;
+    try {
+      // Handle event types
+      switch (event.type) {
+        case "accreditation.approved":
+          await handleAccreditationApproved(event);
+          break;
 
-      case "accreditation.rejected":
-        await handleAccreditationRejected(event);
-        break;
+        case "accreditation.rejected":
+          await handleAccreditationRejected(event);
+          break;
 
-      case "accreditation.expired":
-        await handleAccreditationExpired(event);
-        break;
+        case "accreditation.expired":
+          await handleAccreditationExpired(event);
+          break;
 
-      case "accreditation.pending":
-        logger.info("Accreditation pending", { requestId: event.data.request_id });
-        break;
+        case "accreditation.pending":
+          logger.info("Accreditation pending", { requestId: event.data.request_id });
+          break;
 
-      case "accreditation.document_requested":
-        logger.info("Documents requested", { requestId: event.data.request_id });
-        break;
+        case "accreditation.document_requested":
+          logger.info("Documents requested", { requestId: event.data.request_id });
+          break;
 
-      case "accreditation.document_received":
-        logger.info("Documents received", { requestId: event.data.request_id });
-        break;
+        case "accreditation.document_received":
+          logger.info("Documents received", { requestId: event.data.request_id });
+          break;
 
-      case "identity.verified":
-        logger.info("Identity verified", { investorId: event.data.investor_id });
-        break;
+        case "identity.verified":
+          logger.info("Identity verified", { investorId: event.data.investor_id });
+          break;
 
-      case "identity.failed":
-        logger.warn("Identity verification failed", { investorId: event.data.investor_id });
-        break;
+        case "identity.failed":
+          logger.warn("Identity verification failed", { investorId: event.data.investor_id });
+          break;
 
-      default:
-        logger.info("Unhandled event type", { eventType: event.type });
+        default:
+          logger.info("Unhandled event type", { eventType: event.type });
+      }
+    } catch (handlerError) {
+      processingError = handlerError instanceof Error ? handlerError.message : "Handler error";
+      throw handlerError;
+    } finally {
+      // Mark event as processed (with or without error)
+      if (recordId) {
+        await markWebhookProcessed(recordId, processingError);
+      }
     }
 
     return c.json({ success: true });

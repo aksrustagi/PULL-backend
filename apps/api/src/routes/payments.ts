@@ -1,9 +1,6 @@
 /**
  * Payments API Routes
  * Handles deposits, withdrawals, and payment methods using Stripe
- *
- * SECURITY: All financial operations require idempotency keys to prevent
- * duplicate transactions from network retries.
  */
 
 import { Hono } from "hono";
@@ -18,11 +15,7 @@ import {
   getStripeClient,
 } from "@pull/core/services/stripe";
 import type { CreateCheckoutSessionParams } from "@pull/core/services/stripe";
-import { checkIdempotencyKey, isRedisAvailable } from "../lib/redis";
-import { toUserId } from "../lib/convex-types";
-import { getLogger } from "@pull/core/services";
-
-const logger = getLogger();
+import { logger } from "@pull/core/services/logger";
 
 const app = new Hono<Env>();
 
@@ -36,15 +29,13 @@ const createDepositSchema = z.object({
   paymentMethods: z.array(z.enum(["card", "bank_transfer", "us_bank_account"])).optional(),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
-  // REQUIRED for financial operations - prevents duplicate transactions
-  idempotencyKey: z.string().uuid({ message: "Idempotency key is required for financial operations" }),
+  idempotencyKey: z.string().uuid().optional(),
 });
 
 const createWithdrawalSchema = z.object({
   amount: z.number().int().min(100).max(100000000), // Min $1, Max $1M in cents
   method: z.enum(["standard", "instant"]).default("standard"),
-  // REQUIRED for financial operations - prevents duplicate transactions
-  idempotencyKey: z.string().uuid({ message: "Idempotency key is required for financial operations" }),
+  idempotencyKey: z.string().uuid().optional(),
 });
 
 const setupConnectedAccountSchema = z.object({
@@ -85,44 +76,12 @@ app.post("/deposit", zValidator("json", createDepositSchema), async (c) => {
   }
 
   try {
-    // IDEMPOTENCY: Check for duplicate request
-    const idempotencyResult = await checkIdempotencyKey(
-      `deposit:${userId}:${body.idempotencyKey}`,
-      JSON.stringify({ amount: body.amount, currency: body.currency }),
-      86400 // 24 hour TTL
-    );
-
-    if (idempotencyResult.exists) {
-      logger.info("Duplicate deposit request detected", {
-        requestId,
-        userId,
-        idempotencyKey: body.idempotencyKey,
-      });
-      // Return the cached response for idempotent retry
-      const cachedResponse = JSON.parse(idempotencyResult.storedValue || "{}");
-      return c.json({
-        success: true,
-        data: cachedResponse,
-        idempotent: true,
-        requestId,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    // Warn if Redis is down - idempotency cannot be guaranteed
-    if (!isRedisAvailable()) {
-      logger.warn("Processing deposit without idempotency guarantee - Redis unavailable", {
-        requestId,
-        userId,
-      });
-    }
-
     const convex = getConvexClient();
     const checkoutService = getCheckoutService();
     const stripeClient = getStripeClient();
 
     // Get user for email
-    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+    const user = await convex.query(api.users.getById, { id: userId as any });
     if (!user) {
       return c.json(
         {
@@ -184,7 +143,7 @@ app.post("/deposit", zValidator("json", createDepositSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to create deposit session", { error });
+    logger.error("Failed to create deposit session", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -260,7 +219,7 @@ app.get("/deposit/:sessionId", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to get session", { sessionId, error });
+    logger.error("Failed to get session", { userId, sessionId, requestId, error });
     return c.json(
       {
         success: false,
@@ -327,7 +286,7 @@ app.post("/withdraw", zValidator("json", createWithdrawalSchema), async (c) => {
     const checkoutService = getCheckoutService();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+    const user = await convex.query(api.users.getById, { id: userId as any });
     if (!user) {
       return c.json(
         {
@@ -355,7 +314,7 @@ app.post("/withdraw", zValidator("json", createWithdrawalSchema), async (c) => {
     }
 
     // Get user's connected account
-    const connectedAccountId = (user as { stripeConnectedAccountId?: string }).stripeConnectedAccountId;
+    const connectedAccountId = (user as any).stripeConnectedAccountId;
     if (!connectedAccountId) {
       return c.json(
         {
@@ -444,7 +403,7 @@ app.post("/withdraw", zValidator("json", createWithdrawalSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to process withdrawal", { userId, error });
+    logger.error("Failed to process withdrawal", { userId, amount: body.amount, requestId, error });
     return c.json(
       {
         success: false,
@@ -520,7 +479,7 @@ app.post(
       const payoutService = getPayoutService();
 
       // Get user
-      const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+      const user = await convex.query(api.users.getById, { id: userId as any });
       if (!user) {
         return c.json(
           {
@@ -532,7 +491,7 @@ app.post(
         );
       }
 
-      let accountId = (user as { stripeConnectedAccountId?: string }).stripeConnectedAccountId;
+      let accountId = (user as any).stripeConnectedAccountId;
 
       // Create connected account if doesn't exist
       if (!accountId) {
@@ -567,7 +526,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      logger.error("Failed to setup payout account", { userId, error });
+      logger.error("Failed to setup payout account", { userId, requestId, error });
       return c.json(
         {
           success: false,
@@ -607,7 +566,7 @@ app.get("/payout-account", async (c) => {
     const payoutService = getPayoutService();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+    const user = await convex.query(api.users.getById, { id: userId as any });
     if (!user) {
       return c.json(
         {
@@ -619,7 +578,7 @@ app.get("/payout-account", async (c) => {
       );
     }
 
-    const accountId = (user as { stripeConnectedAccountId?: string }).stripeConnectedAccountId;
+    const accountId = (user as any).stripeConnectedAccountId;
     if (!accountId) {
       return c.json({
         success: true,
@@ -659,7 +618,7 @@ app.get("/payout-account", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to get payout account", { userId, error });
+    logger.error("Failed to get payout account", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -698,7 +657,7 @@ app.get("/payout-account/dashboard", async (c) => {
     const payoutService = getPayoutService();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+    const user = await convex.query(api.users.getById, { id: userId as any });
     if (!user) {
       return c.json(
         {
@@ -710,7 +669,7 @@ app.get("/payout-account/dashboard", async (c) => {
       );
     }
 
-    const accountId = (user as { stripeConnectedAccountId?: string }).stripeConnectedAccountId;
+    const accountId = (user as any).stripeConnectedAccountId;
     if (!accountId) {
       return c.json(
         {
@@ -736,7 +695,7 @@ app.get("/payout-account/dashboard", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to create dashboard link", { userId, error });
+    logger.error("Failed to create dashboard link", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -780,7 +739,7 @@ app.post("/methods", zValidator("json", addPaymentMethodSchema), async (c) => {
     const stripeClient = getStripeClient();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+    const user = await convex.query(api.users.getById, { id: userId as any });
     if (!user) {
       return c.json(
         {
@@ -829,7 +788,7 @@ app.post("/methods", zValidator("json", addPaymentMethodSchema), async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to attach payment method", { userId, error });
+    logger.error("Failed to attach payment method", { userId, paymentMethodId: body.paymentMethodId, requestId, error });
     return c.json(
       {
         success: false,
@@ -868,7 +827,7 @@ app.get("/methods", async (c) => {
     const stripeClient = getStripeClient();
 
     // Get user
-    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+    const user = await convex.query(api.users.getById, { id: userId as any });
     if (!user) {
       return c.json(
         {
@@ -930,7 +889,7 @@ app.get("/methods", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to list payment methods", { userId, error });
+    logger.error("Failed to list payment methods", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -983,7 +942,7 @@ app.delete("/methods/:methodId", async (c) => {
     }
 
     // Get user and verify ownership
-    const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+    const user = await convex.query(api.users.getById, { id: userId as any });
     if (!user) {
       return c.json(
         {
@@ -1017,7 +976,7 @@ app.delete("/methods/:methodId", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to detach payment method", { userId, methodId, error });
+    logger.error("Failed to detach payment method", { userId, methodId, requestId, error });
     return c.json(
       {
         success: false,
@@ -1060,7 +1019,7 @@ app.post(
       const stripeClient = getStripeClient();
 
       // Get user
-      const user = await convex.query(api.users.getById, { id: toUserId(userId) });
+      const user = await convex.query(api.users.getById, { id: userId as any });
       if (!user) {
         return c.json(
           {
@@ -1096,7 +1055,7 @@ app.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      logger.error("Failed to create setup intent", { userId, error });
+      logger.error("Failed to create setup intent", { userId, requestId, error });
       return c.json(
         {
           success: false,
@@ -1198,7 +1157,7 @@ app.get("/history", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to get payment history", { userId, error });
+    logger.error("Failed to get payment history", { userId, requestId, error });
     return c.json(
       {
         success: false,
@@ -1249,7 +1208,7 @@ app.get("/balance", async (c) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Failed to get balance", { userId, error });
+    logger.error("Failed to get balance", { userId, requestId, error });
     return c.json(
       {
         success: false,

@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { getConvexClient } from "../lib/convex";
+import { api } from "@pull/db/convex/_generated/api";
+import type { Id } from "@pull/db/convex/_generated/dataModel";
 
 const app = new Hono<Env>();
 
@@ -54,49 +57,27 @@ app.get("/summary", async (c) => {
     );
   }
 
-  // TODO: Call Convex query gamification.getRewardsSummary
-  const summary = {
-    pointsBalance: 15250,
-    pendingPoints: 50,
-    lifetimePoints: 28500,
-    currentTier: "gold",
-    tierProgress: 52.5,
-    pointsToNextTier: 84750,
-    nextTier: "platinum",
-    tierBenefits: {
-      feeDiscount: 0.2,
-      aiCredits: 200,
-      copyTrading: true,
-      prioritySupport: false,
-      revenueShare: 0,
-      pointsMultiplier: 1.25,
-    },
-    activeStreaks: [
-      {
-        type: "login",
-        count: 7,
-        multiplier: 1.7,
-        longestCount: 30,
-        lastActionAt: Date.now() - 3600000,
-      },
-      {
-        type: "trading",
-        count: 3,
-        multiplier: 1.3,
-        longestCount: 15,
-        lastActionAt: Date.now() - 7200000,
-      },
-    ],
-    recentEarnings: 1250,
-    currentMonthPoints: 5400,
-    decayWarning: null, // or { daysUntilDecay: 15, decayPercent: 10 }
-  };
+  try {
+    const convex = getConvexClient();
+    const summary = await convex.query(api.gamification.getRewardsSummary, {
+      userId: userId as Id<"users">,
+    });
 
-  return c.json({
-    success: true,
-    data: summary,
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: summary,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to fetch rewards summary";
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -122,43 +103,34 @@ app.get("/history", zValidator("query", paginationSchema.extend({
     );
   }
 
-  // TODO: Call Convex query gamification.getPointsHistory
-  const transactions = [
-    {
-      id: "pts_001",
-      type: "daily_login",
-      amount: 15,
-      balance: 15250,
-      description: "Daily login streak bonus",
-      multiplierApplied: 1.7,
-      baseAmount: 5,
-      createdAt: Date.now() - 3600000,
-      status: "completed",
-    },
-    {
-      id: "pts_002",
-      type: "trade_volume",
-      amount: 125,
-      balance: 15235,
-      description: "Points per $10 trade volume",
-      multiplierApplied: 1.25,
-      baseAmount: 100,
-      referenceType: "trades",
-      referenceId: "trade_123",
-      createdAt: Date.now() - 86400000,
-      status: "completed",
-    },
-  ];
+  try {
+    const convex = getConvexClient();
+    const result = await convex.query(api.gamification.getPointsHistory, {
+      userId: userId as Id<"users">,
+      type,
+      limit,
+      cursor,
+    });
 
-  return c.json({
-    success: true,
-    data: {
-      items: transactions,
-      hasMore: false,
-      nextCursor: undefined,
-    },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: {
+        items: result.items,
+        hasMore: result.hasMore,
+        nextCursor: result.nextCursor,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to fetch points history";
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -182,94 +154,43 @@ app.get("/quests", zValidator("query", z.object({
     );
   }
 
-  // TODO: Call Convex query gamification.getActiveQuests
-  const quests = {
-    daily: [
-      {
-        _id: "quest_001",
-        questId: "early_bird",
-        title: "Early Bird",
-        description: "Log in before 9am local time",
-        type: "daily",
-        requirements: { type: "login_before", hour: 9 },
-        pointsReward: 10,
-        progress: { completed: 0 },
-        completed: false,
-        claimed: false,
-        expiresAt: Date.now() + 43200000, // 12 hours
-      },
-      {
-        _id: "quest_002",
-        questId: "active_trader",
-        title: "Active Trader",
-        description: "Make 3 trades today",
-        type: "daily",
-        requirements: { type: "trades_count", target: 3 },
-        pointsReward: 25,
-        progress: { current: 1 },
-        completed: false,
-        claimed: false,
-        expiresAt: Date.now() + 43200000,
-      },
-      {
-        _id: "quest_003",
-        questId: "signal_seeker",
-        title: "Signal Seeker",
-        description: "Review 3 AI signals",
-        type: "daily",
-        requirements: { type: "signals_reviewed", target: 3 },
-        pointsReward: 15,
-        progress: { current: 3 },
-        completed: true,
-        claimed: false,
-        completedAt: Date.now() - 1800000,
-        expiresAt: Date.now() + 43200000,
-      },
-    ],
-    weekly: [
-      {
-        _id: "quest_010",
-        questId: "volume_king",
-        title: "Volume King",
-        description: "Trade $1,000 in volume this week",
-        type: "weekly",
-        requirements: { type: "trade_volume", target: 1000 },
-        pointsReward: 100,
-        progress: { current: 450 },
-        completed: false,
-        claimed: false,
-        expiresAt: Date.now() + 345600000, // 4 days
-      },
-      {
-        _id: "quest_011",
-        questId: "winning_streak",
-        title: "Winning Streak",
-        description: "Win 5 predictions in a row",
-        type: "weekly",
-        requirements: { type: "prediction_streak", target: 5 },
-        pointsReward: 200,
-        progress: { current: 2 },
-        completed: false,
-        claimed: false,
-        expiresAt: Date.now() + 345600000,
-      },
-    ],
-  };
+  try {
+    const convex = getConvexClient();
+    const quests = await convex.query(api.gamification.getActiveQuests, {
+      userId: userId as Id<"users">,
+      type: type as "daily" | "weekly" | "achievement" | "seasonal" | undefined,
+    });
 
-  // Filter by type if specified
-  if (type && type !== "achievement" && type !== "seasonal") {
+    // Group quests by type if no specific type is requested
+    if (!type) {
+      const grouped = {
+        daily: quests.filter((q: { type: string }) => q.type === "daily"),
+        weekly: quests.filter((q: { type: string }) => q.type === "weekly"),
+        achievement: quests.filter((q: { type: string }) => q.type === "achievement"),
+        seasonal: quests.filter((q: { type: string }) => q.type === "seasonal"),
+      };
+      return c.json({
+        success: true,
+        data: grouped,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     return c.json({
       success: true,
-      data: quests[type] ?? [],
+      data: quests,
       timestamp: new Date().toISOString(),
     });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to fetch quests";
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message },
+      },
+      500
+    );
   }
-
-  return c.json({
-    success: true,
-    data: quests,
-    timestamp: new Date().toISOString(),
-  });
 });
 
 // ============================================================================
@@ -301,18 +222,28 @@ app.post("/quests/:questId/claim", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation gamification.claimQuestReward
-  const result = {
-    pointsEarned: 15,
-    newBalance: 15265,
-    bonusReward: null, // or { type: "badge", id: "badge_001", name: "Signal Master" }
-  };
+  try {
+    const convex = getConvexClient();
+    const result = await convex.mutation(api.gamification.claimQuestReward, {
+      userId: userId as Id<"users">,
+      questId: questId as Id<"quests">,
+    });
 
-  return c.json({
-    success: true,
-    data: result,
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to claim quest reward";
+    return c.json(
+      {
+        success: false,
+        error: { code: "CLAIM_FAILED", message },
+      },
+      400
+    );
+  }
 });
 
 // ============================================================================
@@ -336,121 +267,51 @@ app.get("/achievements", zValidator("query", z.object({
     );
   }
 
-  // TODO: Call Convex query gamification.getAchievements
-  const achievements = [
-    {
-      _id: "ach_001",
-      achievementId: "first_blood",
-      title: "First Blood",
-      description: "Make your first trade",
-      icon: "⚔️",
-      category: "trading",
-      requirement: { type: "total_trades", target: 1 },
-      rarity: "common",
-      pointsReward: 50,
-      unlocked: true,
-      unlockedAt: Date.now() - 2592000000,
-      displayed: true,
-    },
-    {
-      _id: "ach_002",
-      achievementId: "oracle",
-      title: "Oracle",
-      description: "10 correct predictions",
-      icon: "🔮",
-      category: "trading",
-      requirement: { type: "correct_predictions", target: 10 },
-      rarity: "common",
-      pointsReward: 200,
-      unlocked: true,
-      unlockedAt: Date.now() - 1296000000,
-      displayed: false,
-    },
-    {
-      _id: "ach_003",
-      achievementId: "seer",
-      title: "Seer",
-      description: "50 correct predictions",
-      icon: "👁️",
-      category: "trading",
-      requirement: { type: "correct_predictions", target: 50 },
-      rarity: "rare",
-      pointsReward: 500,
-      unlocked: false,
-      progress: { current: 35, target: 50 },
-    },
-    {
-      _id: "ach_004",
-      achievementId: "prophet",
-      title: "Prophet",
-      description: "100 correct predictions",
-      icon: "🌟",
-      category: "trading",
-      requirement: { type: "correct_predictions", target: 100 },
-      rarity: "epic",
-      pointsReward: 1000,
-      unlocked: false,
-      progress: { current: 35, target: 100 },
-    },
-    {
-      _id: "ach_005",
-      achievementId: "fortune_teller",
-      title: "Fortune Teller",
-      description: "90% win rate over 20+ trades",
-      icon: "🎰",
-      category: "trading",
-      requirement: { type: "win_rate", target: 0.9, minTrades: 20 },
-      rarity: "legendary",
-      pointsReward: 2000,
-      unlocked: false,
-      progress: { winRate: 0.72, trades: 45, targetWinRate: 0.9 },
-    },
-    {
-      _id: "ach_006",
-      achievementId: "streak_master_7",
-      title: "Streak Master",
-      description: "7-day login streak",
-      icon: "🔥",
-      category: "streak",
-      requirement: { type: "login_streak", target: 7 },
-      rarity: "common",
-      pointsReward: 100,
-      unlocked: true,
-      unlockedAt: Date.now() - 86400000,
-      displayed: true,
-    },
-  ];
+  try {
+    const convex = getConvexClient();
+    const achievements = await convex.query(api.gamification.getAchievements, {
+      userId: userId as Id<"users">,
+      category,
+    });
 
-  // Filter by category if specified
-  const filteredAchievements = category
-    ? achievements.filter((a) => a.category === category)
-    : achievements;
+    // Group by category
+    const grouped = achievements.reduce((acc: Record<string, typeof achievements>, a: { category: string }) => {
+      if (!acc[a.category]) {
+        acc[a.category] = [];
+      }
+      acc[a.category].push(a);
+      return acc;
+    }, {} as Record<string, typeof achievements>);
 
-  // Group by category
-  const grouped = filteredAchievements.reduce((acc, a) => {
-    if (!acc[a.category]) {
-      acc[a.category] = [];
-    }
-    acc[a.category].push(a);
-    return acc;
-  }, {} as Record<string, typeof achievements>);
+    // Calculate stats
+    const stats = {
+      total: achievements.length,
+      unlocked: achievements.filter((a: { unlocked: boolean }) => a.unlocked).length,
+      common: achievements.filter((a: { rarity: string }) => a.rarity === "common").length,
+      rare: achievements.filter((a: { rarity: string }) => a.rarity === "rare").length,
+      epic: achievements.filter((a: { rarity: string }) => a.rarity === "epic").length,
+      legendary: achievements.filter((a: { rarity: string }) => a.rarity === "legendary").length,
+    };
 
-  return c.json({
-    success: true,
-    data: {
-      achievements: filteredAchievements,
-      byCategory: grouped,
-      stats: {
-        total: achievements.length,
-        unlocked: achievements.filter((a) => a.unlocked).length,
-        common: achievements.filter((a) => a.rarity === "common").length,
-        rare: achievements.filter((a) => a.rarity === "rare").length,
-        epic: achievements.filter((a) => a.rarity === "epic").length,
-        legendary: achievements.filter((a) => a.rarity === "legendary").length,
+    return c.json({
+      success: true,
+      data: {
+        achievements,
+        byCategory: grouped,
+        stats,
       },
-    },
-    timestamp: new Date().toISOString(),
-  });
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to fetch achievements";
+    return c.json(
+      {
+        success: false,
+        error: { code: "FETCH_FAILED", message },
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================
@@ -475,13 +336,29 @@ app.patch("/achievements/:achievementId/display", zValidator("json", z.object({
     );
   }
 
-  // TODO: Call Convex mutation gamification.toggleAchievementDisplay
+  try {
+    const convex = getConvexClient();
+    await convex.mutation(api.gamification.toggleAchievementDisplay, {
+      userId: userId as Id<"users">,
+      achievementId: achievementId as Id<"achievements">,
+      displayed,
+    });
 
-  return c.json({
-    success: true,
-    data: { achievementId, displayed },
-    timestamp: new Date().toISOString(),
-  });
+    return c.json({
+      success: true,
+      data: { achievementId, displayed },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to toggle achievement display";
+    return c.json(
+      {
+        success: false,
+        error: { code: "UPDATE_FAILED", message },
+      },
+      400
+    );
+  }
 });
 
 // ============================================================================

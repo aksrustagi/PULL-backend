@@ -7,6 +7,12 @@ import { Hono } from "hono";
 import { Client } from "@temporalio/client";
 import { SumsubClient, type WebhookPayload } from "@pull/core/services/sumsub";
 import { getLogger } from "@pull/core/services";
+import {
+  isWebhookEventProcessed,
+  storeWebhookEvent,
+  markWebhookProcessed,
+  generateCompositeEventId,
+} from "./idempotency";
 
 const sumsub = new Hono();
 const logger = getLogger().child({ service: "sumsub-webhook" });
@@ -31,17 +37,25 @@ function getTemporalClient(): Client {
   });
 }
 
-async function storeWebhookEvent(payload: WebhookPayload, rawPayload: string): Promise<void> {
-  // TODO: Store in Convex webhookEvents table
+async function storeWebhookEventLocal(payload: WebhookPayload, rawPayload: string): Promise<string | null> {
+  // Sumsub doesn't provide a unique event ID, so we generate a composite one
+  const eventId = generateCompositeEventId(
+    payload.applicantId,
+    payload.type,
+    payload.createdAtMs
+  );
   logger.info("Storing webhook event", {
     eventType: payload.type,
     applicantId: payload.applicantId,
+    eventId,
   });
+  return await storeWebhookEvent("sumsub", payload.type, eventId, rawPayload);
 }
 
 async function isEventProcessed(applicantId: string, eventType: string, createdAtMs: string): Promise<boolean> {
-  // TODO: Check if event was already processed (idempotency)
-  return false;
+  // Generate composite event ID for idempotency check
+  const eventId = generateCompositeEventId(applicantId, eventType, createdAtMs);
+  return await isWebhookEventProcessed("sumsub", eventId);
 }
 
 // ==========================================================================
@@ -79,37 +93,48 @@ sumsub.post("/", async (c) => {
       return c.json({ success: true, message: "Already processed" });
     }
 
-    // Store raw event
-    await storeWebhookEvent(payload, rawBody);
+    // Store raw event and get record ID for marking as processed
+    const recordId = await storeWebhookEventLocal(payload, rawBody);
 
-    // Handle event types
-    switch (payload.type) {
-      case "applicantReviewed":
-        await handleApplicantReviewed(payload);
-        break;
+    let processingError: string | undefined;
+    try {
+      // Handle event types
+      switch (payload.type) {
+        case "applicantReviewed":
+          await handleApplicantReviewed(payload);
+          break;
 
-      case "applicantPending":
-        await handleApplicantPending(payload);
-        break;
+        case "applicantPending":
+          await handleApplicantPending(payload);
+          break;
 
-      case "applicantOnHold":
-        await handleApplicantOnHold(payload);
-        break;
+        case "applicantOnHold":
+          await handleApplicantOnHold(payload);
+          break;
 
-      case "applicantCreated":
-        logger.info("Applicant created", { applicantId: payload.applicantId });
-        break;
+        case "applicantCreated":
+          logger.info("Applicant created", { applicantId: payload.applicantId });
+          break;
 
-      case "applicantPrechecked":
-        logger.info("Applicant prechecked", { applicantId: payload.applicantId });
-        break;
+        case "applicantPrechecked":
+          logger.info("Applicant prechecked", { applicantId: payload.applicantId });
+          break;
 
-      case "applicantReset":
-        logger.info("Applicant reset", { applicantId: payload.applicantId });
-        break;
+        case "applicantReset":
+          logger.info("Applicant reset", { applicantId: payload.applicantId });
+          break;
 
-      default:
-        logger.info("Unhandled event type", { eventType: payload.type });
+        default:
+          logger.info("Unhandled event type", { eventType: payload.type });
+      }
+    } catch (handlerError) {
+      processingError = handlerError instanceof Error ? handlerError.message : "Handler error";
+      throw handlerError;
+    } finally {
+      // Mark event as processed (with or without error)
+      if (recordId) {
+        await markWebhookProcessed(recordId, processingError);
+      }
     }
 
     return c.json({ success: true });

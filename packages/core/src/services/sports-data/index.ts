@@ -1,13 +1,21 @@
 /**
  * Sports Data Service
  *
- * Unified interface for fetching NFL data from ESPN and SportsRadar.
+ * Unified interface for fetching NFL and NBA data from ESPN and SportsRadar.
  */
 
 export * from "./types";
 export * from "./espn";
+export * from "./nba";
 
 import { ESPNClient, getESPNClient, NFL_TEAMS } from "./espn";
+import {
+  NBADataService,
+  NBAESPNClient,
+  getNBADataService,
+  getNBAESPNClient,
+  NBA_TEAMS,
+} from "./nba";
 import type {
   NFLTeam,
   NFLPlayer,

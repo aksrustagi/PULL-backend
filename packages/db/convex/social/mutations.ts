@@ -133,7 +133,10 @@ export const updateFollowSettings = mutation({
       throw new Error("Not following this user");
     }
 
-    const updates: any = {};
+    const updates: Partial<{
+      notificationsEnabled: boolean;
+      positionVisibility: "all" | "entry_only" | "none";
+    }> = {};
     if (args.notificationsEnabled !== undefined) {
       updates.notificationsEnabled = args.notificationsEnabled;
     }
@@ -773,5 +776,640 @@ export const createActivity = mutation({
       relatedUserIds: args.relatedUserIds ?? [],
       createdAt: now,
     });
+  },
+});
+
+// ============================================================================
+// TRADING ROOM MUTATIONS
+// ============================================================================
+
+/**
+ * Create a trading room
+ */
+export const createTradingRoom = mutation({
+  args: {
+    ownerId: v.id("users"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    coverImageUrl: v.optional(v.string()),
+    type: v.union(
+      v.literal("public"),
+      v.literal("private"),
+      v.literal("premium"),
+      v.literal("exclusive")
+    ),
+    accessLevel: v.union(
+      v.literal("open"),
+      v.literal("request_to_join"),
+      v.literal("invite_only"),
+      v.literal("subscription")
+    ),
+    subscriptionPrice: v.optional(v.number()),
+    subscriptionPeriod: v.optional(v.union(
+      v.literal("monthly"),
+      v.literal("quarterly"),
+      v.literal("yearly")
+    )),
+    tradingFocus: v.optional(v.array(v.string())),
+    assetClasses: v.optional(v.array(v.string())),
+    settings: v.optional(v.object({
+      allowPositionSharing: v.boolean(),
+      allowCopyTrades: v.boolean(),
+      positionDelay: v.number(),
+      requireVerifiedTraders: v.boolean(),
+      minReputationScore: v.number(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Default settings
+    const defaultSettings = {
+      allowPositionSharing: true,
+      allowCopyTrades: false,
+      positionDelay: 0,
+      requireVerifiedTraders: false,
+      minReputationScore: 0,
+    };
+
+    // Create the room
+    const roomId = await ctx.db.insert("tradingRooms", {
+      name: args.name,
+      description: args.description,
+      avatarUrl: args.avatarUrl,
+      coverImageUrl: args.coverImageUrl,
+      type: args.type,
+      accessLevel: args.accessLevel,
+      subscriptionPrice: args.subscriptionPrice,
+      subscriptionPeriod: args.subscriptionPeriod,
+      ownerId: args.ownerId,
+      moderatorIds: [],
+      tradingFocus: args.tradingFocus ?? [],
+      assetClasses: args.assetClasses ?? [],
+      settings: args.settings ?? defaultSettings,
+      memberCount: 1,
+      activeMembers: 1,
+      totalPositionsShared: 0,
+      totalMessages: 0,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+      lastActivityAt: now,
+    });
+
+    // Add owner as first member
+    await ctx.db.insert("tradingRoomMembers", {
+      roomId,
+      userId: args.ownerId,
+      role: "owner",
+      status: "active",
+      canPost: true,
+      canSharePositions: true,
+      canInvite: true,
+      notificationsEnabled: true,
+      notificationLevel: "all",
+      positionsSharedCount: 0,
+      messagesCount: 0,
+      joinedAt: now,
+      updatedAt: now,
+    });
+
+    // Create activity
+    await ctx.db.insert("socialActivity", {
+      actorId: args.ownerId,
+      type: "room_created",
+      targetType: "room",
+      targetId: roomId,
+      data: { roomId, name: args.name, type: args.type },
+      visibility: "public",
+      relatedUserIds: [],
+      createdAt: now,
+    });
+
+    return roomId;
+  },
+});
+
+/**
+ * Update a trading room
+ */
+export const updateTradingRoom = mutation({
+  args: {
+    roomId: v.id("tradingRooms"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    coverImageUrl: v.optional(v.string()),
+    accessLevel: v.optional(v.union(
+      v.literal("open"),
+      v.literal("request_to_join"),
+      v.literal("invite_only"),
+      v.literal("subscription")
+    )),
+    subscriptionPrice: v.optional(v.number()),
+    subscriptionPeriod: v.optional(v.union(
+      v.literal("monthly"),
+      v.literal("quarterly"),
+      v.literal("yearly")
+    )),
+    tradingFocus: v.optional(v.array(v.string())),
+    assetClasses: v.optional(v.array(v.string())),
+    settings: v.optional(v.object({
+      allowPositionSharing: v.boolean(),
+      allowCopyTrades: v.boolean(),
+      positionDelay: v.number(),
+      requireVerifiedTraders: v.boolean(),
+      minReputationScore: v.number(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    const updates: any = { updatedAt: Date.now() };
+
+    if (args.name !== undefined) updates.name = args.name;
+    if (args.description !== undefined) updates.description = args.description;
+    if (args.avatarUrl !== undefined) updates.avatarUrl = args.avatarUrl;
+    if (args.coverImageUrl !== undefined) updates.coverImageUrl = args.coverImageUrl;
+    if (args.accessLevel !== undefined) updates.accessLevel = args.accessLevel;
+    if (args.subscriptionPrice !== undefined) updates.subscriptionPrice = args.subscriptionPrice;
+    if (args.subscriptionPeriod !== undefined) updates.subscriptionPeriod = args.subscriptionPeriod;
+    if (args.tradingFocus !== undefined) updates.tradingFocus = args.tradingFocus;
+    if (args.assetClasses !== undefined) updates.assetClasses = args.assetClasses;
+    if (args.settings !== undefined) updates.settings = args.settings;
+
+    await ctx.db.patch(args.roomId, updates);
+
+    return { success: true };
+  },
+});
+
+/**
+ * Join a trading room
+ */
+export const joinTradingRoom = mutation({
+  args: {
+    roomId: v.id("tradingRooms"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    if (room.status !== "active") {
+      throw new Error("Room is not active");
+    }
+
+    // Check if already a member
+    const existing = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room_user", (q) =>
+        q.eq("roomId", args.roomId).eq("userId", args.userId)
+      )
+      .unique();
+
+    if (existing) {
+      if (existing.status === "active") {
+        throw new Error("Already a member of this room");
+      }
+      if (existing.status === "banned") {
+        throw new Error("You are banned from this room");
+      }
+    }
+
+    // Check access level
+    if (room.accessLevel === "invite_only") {
+      throw new Error("This room is invite-only");
+    }
+
+    if (room.accessLevel === "subscription" && room.subscriptionPrice) {
+      throw new Error("Subscription required to join this room");
+    }
+
+    const now = Date.now();
+
+    // Determine initial status based on access level
+    const status = room.accessLevel === "request_to_join" ? "pending" : "active";
+
+    if (existing) {
+      // Reactivate membership
+      await ctx.db.patch(existing._id, {
+        status,
+        role: "member",
+        canPost: true,
+        canSharePositions: false,
+        canInvite: false,
+        leftAt: undefined,
+        joinedAt: now,
+        updatedAt: now,
+      });
+    } else {
+      // Create new membership
+      await ctx.db.insert("tradingRoomMembers", {
+        roomId: args.roomId,
+        userId: args.userId,
+        role: "member",
+        status,
+        canPost: true,
+        canSharePositions: false,
+        canInvite: false,
+        notificationsEnabled: true,
+        notificationLevel: "all",
+        positionsSharedCount: 0,
+        messagesCount: 0,
+        joinedAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // Update member count if active
+    if (status === "active") {
+      await ctx.db.patch(args.roomId, {
+        memberCount: room.memberCount + 1,
+        updatedAt: now,
+      });
+
+      // Create activity
+      await ctx.db.insert("socialActivity", {
+        actorId: args.userId,
+        type: "room_joined",
+        targetType: "room",
+        targetId: args.roomId,
+        data: { roomId: args.roomId, name: room.name },
+        visibility: "followers",
+        relatedUserIds: [],
+        createdAt: now,
+      });
+    }
+
+    return { status, roomId: args.roomId };
+  },
+});
+
+/**
+ * Leave a trading room
+ */
+export const leaveTradingRoom = mutation({
+  args: {
+    roomId: v.id("tradingRooms"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    if (room.ownerId === args.userId) {
+      throw new Error("Owner cannot leave the room");
+    }
+
+    const member = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room_user", (q) =>
+        q.eq("roomId", args.roomId).eq("userId", args.userId)
+      )
+      .unique();
+
+    if (!member || member.status !== "active") {
+      throw new Error("Not a member of this room");
+    }
+
+    const now = Date.now();
+
+    await ctx.db.patch(member._id, {
+      status: "left",
+      leftAt: now,
+      updatedAt: now,
+    });
+
+    // Update member count
+    await ctx.db.patch(args.roomId, {
+      memberCount: Math.max(0, room.memberCount - 1),
+      updatedAt: now,
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Invite user to trading room
+ */
+export const inviteToTradingRoom = mutation({
+  args: {
+    roomId: v.id("tradingRooms"),
+    inviterId: v.id("users"),
+    inviteeId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    // Check inviter permissions
+    const inviter = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room_user", (q) =>
+        q.eq("roomId", args.roomId).eq("userId", args.inviterId)
+      )
+      .unique();
+
+    if (!inviter || inviter.status !== "active") {
+      throw new Error("Not a member of this room");
+    }
+
+    if (!inviter.canInvite && inviter.role !== "owner" && inviter.role !== "moderator") {
+      throw new Error("You do not have permission to invite");
+    }
+
+    // Check if already a member
+    const existing = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room_user", (q) =>
+        q.eq("roomId", args.roomId).eq("userId", args.inviteeId)
+      )
+      .unique();
+
+    if (existing?.status === "active") {
+      throw new Error("User is already a member");
+    }
+
+    const now = Date.now();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        status: "active",
+        role: "member",
+        leftAt: undefined,
+        joinedAt: now,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("tradingRoomMembers", {
+        roomId: args.roomId,
+        userId: args.inviteeId,
+        role: "member",
+        status: "active",
+        canPost: true,
+        canSharePositions: false,
+        canInvite: false,
+        notificationsEnabled: true,
+        notificationLevel: "all",
+        positionsSharedCount: 0,
+        messagesCount: 0,
+        joinedAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // Update member count
+    await ctx.db.patch(args.roomId, {
+      memberCount: room.memberCount + 1,
+      updatedAt: now,
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Kick member from trading room
+ */
+export const kickFromTradingRoom = mutation({
+  args: {
+    roomId: v.id("tradingRooms"),
+    kickerId: v.id("users"),
+    targetId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    // Check kicker permissions
+    const kicker = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room_user", (q) =>
+        q.eq("roomId", args.roomId).eq("userId", args.kickerId)
+      )
+      .unique();
+
+    if (!kicker || kicker.status !== "active") {
+      throw new Error("Not a member of this room");
+    }
+
+    if (kicker.role !== "owner" && kicker.role !== "moderator") {
+      throw new Error("Only owners and moderators can kick members");
+    }
+
+    if (args.targetId === room.ownerId) {
+      throw new Error("Cannot kick the owner");
+    }
+
+    const target = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room_user", (q) =>
+        q.eq("roomId", args.roomId).eq("userId", args.targetId)
+      )
+      .unique();
+
+    if (!target || target.status !== "active") {
+      throw new Error("Target is not a member");
+    }
+
+    if (kicker.role === "moderator" && target.role === "moderator") {
+      throw new Error("Moderators cannot kick other moderators");
+    }
+
+    const now = Date.now();
+
+    await ctx.db.patch(target._id, {
+      status: "left",
+      leftAt: now,
+      updatedAt: now,
+    });
+
+    // Update member count
+    await ctx.db.patch(args.roomId, {
+      memberCount: Math.max(0, room.memberCount - 1),
+      updatedAt: now,
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Send message to trading room
+ */
+export const sendTradingRoomMessage = mutation({
+  args: {
+    roomId: v.id("tradingRooms"),
+    senderId: v.id("users"),
+    type: v.union(
+      v.literal("text"),
+      v.literal("position_share"),
+      v.literal("trade_share"),
+      v.literal("analysis"),
+      v.literal("alert")
+    ),
+    content: v.string(),
+    sharedData: v.optional(v.object({
+      positionId: v.optional(v.string()),
+      orderId: v.optional(v.string()),
+      tradeId: v.optional(v.string()),
+      symbol: v.string(),
+      side: v.union(v.literal("buy"), v.literal("sell"), v.literal("long"), v.literal("short")),
+      quantity: v.optional(v.number()),
+      price: v.optional(v.number()),
+      pnl: v.optional(v.number()),
+      pnlPercent: v.optional(v.number()),
+    })),
+    attachments: v.optional(v.array(v.object({
+      type: v.string(),
+      url: v.string(),
+      name: v.optional(v.string()),
+      size: v.optional(v.number()),
+    }))),
+    replyToId: v.optional(v.id("tradingRoomMessages")),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    // Check membership and permissions
+    const member = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room_user", (q) =>
+        q.eq("roomId", args.roomId).eq("userId", args.senderId)
+      )
+      .unique();
+
+    if (!member || member.status !== "active") {
+      throw new Error("Not a member of this room");
+    }
+
+    if (!member.canPost) {
+      throw new Error("You do not have permission to post");
+    }
+
+    if ((args.type === "position_share" || args.type === "trade_share") && !member.canSharePositions) {
+      throw new Error("You do not have permission to share positions");
+    }
+
+    const now = Date.now();
+
+    // Create message
+    const messageId = await ctx.db.insert("tradingRoomMessages", {
+      roomId: args.roomId,
+      senderId: args.senderId,
+      type: args.type,
+      content: args.content,
+      sharedData: args.sharedData,
+      attachments: args.attachments ?? [],
+      likesCount: 0,
+      repliesCount: 0,
+      copyCount: 0,
+      replyToId: args.replyToId,
+      isEdited: false,
+      isDeleted: false,
+      isPinned: false,
+      createdAt: now,
+    });
+
+    // Update room stats
+    const isPositionShare = args.type === "position_share" || args.type === "trade_share";
+    await ctx.db.patch(args.roomId, {
+      totalMessages: room.totalMessages + 1,
+      totalPositionsShared: isPositionShare
+        ? room.totalPositionsShared + 1
+        : room.totalPositionsShared,
+      lastActivityAt: now,
+      updatedAt: now,
+    });
+
+    // Update member stats
+    await ctx.db.patch(member._id, {
+      messagesCount: member.messagesCount + 1,
+      positionsSharedCount: isPositionShare
+        ? member.positionsSharedCount + 1
+        : member.positionsSharedCount,
+      lastPostAt: now,
+      updatedAt: now,
+    });
+
+    // Update reply count if this is a reply
+    if (args.replyToId) {
+      const parentMessage = await ctx.db.get(args.replyToId);
+      if (parentMessage) {
+        await ctx.db.patch(args.replyToId, {
+          repliesCount: parentMessage.repliesCount + 1,
+        });
+      }
+    }
+
+    return messageId;
+  },
+});
+
+/**
+ * Update member count for a room (internal)
+ */
+export const updateRoomMemberCount = mutation({
+  args: {
+    roomId: v.id("tradingRooms"),
+  },
+  handler: async (ctx, args) => {
+    const activeMembers = await ctx.db
+      .query("tradingRoomMembers")
+      .withIndex("by_room", (q) =>
+        q.eq("roomId", args.roomId).eq("status", "active")
+      )
+      .collect();
+
+    await ctx.db.patch(args.roomId, {
+      memberCount: activeMembers.length,
+      updatedAt: Date.now(),
+    });
+
+    return activeMembers.length;
+  },
+});
+
+/**
+ * Archive a trading room
+ */
+export const archiveTradingRoom = mutation({
+  args: {
+    roomId: v.id("tradingRooms"),
+    ownerId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    if (room.ownerId !== args.ownerId) {
+      throw new Error("Only the owner can archive the room");
+    }
+
+    await ctx.db.patch(args.roomId, {
+      status: "archived",
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
   },
 });

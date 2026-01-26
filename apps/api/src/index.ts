@@ -53,10 +53,10 @@ initTracerProvider({
 const stopUptime = startUptimeUpdates();
 
 import { initSentry, captureException } from "./lib/sentry";
-import { authMiddleware } from "./middleware/auth";
+import { authMiddleware, adminOnly } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rate-limit";
 import { adminMiddleware, superadminMiddleware } from "./middleware/admin";
-import { csrfProtection } from "./middleware/security";
+import { csrfProtection, sanitizeInput } from "./middleware/security";
 import { requireFeature, isFeatureEnabled, notImplemented } from "./lib/feature-flags";
 import { healthRoutes } from "./routes/health";
 import { authRoutes } from "./routes/auth";
@@ -117,6 +117,7 @@ export type Env = {
     userId?: string;
     requestId: string;
     logger: ReturnType<typeof getLogger>;
+    sanitizedBody?: unknown;
   };
 };
 
@@ -217,8 +218,10 @@ app.route("/sse", sseRoutes);
 // CSRF protection for state-changing requests
 app.use("/api/*", csrfProtection);
 
-// Protected routes - auth first, then rate limit (so userId is available)
+// Protected routes - auth first, then CSRF/sanitization, then rate limit (so userId is available)
 app.use("/api/v1/*", authMiddleware);
+app.use("/api/v1/*", csrfProtection);
+app.use("/api/v1/*", sanitizeInput);
 app.use("/api/v1/*", rateLimitMiddleware);
 // Core trading and predictions - PRODUCTION READY
 app.route("/api/v1/trading", tradingRoutes);
@@ -322,6 +325,8 @@ app.route("/api/v1/widgets", widgetsRoutes);
 // Admin routes (require auth + admin role)
 app.use("/admin/*", authMiddleware);
 app.use("/admin/*", adminMiddleware);
+app.use("/admin/*", csrfProtection);
+app.use("/admin/*", sanitizeInput);
 app.route("/admin/analytics", analyticsRoutes);
 app.route("/admin/experiments", experimentsRoutes);
 // Backup routes require superadmin
@@ -330,6 +335,8 @@ app.route("/admin/backup", backupRoutes);
 
 app.use("/api/admin/*", authMiddleware);
 app.use("/api/admin/*", adminMiddleware);
+app.use("/api/admin/*", csrfProtection);
+app.use("/api/admin/*", sanitizeInput);
 app.route("/api/admin", adminRoutes);
 
 // tRPC endpoint (uses its own auth via context)

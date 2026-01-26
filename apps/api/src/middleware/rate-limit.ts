@@ -130,7 +130,7 @@ export function createFantasyRateLimit(tier: RateLimiterTier) {
       }
       await next();
     } catch (error) {
-      logger.error(`Rate limit error (${tier}):`, error);
+      logger.error("Rate limit error", { tier, identifier, error });
       await next();
     }
   });
@@ -214,7 +214,7 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
     const path = c.req.path;
     const isSensitive = path.includes("/auth") || path.includes("/trading") || path.includes("/orders");
     if (isSensitive) {
-      logger.error("Rate limit error on sensitive endpoint, blocking:", error);
+      logger.error("Rate limit error on sensitive endpoint, blocking request", { path, identifier, error });
       return c.json(
         {
           success: false,
@@ -225,7 +225,7 @@ export const rateLimitMiddleware = createMiddleware<Env>(async (c, next) => {
         503
       );
     }
-    logger.error("Rate limit error, allowing through:", error);
+    logger.error("Rate limit error, allowing through", { path, identifier, error });
     await next();
   }
 });
