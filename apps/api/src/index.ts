@@ -75,7 +75,7 @@ import { paymentsRoutes } from "./routes/payments";
 import { sseRoutes } from "./routes/sse";
 import { initWebSocketServer } from "./websocket";
 import { dataFlywheelRoutes } from "./routes/dataFlywheel";
-import { analyticsRoutes, experimentsRoutes, backupRoutes } from "./routes/admin";
+import { analyticsRoutes, experimentsRoutes, backupRoutes } from "./routes/admin/index";
 import { adminRoutes } from "./routes/admin";
 import { portfolioAgentRoutes } from "./routes/portfolio-agent";
 import { docsRoutes } from "./routes/docs";

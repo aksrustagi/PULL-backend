@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build": "bun build src/index.ts --outdir dist --target bun --external '@pull/*' --external 'convex' --external '@temporalio/*'",
     "start": "bun run dist/index.js",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
