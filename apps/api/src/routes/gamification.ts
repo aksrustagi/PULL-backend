@@ -2,8 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect gamification routes with rewards_basic flag
+app.use("*", requireFeature("rewards_basic", "Gamification"));
 
 // ============================================================================
 // Validation Schemas
@@ -54,7 +58,7 @@ app.get("/summary", async (c) => {
     );
   }
 
-  // TODO: Call Convex query gamification.getRewardsSummary
+  // Feature protected by feature flag - Convex integration pending
   const summary = {
     pointsBalance: 15250,
     pendingPoints: 50,
@@ -122,7 +126,7 @@ app.get("/history", zValidator("query", paginationSchema.extend({
     );
   }
 
-  // TODO: Call Convex query gamification.getPointsHistory
+  // Feature protected by feature flag - Convex integration pending
   const transactions = [
     {
       id: "pts_001",
@@ -182,7 +186,7 @@ app.get("/quests", zValidator("query", z.object({
     );
   }
 
-  // TODO: Call Convex query gamification.getActiveQuests
+  // Feature protected by feature flag - Convex integration pending
   const quests = {
     daily: [
       {
@@ -301,7 +305,7 @@ app.post("/quests/:questId/claim", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation gamification.claimQuestReward
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     pointsEarned: 15,
     newBalance: 15265,
@@ -336,7 +340,7 @@ app.get("/achievements", zValidator("query", z.object({
     );
   }
 
-  // TODO: Call Convex query gamification.getAchievements
+  // Feature protected by feature flag - Convex integration pending
   const achievements = [
     {
       _id: "ach_001",
@@ -475,7 +479,7 @@ app.patch("/achievements/:achievementId/display", zValidator("json", z.object({
     );
   }
 
-  // TODO: Call Convex mutation gamification.toggleAchievementDisplay
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -498,7 +502,7 @@ app.get("/leaderboard", zValidator("query", z.object({
   const userId = c.get("userId");
   const { period, type, tier, limit } = c.req.valid("query");
 
-  // TODO: Call Convex query gamification.getLeaderboard
+  // Feature protected by feature flag - Convex integration pending
   const leaderboard = {
     entries: [
       {
@@ -596,7 +600,7 @@ app.post("/redeem", zValidator("json", redeemSchema), async (c) => {
     }
   }
 
-  // TODO: Process redemption based on type
+  // Feature protected by feature flag - Convex integration pending
   // - fee_discount: Apply discount to next trade
   // - token_conversion: Start Temporal workflow to convert points to tokens
   // - sweepstakes: Enter user into sweepstakes
@@ -640,7 +644,7 @@ app.get("/shop", zValidator("query", z.object({
   const userId = c.get("userId");
   const { category } = c.req.valid("query");
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
   const shopItems = {
     fee_discounts: [
       {
@@ -751,7 +755,7 @@ app.get("/streaks", async (c) => {
     );
   }
 
-  // TODO: Call Convex query to get all user streaks
+  // Feature protected by feature flag - Convex integration pending
   const streaks = [
     {
       type: "login",
@@ -819,7 +823,7 @@ app.get("/tier", async (c) => {
     );
   }
 
-  // TODO: Call Convex query gamification.getUserTier
+  // Feature protected by feature flag - Convex integration pending
   const tierInfo = {
     current: {
       tier: "gold",
@@ -927,7 +931,7 @@ app.post("/earn", zValidator("json", z.object({
     );
   }
 
-  // TODO: Start Temporal workflow processPointsEarningWorkflow
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     workflowId: `pts_${Date.now()}`,
     pointsEarned: 50,

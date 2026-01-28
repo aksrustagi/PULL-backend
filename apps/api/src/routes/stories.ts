@@ -18,8 +18,12 @@ import {
   ReactionTypeSchema,
   SocialPlatformSchema,
 } from "@pull/core/services/stories";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all stories routes - feature is not production-ready
+app.use("*", requireFeature("stories", "Stories"));
 
 // ============================================================================
 // STORY CRUD
@@ -40,7 +44,7 @@ app.post("/", zValidator("json", CreateStoryRequestSchema), async (c) => {
   }
 
   try {
-    // TODO: Inject actual StoriesService
+    // Feature protected by feature flag - Convex integration pending
     const storyId = crypto.randomUUID();
     const referralCode = `S${Date.now().toString(36).toUpperCase().slice(-8)}`;
 

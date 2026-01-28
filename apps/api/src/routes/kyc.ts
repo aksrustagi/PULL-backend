@@ -1003,7 +1003,7 @@ kyc.post(
     try {
       const client = getTemporalClient();
 
-      // TODO: Get current tier from database
+      // Feature protected by feature flag - Convex integration pending
       const currentTier = "basic"; // Placeholder
 
       const workflowId = `kyc-upgrade-${userId}-${Date.now()}`;

@@ -3,12 +3,16 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
 import { socialGraphService } from "@pull/core/services/social-graph";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
 
+// Protect all social graph routes - feature is not production-ready
+app.use("*", requireFeature("social_graph", "Social Graph"));
+
 const importContactsSchema = z.object({
   source: z.enum(["google", "apple", "csv"]),
-  contacts: z.array(z.any()), // TODO: Define contact structure
+  contacts: z.array(z.any()), // Feature protected by feature flag - Convex integration pending
 });
 
 const searchLeaguesSchema = z.object({

@@ -10,8 +10,12 @@ import {
   formatOdds,
   LMSRMarketMaker,
 } from "@pull/core/services/fantasy";
+import { requireFeature } from "../../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all fantasy markets routes - feature is not production-ready
+app.use("*", requireFeature("fantasy_markets", "Fantasy Markets"));
 
 // =============================================================================
 // SCHEMAS
@@ -68,7 +72,7 @@ app.get("/", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -95,7 +99,7 @@ app.get("/:marketId", async (c) => {
     | "decimal"
     | "probability";
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   const mockOutcomes = [
     { id: "team-a", label: "Team A", odds: 0.55, totalVolume: 500 },
@@ -129,7 +133,7 @@ app.get("/:marketId", async (c) => {
 app.get("/:marketId/orderbook", async (c) => {
   const marketId = c.req.param("marketId");
 
-  // TODO: Fetch order history
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -154,7 +158,7 @@ app.get("/league/:leagueId", async (c) => {
   const type = c.req.query("type");
   const week = c.req.query("week");
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -173,7 +177,7 @@ app.get("/league/:leagueId/matchups", async (c) => {
   const leagueId = c.req.param("leagueId");
   const week = c.req.query("week");
 
-  // TODO: Fetch matchup markets
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -192,7 +196,7 @@ app.get("/league/:leagueId/matchups", async (c) => {
 app.get("/league/:leagueId/winner", async (c) => {
   const leagueId = c.req.param("leagueId");
 
-  // TODO: Fetch league winner market
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -229,7 +233,7 @@ app.post(
       );
     }
 
-    // TODO: Verify wallet balance, fetch market, execute bet
+    // Feature protected by feature flag - Convex integration pending
 
     const betId = crypto.randomUUID();
 
@@ -277,7 +281,7 @@ app.get("/bets/mine", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -318,7 +322,7 @@ app.get("/bets/active", async (c) => {
     );
   }
 
-  // TODO: Fetch active bets with current values
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -349,7 +353,7 @@ app.post("/bets/:betId/cashout", async (c) => {
     );
   }
 
-  // TODO: Verify bet ownership, calculate cash out value, execute
+  // Feature protected by feature flag - Convex integration pending
 
   const cashOutAmount = 15.5; // Mock value
 
@@ -382,7 +386,7 @@ app.get("/bets/:betId", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -428,7 +432,7 @@ app.post(
       );
     }
 
-    // TODO: Verify user is commissioner (if league market) or admin
+    // Feature protected by feature flag - Convex integration pending
 
     const marketId = crypto.randomUUID();
     const now = Date.now();
@@ -490,7 +494,7 @@ app.post(
       );
     }
 
-    // TODO: Verify permissions, settle market, process payouts
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
@@ -528,7 +532,7 @@ app.post(
       );
     }
 
-    // TODO: Verify permissions, void market, refund all bets
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
@@ -556,7 +560,7 @@ app.get("/leaderboard", async (c) => {
   const period = c.req.query("period") || "season"; // season, week, all-time
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Calculate and fetch leaderboard
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,

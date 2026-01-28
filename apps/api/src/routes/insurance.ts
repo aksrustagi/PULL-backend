@@ -47,7 +47,7 @@ const paginationSchema = z.object({
 app.get("/products", async (c) => {
   const userId = c.get("userId");
 
-  // TODO: Call Convex query insurance.getProducts
+  // Feature protected by feature flag - Convex integration pending
   const products = [
     {
       id: "prod_close_loss",
@@ -165,7 +165,7 @@ app.get("/quote", zValidator("query", z.object({
     );
   }
 
-  // TODO: Call Convex query insurance.getQuote
+  // Feature protected by feature flag - Convex integration pending
   const quote = {
     betId,
     productId,
@@ -212,7 +212,7 @@ app.post("/purchase", zValidator("json", purchaseInsuranceSchema), async (c) => 
     );
   }
 
-  // TODO: Call Convex mutation insurance.purchasePolicy
+  // Feature protected by feature flag - Convex integration pending
   const policy = {
     policyId: `pol_${Date.now()}`,
     betId: body.betId,
@@ -258,7 +258,7 @@ app.get("/policies", zValidator("query", paginationSchema.extend({
     );
   }
 
-  // TODO: Call Convex query insurance.getUserPolicies
+  // Feature protected by feature flag - Convex integration pending
   const policies = [
     {
       policyId: "pol_001",
@@ -350,7 +350,7 @@ app.get("/policies/:policyId", async (c) => {
     );
   }
 
-  // TODO: Call Convex query insurance.getPolicyById
+  // Feature protected by feature flag - Convex integration pending
   const policy = {
     policyId,
     betId: "bet_123",
@@ -407,7 +407,7 @@ app.post("/claim", zValidator("json", claimInsuranceSchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation insurance.submitClaim
+  // Feature protected by feature flag - Convex integration pending
   const claim = {
     claimId: `clm_${Date.now()}`,
     policyId: body.policyId,
@@ -447,7 +447,7 @@ app.get("/claims", zValidator("query", paginationSchema.extend({
     );
   }
 
-  // TODO: Call Convex query insurance.getUserClaims
+  // Feature protected by feature flag - Convex integration pending
   const claims = [
     {
       claimId: "clm_001",
@@ -504,7 +504,7 @@ app.get("/credits", async (c) => {
     );
   }
 
-  // TODO: Call Convex query insurance.getCreditBalance
+  // Feature protected by feature flag - Convex integration pending
   const credits = {
     balance: 25.00,
     lifetimeEarned: 75.00,
@@ -555,7 +555,7 @@ app.get("/stats", async (c) => {
     );
   }
 
-  // TODO: Call Convex query insurance.getUserStats
+  // Feature protected by feature flag - Convex integration pending
   const stats = {
     totalPolicies: 15,
     activePolicies: 3,

@@ -6,8 +6,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../../index";
+import { requireFeature } from "../../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all fantasy league routes - feature is not production-ready
+app.use("*", requireFeature("fantasy_leagues", "Fantasy Leagues"));
 
 // =============================================================================
 // SCHEMAS
@@ -102,7 +106,7 @@ app.post("/", zValidator("json", createLeagueSchema), async (c) => {
   // Generate invite code
   const inviteCode = generateInviteCode();
 
-  // TODO: Create league in Convex
+  // Feature protected by feature flag - Convex integration pending
 
   const leagueId = crypto.randomUUID();
   const now = Date.now();
@@ -150,7 +154,7 @@ app.get("/", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -174,7 +178,7 @@ app.get("/:leagueId", async (c) => {
   const userId = c.get("userId");
   const leagueId = c.req.param("leagueId");
 
-  // TODO: Fetch from Convex and verify user is a member
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -208,7 +212,7 @@ app.put(
       );
     }
 
-    // TODO: Verify user is commissioner and update in Convex
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
@@ -239,7 +243,7 @@ app.post("/join", zValidator("json", joinLeagueSchema), async (c) => {
     );
   }
 
-  // TODO: Find league by invite code, verify not full, create team
+  // Feature protected by feature flag - Convex integration pending
 
   const teamId = crypto.randomUUID();
 
@@ -272,7 +276,7 @@ app.post("/:leagueId/leave", async (c) => {
     );
   }
 
-  // TODO: Verify user is member (not commissioner), remove from league
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -289,7 +293,7 @@ app.post("/:leagueId/leave", async (c) => {
 app.get("/:leagueId/standings", async (c) => {
   const leagueId = c.req.param("leagueId");
 
-  // TODO: Fetch teams and calculate standings
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -310,7 +314,7 @@ app.get("/:leagueId/schedule", async (c) => {
   const leagueId = c.req.param("leagueId");
   const week = c.req.query("week");
 
-  // TODO: Fetch matchups for all weeks or specific week
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -330,7 +334,7 @@ app.get("/:leagueId/activity", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-  // TODO: Fetch transactions and events from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -353,7 +357,7 @@ app.get("/:leagueId/activity", async (c) => {
 app.get("/:leagueId/members", async (c) => {
   const leagueId = c.req.param("leagueId");
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -383,7 +387,7 @@ app.post(
       );
     }
 
-    // TODO: Verify commissioner, send invite email
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
@@ -414,7 +418,7 @@ app.delete("/:leagueId/members/:memberId", async (c) => {
     );
   }
 
-  // TODO: Verify commissioner, remove member
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,

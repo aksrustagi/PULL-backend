@@ -53,6 +53,10 @@ export const FEATURE_FLAGS = {
   marketMaker: false,
   bracketBattles: false,
 
+  // Social features - NOT READY
+  social_graph: false,
+  voice_commands: false,
+
   // Premium features - NOT READY
   vip: false,
   insurance: false,

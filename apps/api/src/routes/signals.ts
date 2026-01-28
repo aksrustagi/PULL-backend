@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import type { Env } from "../index";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all signals routes - feature is not production-ready
+app.use("*", requireFeature("ai_insights", "AI Signals"));
 
 // ============================================================================
 // SIGNAL ENDPOINTS
@@ -32,7 +36,7 @@ app.get("/", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const unseen = c.req.query("unseen") === "true";
 
-  // TODO: Fetch from Convex using signals:getSignals
+  // Feature protected by feature flag - Convex integration pending
   // const signals = await convex.query(api.signals.getSignals, {
   //   userId,
   //   types,
@@ -72,7 +76,7 @@ app.get("/:id", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex using signals:getSignalById
+  // Feature protected by feature flag - Convex integration pending
   // const signal = await convex.query(api.signals.getSignalById, {
   //   id: signalId,
   //   userId,
@@ -119,7 +123,7 @@ app.post("/:id/seen", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation signals:markSignalSeen
+  // Feature protected by feature flag - Convex integration pending
   // await convex.mutation(api.signals.markSignalSeen, {
   //   signalId,
   //   userId,
@@ -150,7 +154,7 @@ app.post("/:id/dismiss", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation signals:dismissSignal
+  // Feature protected by feature flag - Convex integration pending
   // await convex.mutation(api.signals.dismissSignal, {
   //   signalId,
   //   userId,
@@ -181,7 +185,7 @@ app.post("/:id/acted", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation signals:markSignalActed
+  // Feature protected by feature flag - Convex integration pending
   // await convex.mutation(api.signals.markSignalActed, {
   //   signalId,
   //   userId,
@@ -219,7 +223,7 @@ app.get("/insights", async (c) => {
   const type = c.req.query("type");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Fetch from Convex using signals:getUserInsights
+  // Feature protected by feature flag - Convex integration pending
   // const insights = await convex.query(api.signals.getUserInsights, {
   //   userId,
   //   type,
@@ -254,7 +258,7 @@ app.get("/insights/today", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex using signals:getTodayInsights
+  // Feature protected by feature flag - Convex integration pending
   // const insights = await convex.query(api.signals.getTodayInsights, {
   //   userId,
   // });
@@ -289,7 +293,7 @@ app.post("/insights/:id/dismiss", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation signals:dismissInsight
+  // Feature protected by feature flag - Convex integration pending
   // await convex.mutation(api.signals.dismissInsight, {
   //   insightId,
   //   userId,
@@ -316,7 +320,7 @@ app.get("/correlations/:ticker", async (c) => {
     : 0.5;
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Fetch from Convex using signals:getCorrelatedMarkets
+  // Feature protected by feature flag - Convex integration pending
   // const correlations = await convex.query(api.signals.getCorrelatedMarkets, {
   //   marketTicker: ticker,
   //   minCorrelation,
@@ -340,7 +344,7 @@ app.get("/correlations", async (c) => {
   const positive = c.req.query("positive");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Fetch from Convex using signals:getStrongestCorrelations
+  // Feature protected by feature flag - Convex integration pending
   // const correlations = await convex.query(api.signals.getStrongestCorrelations, {
   //   limit,
   //   positive: positive === "true" ? true : positive === "false" ? false : undefined,
@@ -376,7 +380,7 @@ app.get("/preferences", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex using signals:getUserPreferences
+  // Feature protected by feature flag - Convex integration pending
   // const preferences = await convex.query(api.signals.getUserPreferences, {
   //   userId,
   // });
@@ -439,7 +443,7 @@ app.put("/preferences", async (c) => {
     }
   }
 
-  // TODO: Call Convex mutation signals:updatePreferences
+  // Feature protected by feature flag - Convex integration pending
   // await convex.mutation(api.signals.updatePreferences, {
   //   userId,
   //   ...updates,
@@ -473,7 +477,7 @@ app.get("/stats", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex using signals:getSignalStats
+  // Feature protected by feature flag - Convex integration pending
   // const stats = await convex.query(api.signals.getSignalStats, {
   //   userId,
   // });

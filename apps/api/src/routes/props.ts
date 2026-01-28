@@ -2,8 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all props builder routes - feature is not production-ready
+app.use("*", requireFeature("props_builder", "Props Builder"));
 
 // ============================================================================
 // Validation Schemas
@@ -80,7 +84,7 @@ app.get("/", zValidator("query", paginationSchema.extend({
   const userId = c.get("userId");
   const { limit, cursor, category, status, sport, creator, sort } = c.req.valid("query");
 
-  // TODO: Call Convex query props.getProps
+  // Feature protected by feature flag - Convex integration pending
   const props = [
     {
       id: "prop_001",
@@ -170,7 +174,7 @@ app.get("/:propId", async (c) => {
   const userId = c.get("userId");
   const propId = c.req.param("propId");
 
-  // TODO: Call Convex query props.getPropById
+  // Feature protected by feature flag - Convex integration pending
   const prop = {
     id: propId,
     title: "Will LeBron score 30+ points tonight?",
@@ -260,7 +264,7 @@ app.post("/", zValidator("json", createPropSchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation props.createProp
+  // Feature protected by feature flag - Convex integration pending
   const prop = {
     id: `prop_${Date.now()}`,
     ...body,
@@ -304,7 +308,7 @@ app.post("/:propId/bet", zValidator("json", z.object({
     );
   }
 
-  // TODO: Call Convex mutation props.placeBet
+  // Feature protected by feature flag - Convex integration pending
   const bet = {
     betId: `bet_${Date.now()}`,
     propId,
@@ -347,7 +351,7 @@ app.post("/:propId/vote", zValidator("json", z.object({
     );
   }
 
-  // TODO: Call Convex mutation props.vote
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     propId,
     vote,
@@ -387,7 +391,7 @@ app.post("/:propId/flag", zValidator("json", z.object({
     );
   }
 
-  // TODO: Call Convex mutation props.flagProp
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     flagId: `flag_${Date.now()}`,
     propId,
@@ -422,7 +426,7 @@ app.get("/my/created", zValidator("query", paginationSchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex query props.getMyCreatedProps
+  // Feature protected by feature flag - Convex integration pending
   const props = [
     {
       id: "prop_my_001",
@@ -487,7 +491,7 @@ app.get("/my/bets", zValidator("query", paginationSchema.extend({
     );
   }
 
-  // TODO: Call Convex query props.getMyBets
+  // Feature protected by feature flag - Convex integration pending
   const bets = [
     {
       betId: "bet_001",
@@ -559,7 +563,7 @@ app.get("/creators/leaderboard", zValidator("query", z.object({
 })), async (c) => {
   const { period, limit } = c.req.valid("query");
 
-  // TODO: Call Convex query props.getCreatorLeaderboard
+  // Feature protected by feature flag - Convex integration pending
   const leaderboard = [
     {
       rank: 1,
@@ -613,7 +617,7 @@ app.get("/creators/leaderboard", zValidator("query", z.object({
 // ============================================================================
 
 app.get("/trending", async (c) => {
-  // TODO: Call Convex query props.getTrending
+  // Feature protected by feature flag - Convex integration pending
   const trending = {
     props: [
       {

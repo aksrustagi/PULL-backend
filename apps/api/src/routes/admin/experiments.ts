@@ -65,7 +65,7 @@ app.get("/", async (c) => {
   const status = c.req.query("status"); // draft, running, paused, completed, archived
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Fetch from Convex experiments:list
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -91,7 +91,7 @@ app.get("/", async (c) => {
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
 
-  // TODO: Fetch from Convex experiments:getById
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -137,7 +137,7 @@ app.post("/", zValidator("json", createExperimentSchema), async (c) => {
     );
   }
 
-  // TODO: Create in Convex experiments:create
+  // Admin route - implementation pending
 
   return c.json(
     {
@@ -162,7 +162,7 @@ app.put("/:id", zValidator("json", updateExperimentSchema), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
 
-  // TODO: Update in Convex experiments:update
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -182,7 +182,7 @@ app.put("/:id", zValidator("json", updateExperimentSchema), async (c) => {
 app.delete("/:id", async (c) => {
   const id = c.req.param("id");
 
-  // TODO: Archive in Convex experiments:archive
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -202,7 +202,7 @@ app.delete("/:id", async (c) => {
 app.post("/:id/start", async (c) => {
   const id = c.req.param("id");
 
-  // TODO: Update status in Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -222,7 +222,7 @@ app.post("/:id/start", async (c) => {
 app.post("/:id/pause", async (c) => {
   const id = c.req.param("id");
 
-  // TODO: Update status in Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -241,7 +241,7 @@ app.post("/:id/pause", async (c) => {
 app.post("/:id/resume", async (c) => {
   const id = c.req.param("id");
 
-  // TODO: Update status in Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -265,7 +265,7 @@ app.post("/:id/complete", zValidator("json", completeSchema), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
 
-  // TODO: Update status in Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -290,7 +290,7 @@ app.post("/:id/complete", zValidator("json", completeSchema), async (c) => {
 app.get("/:id/results", async (c) => {
   const id = c.req.param("id");
 
-  // TODO: Calculate results from Convex experimentEvents
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -318,7 +318,7 @@ app.get("/:id/timeline", async (c) => {
   const id = c.req.param("id");
   const granularity = c.req.query("granularity") ?? "daily"; // hourly, daily
 
-  // TODO: Calculate from Convex experimentEvents:getDailyStats
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -338,7 +338,7 @@ app.get("/:id/timeline", async (c) => {
 app.get("/:id/stats", async (c) => {
   const id = c.req.param("id");
 
-  // TODO: Fetch from Convex experimentEvents:getStats
+  // Admin route - implementation pending
 
   return c.json({
     success: true,

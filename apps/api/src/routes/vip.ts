@@ -2,8 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all VIP routes - feature is not production-ready
+app.use("*", requireFeature("vip", "VIP Program"));
 
 // ============================================================================
 // Validation Schemas
@@ -39,7 +43,7 @@ app.get("/status", async (c) => {
     );
   }
 
-  // TODO: Call Convex query vip.getVIPStatus
+  // Feature protected by feature flag - Convex integration pending
   const status = {
     userId,
     tier: "gold" as const,
@@ -80,7 +84,7 @@ app.get("/status", async (c) => {
 app.get("/tiers", async (c) => {
   const userId = c.get("userId");
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
   const tiers = {
     bronze: {
       name: "Bronze",
@@ -196,7 +200,7 @@ app.get("/cashback", zValidator("query", cashbackHistorySchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex query vip.getCashbackHistory
+  // Feature protected by feature flag - Convex integration pending
   const cashbackHistory = {
     summary: {
       pendingAmount: 45.50,
@@ -262,7 +266,7 @@ app.post("/cashback/claim", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation vip.claimCashback
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     claimedAmount: 45.50,
     newBalance: 1045.50,
@@ -295,7 +299,7 @@ app.get("/events", async (c) => {
     );
   }
 
-  // TODO: Call Convex query vip.getVIPEvents
+  // Feature protected by feature flag - Convex integration pending
   const events = [
     {
       id: "evt_001",
@@ -369,7 +373,7 @@ app.post("/events/:eventId/register", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation vip.registerForEvent
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     eventId,
     registrationId: `reg_${Date.now()}`,
@@ -405,7 +409,7 @@ app.get("/benefits/compare", zValidator("query", z.object({
     );
   }
 
-  // TODO: Call Convex query vip.compareBenefits
+  // Feature protected by feature flag - Convex integration pending
   const comparison = {
     currentTier: "gold",
     targetTier,
@@ -449,7 +453,7 @@ app.get("/manager", async (c) => {
     );
   }
 
-  // TODO: Call Convex query vip.getAccountManager
+  // Feature protected by feature flag - Convex integration pending
   // For demo, assume user is gold (no dedicated manager)
   const managerInfo = {
     hasManager: false,

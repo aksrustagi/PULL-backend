@@ -6,8 +6,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../../index";
+import { requireFeature } from "../../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all fantasy team routes - feature is not production-ready
+app.use("*", requireFeature("fantasy_leagues", "Fantasy Leagues"));
 
 // =============================================================================
 // SCHEMAS
@@ -58,7 +62,7 @@ app.get("/:teamId", async (c) => {
   const userId = c.get("userId");
   const teamId = c.req.param("teamId");
 
-  // TODO: Fetch from Convex, verify user has access (owns team or in same league)
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -109,7 +113,7 @@ app.put(
       );
     }
 
-    // TODO: Verify ownership and update in Convex
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
@@ -130,7 +134,7 @@ app.get("/:teamId/roster", async (c) => {
   const teamId = c.req.param("teamId");
   const week = c.req.query("week");
 
-  // TODO: Fetch roster from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -168,7 +172,7 @@ app.put(
       );
     }
 
-    // TODO: Verify ownership, validate moves (position eligibility, not locked), update in Convex
+    // Feature protected by feature flag - Convex integration pending
 
     const processedMoves = moves.map((move) => ({
       ...move,
@@ -195,7 +199,7 @@ app.get("/:teamId/matchups", async (c) => {
   const teamId = c.req.param("teamId");
   const week = c.req.query("week");
 
-  // TODO: Fetch matchups from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -213,7 +217,7 @@ app.get("/:teamId/matchups", async (c) => {
 app.get("/:teamId/matchup", async (c) => {
   const teamId = c.req.param("teamId");
 
-  // TODO: Fetch current week matchup with opponent details
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -247,7 +251,7 @@ app.get("/:teamId/matchup", async (c) => {
 app.get("/:teamId/optimize", async (c) => {
   const teamId = c.req.param("teamId");
 
-  // TODO: Fetch roster and calculate optimization
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -268,7 +272,7 @@ app.get("/:teamId/optimize", async (c) => {
 app.get("/:teamId/validate", async (c) => {
   const teamId = c.req.param("teamId");
 
-  // TODO: Fetch roster and validate
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -291,7 +295,7 @@ app.get("/:teamId/transactions", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-  // TODO: Fetch transactions from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -314,7 +318,7 @@ app.get("/:teamId/transactions", async (c) => {
 app.get("/:teamId/draft-picks", async (c) => {
   const teamId = c.req.param("teamId");
 
-  // TODO: Fetch draft picks from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,

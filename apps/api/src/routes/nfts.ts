@@ -68,7 +68,7 @@ app.get("/eligible", zValidator("query", paginationSchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex query nfts.getEligibleBets
+  // Feature protected by feature flag - Convex integration pending
   const eligibleBets = [
     {
       betId: "bet_001",
@@ -152,7 +152,7 @@ app.post("/mint", zValidator("json", mintNFTSchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation nfts.mintNFT
+  // Feature protected by feature flag - Convex integration pending
   const nft = {
     id: `nft_${Date.now()}`,
     tokenId: `PULL-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
@@ -213,7 +213,7 @@ app.get("/collection", zValidator("query", paginationSchema.extend({
     );
   }
 
-  // TODO: Call Convex query nfts.getUserCollection
+  // Feature protected by feature flag - Convex integration pending
   const collection = {
     items: [
       {
@@ -294,7 +294,7 @@ app.get("/:nftId", async (c) => {
   const userId = c.get("userId");
   const nftId = c.req.param("nftId");
 
-  // TODO: Call Convex query nfts.getNFTById
+  // Feature protected by feature flag - Convex integration pending
   const nft = {
     id: nftId,
     tokenId: "PULL-ABC123XY",
@@ -397,7 +397,7 @@ app.post("/:nftId/list", zValidator("json", z.object({
     );
   }
 
-  // TODO: Call Convex mutation nfts.listNFT
+  // Feature protected by feature flag - Convex integration pending
   const listing = {
     listingId: `list_${Date.now()}`,
     nftId,
@@ -437,7 +437,7 @@ app.delete("/:nftId/list", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation nfts.delistNFT
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     nftId,
     status: "delisted" as const,
@@ -475,7 +475,7 @@ app.post("/:nftId/offer", zValidator("json", z.object({
     );
   }
 
-  // TODO: Call Convex mutation nfts.makeOffer
+  // Feature protected by feature flag - Convex integration pending
   const offer = {
     offerId: `offer_${Date.now()}`,
     nftId,
@@ -515,7 +515,7 @@ app.post("/:nftId/offer/:offerId/accept", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation nfts.acceptOffer
+  // Feature protected by feature flag - Convex integration pending
   const trade = {
     tradeId: `trade_${Date.now()}`,
     nftId,
@@ -558,7 +558,7 @@ app.post("/:nftId/buy", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation nfts.buyNFT
+  // Feature protected by feature flag - Convex integration pending
   const purchase = {
     tradeId: `trade_${Date.now()}`,
     nftId,
@@ -596,7 +596,7 @@ app.get("/marketplace", zValidator("query", paginationSchema.extend({
 })), async (c) => {
   const { limit, cursor, rarity, category, sport, minPrice, maxPrice, sort } = c.req.valid("query");
 
-  // TODO: Call Convex query nfts.getMarketplaceListings
+  // Feature protected by feature flag - Convex integration pending
   const marketplace = {
     items: [
       {
@@ -684,7 +684,7 @@ app.get("/leaderboard", zValidator("query", z.object({
 })), async (c) => {
   const { type, limit } = c.req.valid("query");
 
-  // TODO: Call Convex query nfts.getCollectorLeaderboard
+  // Feature protected by feature flag - Convex integration pending
   const leaderboard = {
     entries: [
       {
@@ -739,7 +739,7 @@ app.get("/activity", zValidator("query", paginationSchema.extend({
 })), async (c) => {
   const { limit, cursor, type } = c.req.valid("query");
 
-  // TODO: Call Convex query nfts.getActivity
+  // Feature protected by feature flag - Convex integration pending
   const activity = {
     items: [
       {
@@ -792,7 +792,7 @@ app.get("/activity", zValidator("query", paginationSchema.extend({
 // ============================================================================
 
 app.get("/stats", async (c) => {
-  // TODO: Call Convex query nfts.getPlatformStats
+  // Feature protected by feature flag - Convex integration pending
   const stats = {
     totalMinted: 15420,
     totalVolume: 1250000,

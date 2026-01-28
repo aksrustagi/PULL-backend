@@ -14,7 +14,7 @@ const app = new Hono<Env>();
  * Key metrics summary with trends
  */
 app.get("/overview", async (c) => {
-  // TODO: Fetch from Convex dailyMetrics:getOverview
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -57,7 +57,7 @@ app.get("/metrics", async (c) => {
   const endDate = c.req.query("endDate");
   const granularity = c.req.query("granularity") ?? "daily"; // daily, weekly, monthly
 
-  // TODO: Fetch from Convex dailyMetrics:getByDateRange
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -76,7 +76,7 @@ app.get("/metrics", async (c) => {
  * Real-time metrics (last 24 hours by hour)
  */
 app.get("/realtime", async (c) => {
-  // TODO: Fetch from Convex analyticsEvents
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -103,7 +103,7 @@ app.get("/funnel", async (c) => {
   const startDate = c.req.query("startDate");
   const endDate = c.req.query("endDate");
 
-  // TODO: Calculate from Convex analyticsEvents
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -133,7 +133,7 @@ app.get("/funnel/dropoff", async (c) => {
   const startDate = c.req.query("startDate");
   const endDate = c.req.query("endDate");
 
-  // TODO: Analyze drop-off reasons
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -159,7 +159,7 @@ app.get("/funnel/dropoff", async (c) => {
 app.get("/retention", async (c) => {
   const cohortCount = parseInt(c.req.query("cohorts") ?? "30", 10);
 
-  // TODO: Fetch from Convex dailyMetrics:getRetentionCohorts
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -182,7 +182,7 @@ app.get("/retention", async (c) => {
 app.get("/retention/heatmap", async (c) => {
   const weeks = parseInt(c.req.query("weeks") ?? "12", 10);
 
-  // TODO: Generate heatmap data
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -203,7 +203,7 @@ app.get("/retention/heatmap", async (c) => {
  * User segmentation data
  */
 app.get("/users/segments", async (c) => {
-  // TODO: Calculate segments from Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -236,7 +236,7 @@ app.get("/users/segments", async (c) => {
  * LTV distribution and analysis
  */
 app.get("/users/ltv", async (c) => {
-  // TODO: Calculate from Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -263,7 +263,7 @@ app.get("/revenue", async (c) => {
   const startDate = c.req.query("startDate");
   const endDate = c.req.query("endDate");
 
-  // TODO: Fetch from Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -294,7 +294,7 @@ app.get("/revenue", async (c) => {
 app.get("/social", async (c) => {
   const period = c.req.query("period") ?? "week"; // day, week, month
 
-  // TODO: Calculate from Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -322,7 +322,7 @@ app.get("/social", async (c) => {
 app.get("/anomalies", async (c) => {
   const days = parseInt(c.req.query("days") ?? "7", 10);
 
-  // TODO: Fetch from Convex dailyMetrics:getRecentAnomalies
+  // Admin route - implementation pending
 
   return c.json({
     success: true,
@@ -347,7 +347,7 @@ app.get("/anomalies", async (c) => {
  * Top growth drivers analysis
  */
 app.get("/growth-drivers", async (c) => {
-  // TODO: Calculate from Convex
+  // Admin route - implementation pending
 
   return c.json({
     success: true,

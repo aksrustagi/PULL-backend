@@ -15,8 +15,12 @@ import {
   positionCommentsService,
   reputationService,
 } from "../services/social";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all social trading routes - feature is not production-ready
+app.use("*", requireFeature("social_trading", "Social Trading"));
 
 // ============================================================================
 // Follow/Unfollow Routes
@@ -1081,7 +1085,7 @@ app.post("/rooms", zValidator("json", createRoomSchema), async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   const roomId = crypto.randomUUID();
 
   return c.json({
@@ -1105,7 +1109,7 @@ app.get("/rooms/:roomId", async (c) => {
   const roomId = c.req.param("roomId");
   const userId = c.get("userId");
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   return c.json({
     success: true,
     data: null,
@@ -1121,7 +1125,7 @@ app.get("/rooms", async (c) => {
   const type = c.req.query("type");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   return c.json({
     success: true,
     data: { rooms: [] },
@@ -1142,7 +1146,7 @@ app.get("/rooms/me", async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   return c.json({
     success: true,
     data: { rooms: [] },
@@ -1156,7 +1160,7 @@ app.get("/rooms/me", async (c) => {
 app.get("/rooms/popular", async (c) => {
   const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   return c.json({
     success: true,
     data: { rooms: [] },
@@ -1178,7 +1182,7 @@ app.post("/rooms/:roomId/join", async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   return c.json({
     success: true,
     data: { roomId, userId, status: "active" },
@@ -1200,7 +1204,7 @@ app.post("/rooms/:roomId/leave", async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   return c.json({
     success: true,
     data: { left: true },
@@ -1224,7 +1228,7 @@ app.get("/rooms/:roomId/messages", async (c) => {
     );
   }
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   return c.json({
     success: true,
     data: { messages: [], cursor: undefined },
@@ -1247,7 +1251,7 @@ app.post("/rooms/:roomId/messages", zValidator("json", sendMessageSchema), async
     );
   }
 
-  // TODO: Implement with TradingRoomService
+  // Feature protected by feature flag - Convex integration pending
   const messageId = crypto.randomUUID();
 
   return c.json({

@@ -2,8 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all watch party routes - feature is not production-ready
+app.use("*", requireFeature("watch_party", "Watch Party"));
 
 // ============================================================================
 // Validation Schemas
@@ -67,7 +71,7 @@ app.get("/active", zValidator("query", z.object({
   const userId = c.get("userId");
   const { eventId, sport } = c.req.valid("query");
 
-  // TODO: Call Convex query watchParty.getActiveParties
+  // Feature protected by feature flag - Convex integration pending
   const parties = [
     {
       id: "party_001",
@@ -157,7 +161,7 @@ app.post("/", zValidator("json", createPartySchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation watchParty.createParty
+  // Feature protected by feature flag - Convex integration pending
   const party = {
     id: `party_${Date.now()}`,
     ...body,
@@ -185,7 +189,7 @@ app.get("/:partyId", async (c) => {
   const userId = c.get("userId");
   const partyId = c.req.param("partyId");
 
-  // TODO: Call Convex query watchParty.getPartyById
+  // Feature protected by feature flag - Convex integration pending
   const party = {
     id: partyId,
     name: "Lakers Nation Watch Party",
@@ -261,7 +265,7 @@ app.post("/:partyId/join", zValidator("json", joinPartySchema.optional()), async
     );
   }
 
-  // TODO: Call Convex mutation watchParty.joinParty
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     partyId,
     status: "joined" as const,
@@ -301,7 +305,7 @@ app.post("/:partyId/leave", async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation watchParty.leaveParty
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     partyId,
     status: "left" as const,
@@ -325,7 +329,7 @@ app.get("/:partyId/messages", zValidator("query", paginationSchema), async (c) =
   const partyId = c.req.param("partyId");
   const { limit, cursor } = c.req.valid("query");
 
-  // TODO: Call Convex query watchParty.getMessages
+  // Feature protected by feature flag - Convex integration pending
   const messages = [
     {
       id: "msg_001",
@@ -408,7 +412,7 @@ app.post("/:partyId/messages", zValidator("json", sendMessageSchema), async (c) 
     );
   }
 
-  // TODO: Call Convex mutation watchParty.sendMessage
+  // Feature protected by feature flag - Convex integration pending
   const message = {
     id: `msg_${Date.now()}`,
     partyId,
@@ -437,7 +441,7 @@ app.get("/:partyId/group-bets", async (c) => {
   const userId = c.get("userId");
   const partyId = c.req.param("partyId");
 
-  // TODO: Call Convex query watchParty.getGroupBets
+  // Feature protected by feature flag - Convex integration pending
   const groupBets = [
     {
       id: "gb_001",
@@ -507,7 +511,7 @@ app.post("/:partyId/group-bets", zValidator("json", createGroupBetSchema), async
     );
   }
 
-  // TODO: Call Convex mutation watchParty.createGroupBet
+  // Feature protected by feature flag - Convex integration pending
   const groupBet = {
     id: `gb_${Date.now()}`,
     partyId,
@@ -548,7 +552,7 @@ app.post("/:partyId/group-bets/:betId/contribute", zValidator("json", contribute
     );
   }
 
-  // TODO: Call Convex mutation watchParty.contributeToGroupBet
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     betId,
     contributionId: `contrib_${Date.now()}`,
@@ -577,7 +581,7 @@ app.get("/:partyId/polls", async (c) => {
   const userId = c.get("userId");
   const partyId = c.req.param("partyId");
 
-  // TODO: Call Convex query watchParty.getPolls
+  // Feature protected by feature flag - Convex integration pending
   const polls = [
     {
       id: "poll_001",
@@ -625,7 +629,7 @@ app.post("/:partyId/polls", zValidator("json", createPollSchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex mutation watchParty.createPoll
+  // Feature protected by feature flag - Convex integration pending
   const poll = {
     id: `poll_${Date.now()}`,
     partyId,
@@ -668,7 +672,7 @@ app.post("/:partyId/polls/:pollId/vote", zValidator("json", z.object({
     );
   }
 
-  // TODO: Call Convex mutation watchParty.voteOnPoll
+  // Feature protected by feature flag - Convex integration pending
   const result = {
     pollId,
     optionId,
@@ -698,7 +702,7 @@ app.get("/:partyId/sync", async (c) => {
   const userId = c.get("userId");
   const partyId = c.req.param("partyId");
 
-  // TODO: Call Convex query watchParty.getSyncState
+  // Feature protected by feature flag - Convex integration pending
   const syncState = {
     partyId,
     eventId: "evt_lakers_celtics",
@@ -756,7 +760,7 @@ app.get("/my", zValidator("query", paginationSchema), async (c) => {
     );
   }
 
-  // TODO: Call Convex query watchParty.getMyParties
+  // Feature protected by feature flag - Convex integration pending
   const parties = {
     hosting: [
       {

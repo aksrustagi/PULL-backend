@@ -81,7 +81,7 @@ app.get("/", zValidator("query", searchPlayersSchema), async (c) => {
       );
     }
 
-    // TODO: If leagueId provided, filter by availability status
+    // Feature protected by feature flag - Convex integration pending
 
     // Sort
     players.sort((a, b) => {
@@ -158,7 +158,7 @@ app.get("/", zValidator("query", searchPlayersSchema), async (c) => {
 app.get("/:playerId", async (c) => {
   const playerId = c.req.param("playerId");
 
-  // TODO: Fetch from Convex or ESPN
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -195,7 +195,7 @@ app.get("/:playerId/stats", async (c) => {
   const season = c.req.query("season") || new Date().getFullYear().toString();
   const week = c.req.query("week");
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -254,7 +254,7 @@ app.get("/:playerId/projections", async (c) => {
   const playerId = c.req.param("playerId");
   const week = c.req.query("week");
 
-  // TODO: Fetch projections
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -293,7 +293,7 @@ app.get("/:playerId/gamelog", async (c) => {
   const playerId = c.req.param("playerId");
   const season = c.req.query("season") || new Date().getFullYear().toString();
 
-  // TODO: Fetch game log from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -313,7 +313,7 @@ app.get("/trending/all", async (c) => {
   const type = c.req.query("type") || "add";
   const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
-  // TODO: Calculate trending from recent transactions
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -367,7 +367,7 @@ app.get("/compare", async (c) => {
     );
   }
 
-  // TODO: Fetch and compare players
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,

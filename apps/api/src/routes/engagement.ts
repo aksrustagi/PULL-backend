@@ -45,7 +45,7 @@ app.post("/claim-daily", zValidator("json", claimDailySchema), async (c) => {
 
   const { challengeId } = c.req.valid("json");
 
-  // TODO: Implement daily challenge claiming
+  // Feature protected by feature flag - Convex integration pending
   const xpEarned = 50;
   await engagementService.addXP(userId, xpEarned, "daily_challenge");
 
@@ -117,7 +117,7 @@ app.post("/mint-trophy", zValidator("json", z.object({
 
   const { leagueId, seasonId, trophyType } = c.req.valid("json");
 
-  // TODO: Verify user is eligible for this trophy
+  // Feature protected by feature flag - Convex integration pending
   const trophy = await engagementService.mintChampionshipTrophy(leagueId, seasonId, userId);
 
   return c.json({

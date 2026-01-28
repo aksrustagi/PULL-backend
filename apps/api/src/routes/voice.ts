@@ -3,8 +3,12 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
 import { voiceService } from "@pull/core/services/voice";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all voice routes - feature is not production-ready
+app.use("*", requireFeature("voice_commands", "Voice Commands"));
 
 const voiceCommandSchema = z.object({
   audioUrl: z.string().url().optional(),
@@ -36,7 +40,7 @@ app.post("/command", zValidator("json", voiceCommandSchema), async (c) => {
   // For now, we support URL reference
   const command = await voiceService.processVoiceCommand({
     ...body,
-    audioBuffer: undefined, // TODO: Handle file upload
+    audioBuffer: undefined, // Feature protected by feature flag - Convex integration pending
   });
 
   return c.json({

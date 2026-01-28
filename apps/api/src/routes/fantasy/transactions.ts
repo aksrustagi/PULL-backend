@@ -8,8 +8,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../../index";
+import { requireFeature } from "../../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all fantasy transaction routes - feature is not production-ready
+app.use("*", requireFeature("fantasy_trading", "Fantasy Trading"));
 
 // =============================================================================
 // SCHEMAS
@@ -81,7 +85,7 @@ app.post("/add", zValidator("json", addDropSchema), async (c) => {
     );
   }
 
-  // TODO: Verify team ownership, player availability, roster space
+  // Feature protected by feature flag - Convex integration pending
 
   const transactionId = crypto.randomUUID();
 
@@ -127,7 +131,7 @@ app.post("/drop", zValidator("json", addDropSchema), async (c) => {
     );
   }
 
-  // TODO: Verify team ownership, player on roster
+  // Feature protected by feature flag - Convex integration pending
 
   const transactionId = crypto.randomUUID();
 
@@ -167,7 +171,7 @@ app.post("/waiver", zValidator("json", waiverClaimSchema), async (c) => {
     );
   }
 
-  // TODO: Verify team ownership, player on waivers, FAAB budget
+  // Feature protected by feature flag - Convex integration pending
 
   const transactionId = crypto.randomUUID();
 
@@ -208,7 +212,7 @@ app.get("/waiver/pending", async (c) => {
     );
   }
 
-  // TODO: Fetch pending waivers from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -234,7 +238,7 @@ app.delete("/waiver/:claimId", async (c) => {
     );
   }
 
-  // TODO: Verify ownership and cancel
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -273,7 +277,7 @@ app.put(
       );
     }
 
-    // TODO: Verify ownership and reorder
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
@@ -307,7 +311,7 @@ app.post("/trade", zValidator("json", tradeProposalSchema), async (c) => {
     );
   }
 
-  // TODO: Verify team ownership, players on rosters, trade deadline
+  // Feature protected by feature flag - Convex integration pending
 
   const transactionId = crypto.randomUUID();
 
@@ -331,7 +335,7 @@ app.post("/trade", zValidator("json", tradeProposalSchema), async (c) => {
 app.get("/trade/:tradeId", async (c) => {
   const tradeId = c.req.param("tradeId");
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -365,7 +369,7 @@ app.put(
       );
     }
 
-    // TODO: Verify user is trade recipient, handle response
+    // Feature protected by feature flag - Convex integration pending
 
     if (body.accept) {
       return c.json({
@@ -422,7 +426,7 @@ app.delete("/trade/:tradeId", async (c) => {
     );
   }
 
-  // TODO: Verify user is trade initiator
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -456,7 +460,7 @@ app.post(
       );
     }
 
-    // TODO: Verify user is league member (not involved in trade), record vote
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
@@ -495,7 +499,7 @@ app.get("/", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -533,7 +537,7 @@ app.post("/commissioner/process-waivers", async (c) => {
     );
   }
 
-  // TODO: Verify commissioner, process waivers
+  // Feature protected by feature flag - Convex integration pending
 
   return c.json({
     success: true,
@@ -566,7 +570,7 @@ app.post(
       );
     }
 
-    // TODO: Verify commissioner, execute action
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
@@ -611,7 +615,7 @@ app.post(
       );
     }
 
-    // TODO: Verify commissioner, execute roster move
+    // Feature protected by feature flag - Convex integration pending
 
     return c.json({
       success: true,
