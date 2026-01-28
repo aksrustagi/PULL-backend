@@ -50,6 +50,8 @@ export const FEATURE_FLAGS = {
   cash_battles: false,
   squads: false,
   watch_party: false,
+  marketMaker: false,
+  bracketBattles: false,
 
   // Premium features - NOT READY
   vip: false,

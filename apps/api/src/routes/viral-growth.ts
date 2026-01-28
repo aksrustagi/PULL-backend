@@ -13,6 +13,9 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { api } from "@pull/db/convex/_generated/api";
+import { toUserId } from "../lib/convex-types";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
 
@@ -39,8 +42,9 @@ const updatePositionSchema = z.object({
 
 /**
  * Create market maker position
+ * NOTE: Market maker Convex operations not yet implemented
  */
-app.post("/market-maker/positions", zValidator("json", createPositionSchema), async (c) => {
+app.post("/market-maker/positions", requireFeature("marketMaker"), zValidator("json", createPositionSchema), async (c) => {
   const userId = c.get("userId");
   const body = c.req.valid("json");
 
@@ -48,143 +52,117 @@ app.post("/market-maker/positions", zValidator("json", createPositionSchema), as
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call MarketMakerService.createPosition
-  const position = {
-    id: `mm_pos_${Date.now()}`,
-    userId,
-    ...body,
-    status: "active",
-    currentCapital: body.capital,
-    totalEarnings: 0,
-    createdAt: new Date().toISOString(),
-  };
-
-  return c.json({ success: true, data: position, timestamp: new Date().toISOString() });
+  // Market maker feature requires Convex schema implementation
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Market maker positions coming soon" }
+  }, 501);
 });
 
 /**
  * Get user's market maker positions
  */
-app.get("/market-maker/positions", async (c) => {
+app.get("/market-maker/positions", requireFeature("marketMaker"), async (c) => {
   const userId = c.get("userId");
-  const status = c.req.query("status");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call MarketMakerService.getUserPositions
-  const positions: any[] = [];
-
-  return c.json({ success: true, data: positions, timestamp: new Date().toISOString() });
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Market maker positions coming soon" }
+  }, 501);
 });
 
 /**
  * Update market maker position
  */
-app.patch("/market-maker/positions/:positionId", zValidator("json", updatePositionSchema), async (c) => {
+app.patch("/market-maker/positions/:positionId", requireFeature("marketMaker"), zValidator("json", updatePositionSchema), async (c) => {
   const userId = c.get("userId");
-  const positionId = c.req.param("positionId");
-  const body = c.req.valid("json");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call MarketMakerService.updatePosition
-  return c.json({ success: true, data: { id: positionId, ...body, updated: true }, timestamp: new Date().toISOString() });
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Market maker positions coming soon" }
+  }, 501);
 });
 
 /**
  * Pause market maker position
  */
-app.post("/market-maker/positions/:positionId/pause", async (c) => {
+app.post("/market-maker/positions/:positionId/pause", requireFeature("marketMaker"), async (c) => {
   const userId = c.get("userId");
-  const positionId = c.req.param("positionId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call MarketMakerService.pausePosition
-  return c.json({ success: true, data: { id: positionId, status: "paused" }, timestamp: new Date().toISOString() });
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Market maker positions coming soon" }
+  }, 501);
 });
 
 /**
  * Stop market maker position
  */
-app.post("/market-maker/positions/:positionId/stop", async (c) => {
+app.post("/market-maker/positions/:positionId/stop", requireFeature("marketMaker"), async (c) => {
   const userId = c.get("userId");
-  const positionId = c.req.param("positionId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call MarketMakerService.stopPosition
-  return c.json({ success: true, data: { id: positionId, status: "stopped" }, timestamp: new Date().toISOString() });
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Market maker positions coming soon" }
+  }, 501);
 });
 
 /**
  * Get market maker statistics
  */
-app.get("/market-maker/stats", async (c) => {
+app.get("/market-maker/stats", requireFeature("marketMaker"), async (c) => {
   const userId = c.get("userId");
-  const period = c.req.query("period") ?? "all_time";
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call MarketMakerService.getStats
-  const stats = {
-    userId,
-    period,
-    totalVolume: 50000,
-    totalTrades: 250,
-    winRate: 0.68,
-    netEarnings: 1250,
-  };
-
-  return c.json({ success: true, data: stats, timestamp: new Date().toISOString() });
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Market maker stats coming soon" }
+  }, 501);
 });
 
 /**
  * Get liquidity pools
  */
-app.get("/market-maker/pools", async (c) => {
-  // TODO: Call MarketMakerService.getPools
-  const pools = [
-    {
-      id: "pool_conservative",
-      name: "Conservative MM Pool",
-      totalCapital: 100000,
-      currentApy: 0.15,
-      status: "active",
-    },
-  ];
-
-  return c.json({ success: true, data: pools, timestamp: new Date().toISOString() });
+app.get("/market-maker/pools", requireFeature("marketMaker"), async (c) => {
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Market maker pools coming soon" }
+  }, 501);
 });
 
 /**
  * Join a liquidity pool
  */
-app.post("/market-maker/pools/:poolId/join", zValidator("json", z.object({ amount: z.number().positive() })), async (c) => {
+app.post("/market-maker/pools/:poolId/join", requireFeature("marketMaker"), zValidator("json", z.object({ amount: z.number().positive() })), async (c) => {
   const userId = c.get("userId");
-  const poolId = c.req.param("poolId");
-  const { amount } = c.req.valid("json");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call MarketMakerService.joinPool
   return c.json({
-    success: true,
-    data: { poolId, userId, amount, status: "active" },
-    timestamp: new Date().toISOString(),
-  });
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Market maker pools coming soon" }
+  }, 501);
 });
 
 // ============================================================================
@@ -220,173 +198,127 @@ const createPoolSchema = z.object({
 /**
  * Get tournaments
  */
-app.get("/brackets/tournaments", async (c) => {
-  const status = c.req.query("status");
-
-  // TODO: Call BracketService.getTournaments
-  const tournaments = [
-    {
-      id: "ncaa_2024_mens",
-      name: "2024 NCAA Men's Basketball Tournament",
-      type: "ncaa_mens_basketball",
-      status: "upcoming",
-      totalTeams: 64,
-    },
-  ];
-
-  return c.json({ success: true, data: tournaments, timestamp: new Date().toISOString() });
+app.get("/brackets/tournaments", requireFeature("bracketBattles"), async (c) => {
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 /**
  * Get tournament details
  */
-app.get("/brackets/tournaments/:tournamentId", async (c) => {
-  const tournamentId = c.req.param("tournamentId");
-
-  // TODO: Call BracketService.getTournament
+app.get("/brackets/tournaments/:tournamentId", requireFeature("bracketBattles"), async (c) => {
   return c.json({
-    success: true,
-    data: { id: tournamentId, name: "2024 NCAA Tournament", status: "upcoming" },
-    timestamp: new Date().toISOString(),
-  });
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 /**
  * Create bracket
  */
-app.post("/brackets", zValidator("json", createBracketSchema), async (c) => {
+app.post("/brackets", requireFeature("bracketBattles"), zValidator("json", createBracketSchema), async (c) => {
   const userId = c.get("userId");
-  const body = c.req.valid("json");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call BracketService.createBracket
-  const bracket = {
-    id: `bracket_${Date.now()}`,
-    userId,
-    ...body,
-    status: "draft",
-    totalPoints: 0,
-    createdAt: new Date().toISOString(),
-  };
-
-  return c.json({ success: true, data: bracket, timestamp: new Date().toISOString() });
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 /**
  * Update bracket picks
  */
-app.patch("/brackets/:bracketId", zValidator("json", updateBracketSchema), async (c) => {
+app.patch("/brackets/:bracketId", requireFeature("bracketBattles"), zValidator("json", updateBracketSchema), async (c) => {
   const userId = c.get("userId");
-  const bracketId = c.req.param("bracketId");
-  const body = c.req.valid("json");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call BracketService.updateBracket
   return c.json({
-    success: true,
-    data: { id: bracketId, ...body, updated: true },
-    timestamp: new Date().toISOString(),
-  });
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 /**
  * Submit bracket
  */
-app.post("/brackets/:bracketId/submit", async (c) => {
+app.post("/brackets/:bracketId/submit", requireFeature("bracketBattles"), async (c) => {
   const userId = c.get("userId");
-  const bracketId = c.req.param("bracketId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call BracketService.submitBracket
   return c.json({
-    success: true,
-    data: { id: bracketId, status: "submitted", submittedAt: new Date().toISOString() },
-    timestamp: new Date().toISOString(),
-  });
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 /**
  * Get user's brackets
  */
-app.get("/brackets/me", async (c) => {
+app.get("/brackets/me", requireFeature("bracketBattles"), async (c) => {
   const userId = c.get("userId");
-  const tournamentId = c.req.query("tournamentId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call BracketService.getUserBrackets
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 /**
  * Create bracket pool
  */
-app.post("/brackets/pools", zValidator("json", createPoolSchema), async (c) => {
+app.post("/brackets/pools", requireFeature("bracketBattles"), zValidator("json", createPoolSchema), async (c) => {
   const userId = c.get("userId");
-  const body = c.req.valid("json");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call BracketService.createPool
-  const pool = {
-    id: `pool_${Date.now()}`,
-    creatorId: userId,
-    ...body,
-    currentEntries: 0,
-    prizePool: 0,
-    status: "open",
-    createdAt: new Date().toISOString(),
-  };
-
-  return c.json({ success: true, data: pool, timestamp: new Date().toISOString() });
+  return c.json({
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 /**
  * Get pool leaderboard
  */
-app.get("/brackets/pools/:poolId/leaderboard", async (c) => {
-  const poolId = c.req.param("poolId");
-  const limit = parseInt(c.req.query("limit") ?? "100", 10);
-
-  // TODO: Call BracketService.getPoolLeaderboard
+app.get("/brackets/pools/:poolId/leaderboard", requireFeature("bracketBattles"), async (c) => {
   return c.json({
-    success: true,
-    data: { poolId, entries: [], totalEntries: 0 },
-    timestamp: new Date().toISOString(),
-  });
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 /**
  * Join bracket pool
  */
-app.post("/brackets/pools/:poolId/join", zValidator("json", z.object({ bracketId: z.string(), inviteCode: z.string().optional() })), async (c) => {
+app.post("/brackets/pools/:poolId/join", requireFeature("bracketBattles"), zValidator("json", z.object({ bracketId: z.string(), inviteCode: z.string().optional() })), async (c) => {
   const userId = c.get("userId");
-  const poolId = c.req.param("poolId");
-  const body = c.req.valid("json");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call BracketService.joinPool
   return c.json({
-    success: true,
-    data: { poolId, userId, bracketId: body.bracketId, joined: true },
-    timestamp: new Date().toISOString(),
-  });
+    success: false,
+    error: { code: "NOT_IMPLEMENTED", message: "Bracket battles coming soon" }
+  }, 501);
 });
 
 // ============================================================================
@@ -397,13 +329,32 @@ app.post("/brackets/pools/:poolId/join", zValidator("json", z.object({ bracketId
  * Get all achievements
  */
 app.get("/achievements", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const category = c.req.query("category");
 
-  // TODO: Call AchievementService.getDefinitions
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  const achievements = await convex.query(api.gamification.getAchievements, {
+    userId: toUserId(userId),
+    category: category || undefined,
+  });
+
+  // Group by category
+  const byCategory: Record<string, typeof achievements> = {};
+  for (const achievement of achievements) {
+    const cat = achievement.category;
+    if (!byCategory[cat]) {
+      byCategory[cat] = [];
+    }
+    byCategory[cat].push(achievement);
+  }
+
   return c.json({
     success: true,
-    data: { achievements: [], byCategory: {} },
+    data: { achievements, byCategory },
     timestamp: new Date().toISOString(),
   });
 });
@@ -412,34 +363,54 @@ app.get("/achievements", async (c) => {
  * Get user's achievements
  */
 app.get("/achievements/me", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
-  const status = c.req.query("status");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call AchievementService.getUserAchievements
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  const achievements = await convex.query(api.gamification.getAchievements, {
+    userId: toUserId(userId),
+  });
+
+  // Filter to only unlocked achievements
+  const unlockedAchievements = achievements.filter((a) => a.unlocked);
+
+  return c.json({
+    success: true,
+    data: unlockedAchievements,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 /**
  * Get achievement statistics
  */
 app.get("/achievements/stats", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call AchievementService.getStats
+  const achievements = await convex.query(api.gamification.getAchievements, {
+    userId: toUserId(userId),
+  });
+
+  const totalUnlocked = achievements.filter((a) => a.unlocked).length;
+  const totalAvailable = achievements.length;
+  const totalPoints = achievements
+    .filter((a) => a.unlocked)
+    .reduce((sum, a) => sum + (a.pointsReward ?? 0), 0);
+
   const stats = {
     userId,
-    totalUnlocked: 5,
-    totalAvailable: 25,
-    percentComplete: 20,
-    totalPoints: 500,
+    totalUnlocked,
+    totalAvailable,
+    percentComplete: totalAvailable > 0 ? Math.round((totalUnlocked / totalAvailable) * 100) : 0,
+    totalPoints,
   };
 
   return c.json({ success: true, data: stats, timestamp: new Date().toISOString() });
@@ -447,20 +418,20 @@ app.get("/achievements/stats", async (c) => {
 
 /**
  * Claim achievement rewards
+ * NOTE: Achievements auto-claim rewards on unlock in gamification.ts
  */
 app.post("/achievements/:achievementId/claim", async (c) => {
   const userId = c.get("userId");
   const achievementId = c.req.param("achievementId");
-  const body = await c.req.json<{ tier?: number }>().catch(() => ({}));
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call AchievementService.claimRewards
+  // Achievement rewards are auto-credited on unlock
   return c.json({
     success: true,
-    data: { achievementId, rewards: [], claimed: true },
+    data: { achievementId, message: "Rewards are automatically credited when achievements are unlocked" },
     timestamp: new Date().toISOString(),
   });
 });
@@ -469,6 +440,7 @@ app.post("/achievements/:achievementId/claim", async (c) => {
  * Update achievement display
  */
 app.patch("/achievements/:achievementId/display", zValidator("json", z.object({ isDisplayed: z.boolean(), displayOrder: z.number().optional() })), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const achievementId = c.req.param("achievementId");
   const body = c.req.valid("json");
@@ -477,7 +449,12 @@ app.patch("/achievements/:achievementId/display", zValidator("json", z.object({ 
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call AchievementService.updateDisplaySettings
+  await convex.mutation(api.gamification.toggleAchievementDisplay, {
+    userId: toUserId(userId),
+    achievementId: achievementId as any,
+    displayed: body.isDisplayed,
+  });
+
   return c.json({
     success: true,
     data: { achievementId, ...body, updated: true },
@@ -489,10 +466,20 @@ app.patch("/achievements/:achievementId/display", zValidator("json", z.object({ 
  * Get achievement leaderboard
  */
 app.get("/achievements/leaderboard", async (c) => {
+  const convex = c.get("convex");
   const limit = parseInt(c.req.query("limit") ?? "100", 10);
 
-  // TODO: Call AchievementService.getLeaderboard
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  const leaderboard = await convex.query(api.gamification.getLeaderboard, {
+    period: "alltime",
+    type: "points",
+    limit,
+  });
+
+  return c.json({
+    success: true,
+    data: leaderboard.entries,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ============================================================================
@@ -518,14 +505,20 @@ const updateCopySubscriptionSchema = createCopySubscriptionSchema.partial().omit
  * Get copy trading leaderboard
  */
 app.get("/copy-trading/leaderboard", async (c) => {
-  const type = c.req.query("type") ?? "return";
+  const convex = c.get("convex");
+  const type = c.req.query("type") ?? "pnl_percent";
   const period = c.req.query("period") ?? "monthly";
   const limit = parseInt(c.req.query("limit") ?? "100", 10);
 
-  // TODO: Call CopyTradingLeaderboard.getLeaderboard
+  const leaderboard = await convex.query(api.social.queries.getLeaderboard, {
+    leaderboardType: type as "pnl" | "pnl_percent" | "sharpe_ratio" | "win_rate" | "total_trades" | "followers" | "copiers" | "reputation",
+    period: period as "daily" | "weekly" | "monthly" | "all_time",
+    limit,
+  });
+
   return c.json({
     success: true,
-    data: { entries: [], stats: {} },
+    data: leaderboard,
     timestamp: new Date().toISOString(),
   });
 });
@@ -534,34 +527,54 @@ app.get("/copy-trading/leaderboard", async (c) => {
  * Search traders
  */
 app.get("/copy-trading/traders/search", async (c) => {
+  const convex = c.get("convex");
   const query = c.req.query("q") ?? "";
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Call CopyTradingLeaderboard.searchTraders
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  const traders = await convex.query(api.social.queries.searchTraders, {
+    query,
+    limit,
+  });
+
+  return c.json({ success: true, data: traders, timestamp: new Date().toISOString() });
 });
 
 /**
  * Get recommended traders
  */
 app.get("/copy-trading/traders/recommended", async (c) => {
-  const userId = c.get("userId");
+  const convex = c.get("convex");
   const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
-  // TODO: Call CopyTradingLeaderboard.getRecommendedTraders
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  const traders = await convex.query(api.social.queries.getTrendingTraders, {
+    period: "weekly",
+    limit,
+  });
+
+  return c.json({ success: true, data: traders, timestamp: new Date().toISOString() });
 });
 
 /**
  * Get trader profile
  */
 app.get("/copy-trading/traders/:traderId", async (c) => {
+  const convex = c.get("convex");
   const traderId = c.req.param("traderId");
 
-  // TODO: Call CopyTradingService.getProfile
+  const profile = await convex.query(api.social.queries.getTraderProfile, {
+    userId: toUserId(traderId),
+  });
+
+  if (!profile) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Trader not found" } }, 404);
+  }
+
   return c.json({
     success: true,
-    data: { userId: traderId, username: "", isAcceptingCopiers: true },
+    data: {
+      ...profile,
+      isAcceptingCopiers: profile.profile?.allowCopyTrading ?? false,
+    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -570,13 +583,26 @@ app.get("/copy-trading/traders/:traderId", async (c) => {
  * Get trader performance
  */
 app.get("/copy-trading/traders/:traderId/performance", async (c) => {
+  const convex = c.get("convex");
   const traderId = c.req.param("traderId");
   const period = c.req.query("period") ?? "all_time";
 
-  // TODO: Call CopyTradingService.getTraderPerformance
+  const stats = await convex.query(api.social.queries.getTraderStats, {
+    userId: toUserId(traderId),
+    period: period as "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "all_time",
+  });
+
   return c.json({
     success: true,
-    data: { userId: traderId, period, winRate: 0.6, returnPercent: 0.25 },
+    data: {
+      userId: traderId,
+      period,
+      winRate: stats?.winRate ?? 0,
+      returnPercent: stats?.totalPnLPercent ?? 0,
+      totalTrades: stats?.totalTrades ?? 0,
+      sharpeRatio: stats?.sharpeRatio ?? 0,
+      maxDrawdown: stats?.maxDrawdownPercent ?? 0,
+    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -585,6 +611,7 @@ app.get("/copy-trading/traders/:traderId/performance", async (c) => {
  * Create copy subscription
  */
 app.post("/copy-trading/subscribe", zValidator("json", createCopySubscriptionSchema), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const body = c.req.valid("json");
 
@@ -592,37 +619,51 @@ app.post("/copy-trading/subscribe", zValidator("json", createCopySubscriptionSch
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call CopyTradingService.createSubscription
-  const subscription = {
-    id: `copy_sub_${Date.now()}`,
-    copierId: userId,
-    ...body,
-    status: "active",
-    subscribedAt: new Date().toISOString(),
-  };
+  const subscriptionId = await convex.mutation(api.social.mutations.createCopySubscription, {
+    copierId: toUserId(userId),
+    traderId: toUserId(body.traderId),
+    copyMode: body.copyMode,
+    fixedAmount: body.fixedAmount,
+    portfolioPercentage: body.portfolioPercentage,
+    copyRatio: body.copyRatio,
+    maxPositionSize: body.maxPositionSize,
+    maxDailyLoss: body.maxDailyLoss,
+    maxTotalExposure: body.maxTotalExposure,
+    copyAssetClasses: body.copyAssetClasses,
+  });
 
-  return c.json({ success: true, data: subscription, timestamp: new Date().toISOString() });
+  return c.json({
+    success: true,
+    data: { id: subscriptionId, copierId: userId, ...body, status: "active" },
+    timestamp: new Date().toISOString(),
+  });
 });
 
 /**
  * Get my subscriptions
  */
 app.get("/copy-trading/subscriptions", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
-  const status = c.req.query("status");
+  const status = c.req.query("status") as "pending" | "active" | "paused" | "stopped" | "cancelled" | undefined;
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call CopyTradingService.getCopierSubscriptions
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  const subscriptions = await convex.query(api.social.queries.getCopySubscriptions, {
+    copierId: toUserId(userId),
+    status,
+  });
+
+  return c.json({ success: true, data: subscriptions, timestamp: new Date().toISOString() });
 });
 
 /**
  * Update subscription
  */
 app.patch("/copy-trading/subscriptions/:subscriptionId", zValidator("json", updateCopySubscriptionSchema), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const subscriptionId = c.req.param("subscriptionId");
   const body = c.req.valid("json");
@@ -631,7 +672,11 @@ app.patch("/copy-trading/subscriptions/:subscriptionId", zValidator("json", upda
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call CopyTradingService.updateSubscription
+  await convex.mutation(api.social.mutations.updateCopySubscription, {
+    subscriptionId: subscriptionId as any,
+    ...body,
+  });
+
   return c.json({
     success: true,
     data: { id: subscriptionId, ...body, updated: true },
@@ -643,6 +688,7 @@ app.patch("/copy-trading/subscriptions/:subscriptionId", zValidator("json", upda
  * Pause subscription
  */
 app.post("/copy-trading/subscriptions/:subscriptionId/pause", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const subscriptionId = c.req.param("subscriptionId");
 
@@ -650,7 +696,10 @@ app.post("/copy-trading/subscriptions/:subscriptionId/pause", async (c) => {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call CopyTradingService.pauseSubscription
+  await convex.mutation(api.social.mutations.pauseCopySubscription, {
+    subscriptionId: subscriptionId as any,
+  });
+
   return c.json({
     success: true,
     data: { id: subscriptionId, status: "paused" },
@@ -662,6 +711,7 @@ app.post("/copy-trading/subscriptions/:subscriptionId/pause", async (c) => {
  * Resume subscription
  */
 app.post("/copy-trading/subscriptions/:subscriptionId/resume", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const subscriptionId = c.req.param("subscriptionId");
 
@@ -669,7 +719,10 @@ app.post("/copy-trading/subscriptions/:subscriptionId/resume", async (c) => {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call CopyTradingService.resumeSubscription
+  await convex.mutation(api.social.mutations.resumeCopySubscription, {
+    subscriptionId: subscriptionId as any,
+  });
+
   return c.json({
     success: true,
     data: { id: subscriptionId, status: "active" },
@@ -681,6 +734,7 @@ app.post("/copy-trading/subscriptions/:subscriptionId/resume", async (c) => {
  * Cancel subscription
  */
 app.delete("/copy-trading/subscriptions/:subscriptionId", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const subscriptionId = c.req.param("subscriptionId");
 
@@ -688,7 +742,10 @@ app.delete("/copy-trading/subscriptions/:subscriptionId", async (c) => {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call CopyTradingService.cancelSubscription
+  await convex.mutation(api.social.mutations.cancelCopySubscription, {
+    subscriptionId: subscriptionId as any,
+  });
+
   return c.json({
     success: true,
     data: { id: subscriptionId, status: "cancelled" },
@@ -700,11 +757,16 @@ app.delete("/copy-trading/subscriptions/:subscriptionId", async (c) => {
  * Get copy trades
  */
 app.get("/copy-trading/subscriptions/:subscriptionId/trades", async (c) => {
+  const convex = c.get("convex");
   const subscriptionId = c.req.param("subscriptionId");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Call CopyTradingService.getSubscriptionTrades
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  const result = await convex.query(api.social.queries.getCopyTrades, {
+    subscriptionId: subscriptionId as any,
+    limit,
+  });
+
+  return c.json({ success: true, data: result.trades, timestamp: new Date().toISOString() });
 });
 
 // ============================================================================
@@ -715,55 +777,88 @@ app.get("/copy-trading/subscriptions/:subscriptionId/trades", async (c) => {
  * Get daily challenges
  */
 app.get("/challenges/daily", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
 
-  // TODO: Call ChallengeService.getDailyChallenges
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  const quests = await convex.query(api.gamification.getActiveQuests, {
+    userId: toUserId(userId),
+    type: "daily",
+  });
+
+  return c.json({ success: true, data: quests, timestamp: new Date().toISOString() });
 });
 
 /**
  * Get weekly challenges
  */
 app.get("/challenges/weekly", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
 
-  // TODO: Call ChallengeService.getWeeklyChallenges
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  const quests = await convex.query(api.gamification.getActiveQuests, {
+    userId: toUserId(userId),
+    type: "weekly",
+  });
+
+  return c.json({ success: true, data: quests, timestamp: new Date().toISOString() });
 });
 
 /**
  * Get active challenges
  */
 app.get("/challenges/active", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call ChallengeService.getActiveChallenges
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  const quests = await convex.query(api.gamification.getActiveQuests, {
+    userId: toUserId(userId),
+  });
+
+  // Filter to quests that have been started but not completed
+  const activeQuests = quests.filter((q) => q.startedAt && !q.completed);
+
+  return c.json({ success: true, data: activeQuests, timestamp: new Date().toISOString() });
 });
 
 /**
  * Get completed challenges
  */
 app.get("/challenges/completed", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
-  const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call ChallengeService.getCompletedChallenges
-  return c.json({ success: true, data: [], timestamp: new Date().toISOString() });
+  const quests = await convex.query(api.gamification.getActiveQuests, {
+    userId: toUserId(userId),
+  });
+
+  // Filter to completed quests
+  const completedQuests = quests.filter((q) => q.completed);
+
+  return c.json({ success: true, data: completedQuests, timestamp: new Date().toISOString() });
 });
 
 /**
  * Start a challenge
+ * NOTE: Quests auto-start on first progress update
  */
 app.post("/challenges/:challengeId/start", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const challengeId = c.req.param("challengeId");
 
@@ -771,35 +866,52 @@ app.post("/challenges/:challengeId/start", async (c) => {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call ChallengeService.startChallenge
-  const userChallenge = {
-    id: `uc_${Date.now()}`,
-    userId,
-    challengeId,
-    status: "active",
-    progress: [],
-    overallProgress: 0,
-    startedAt: new Date().toISOString(),
-  };
+  // Initialize quest progress with 0
+  await convex.mutation(api.gamification.updateQuestProgress, {
+    userId: toUserId(userId),
+    questId: challengeId as any,
+    progressUpdate: { current: 0 },
+  });
 
-  return c.json({ success: true, data: userChallenge, timestamp: new Date().toISOString() });
+  return c.json({
+    success: true,
+    data: {
+      challengeId,
+      userId,
+      status: "active",
+      progress: { current: 0 },
+      startedAt: new Date().toISOString(),
+    },
+    timestamp: new Date().toISOString(),
+  });
 });
 
 /**
  * Claim challenge rewards
  */
-app.post("/challenges/:userChallengeId/claim", async (c) => {
+app.post("/challenges/:questId/claim", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
-  const userChallengeId = c.req.param("userChallengeId");
+  const questId = c.req.param("questId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call ChallengeService.claimRewards
+  const result = await convex.mutation(api.gamification.claimQuestReward, {
+    userId: toUserId(userId),
+    questId: questId as any,
+  });
+
   return c.json({
     success: true,
-    data: { userChallengeId, rewards: [], claimed: true },
+    data: {
+      questId,
+      pointsEarned: result.pointsEarned,
+      newBalance: result.newBalance,
+      bonusReward: result.bonusReward,
+      claimed: true,
+    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -808,20 +920,35 @@ app.post("/challenges/:userChallengeId/claim", async (c) => {
  * Get challenge statistics
  */
 app.get("/challenges/stats", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call ChallengeService.getChallengeStats
+  const quests = await convex.query(api.gamification.getActiveQuests, {
+    userId: toUserId(userId),
+  });
+
+  const streakData = await convex.query(api.gamification.getStreak, {
+    userId: toUserId(userId),
+    streakType: "daily_login",
+  });
+
+  const completedQuests = quests.filter((q) => q.completed);
+  const claimedQuests = quests.filter((q) => q.claimed);
+  const totalPointsEarned = quests
+    .filter((q) => q.claimed)
+    .reduce((sum, q) => sum + (q.pointsReward ?? 0), 0);
+
   const stats = {
-    totalCompleted: 15,
-    totalClaimed: 12,
-    totalPointsEarned: 1500,
-    currentStreak: 3,
-    longestStreak: 7,
-    completionRate: 0.8,
+    totalCompleted: completedQuests.length,
+    totalClaimed: claimedQuests.length,
+    totalPointsEarned,
+    currentStreak: streakData?.currentCount ?? 0,
+    longestStreak: streakData?.longestCount ?? 0,
+    completionRate: quests.length > 0 ? completedQuests.length / quests.length : 0,
   };
 
   return c.json({ success: true, data: stats, timestamp: new Date().toISOString() });
@@ -831,19 +958,31 @@ app.get("/challenges/stats", async (c) => {
  * Get available rewards
  */
 app.get("/challenges/rewards", async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
 
   if (!userId) {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
   }
 
-  // TODO: Call ChallengeRewardsProcessor.getRewardsSummary
+  const summary = await convex.query(api.gamification.getRewardsSummary, {
+    userId: toUserId(userId),
+  });
+
+  const tierMultiplier = summary.tierBenefits?.pointsMultiplier ?? 1;
+  const streakMultiplier = summary.activeStreaks.reduce(
+    (max, s) => Math.max(max, s.multiplier),
+    1
+  );
+
   const rewards = {
-    availableFreeBets: 2,
-    totalFreeBetValue: 15,
-    activeBadges: 5,
-    activeMultipliers: 1,
-    currentPointsMultiplier: 1.5,
+    pointsBalance: summary.pointsBalance,
+    pendingPoints: summary.pendingPoints,
+    currentTier: summary.currentTier,
+    tierProgress: summary.tierProgress,
+    pointsToNextTier: summary.pointsToNextTier,
+    currentPointsMultiplier: tierMultiplier * streakMultiplier,
+    activeStreaks: summary.activeStreaks,
   };
 
   return c.json({ success: true, data: rewards, timestamp: new Date().toISOString() });
