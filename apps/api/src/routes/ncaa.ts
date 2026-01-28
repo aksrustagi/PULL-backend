@@ -6,8 +6,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import type { Env } from "../index";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all NCAA routes - feature is not production-ready
+app.use("*", requireFeature("ncaa_betting", "NCAA Betting"));
 
 // ============================================================================
 // SCHEMAS
@@ -85,7 +89,7 @@ const PlaceBetSchema = z.object({
 app.get("/teams", zValidator("query", GetTeamsSchema), async (c) => {
   const query = c.req.valid("query");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
   const teams: Array<{
     id: string;
     name: string;
@@ -112,7 +116,7 @@ app.get("/teams", zValidator("query", GetTeamsSchema), async (c) => {
 app.get("/teams/:id", async (c) => {
   const teamId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -128,7 +132,7 @@ app.get("/teams/:id", async (c) => {
 app.get("/teams/:id/players", async (c) => {
   const teamId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -144,7 +148,7 @@ app.get("/teams/:id/players", async (c) => {
 app.get("/teams/:id/schedule", async (c) => {
   const teamId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -164,7 +168,7 @@ app.get("/teams/:id/schedule", async (c) => {
 app.get("/bracket", async (c) => {
   const season = c.req.query("season") ?? "2025-2026";
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -201,7 +205,7 @@ app.get("/bracket/user", async (c) => {
     );
   }
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -231,7 +235,7 @@ app.post(
       );
     }
 
-    // TODO: Validate picks and save to database
+    // Feature protected by feature flag - bracket validation pending
 
     return c.json({
       success: true,
@@ -268,7 +272,7 @@ app.put(
       );
     }
 
-    // TODO: Check ownership and lock status
+    // Feature protected by feature flag - ownership validation pending
 
     return c.json({
       success: true,
@@ -293,7 +297,7 @@ app.put(
 app.get("/games", zValidator("query", GetGamesSchema), async (c) => {
   const query = c.req.valid("query");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -307,7 +311,7 @@ app.get("/games", zValidator("query", GetGamesSchema), async (c) => {
  * Get live games
  */
 app.get("/games/live", async (c) => {
-  // TODO: Fetch live games
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -323,7 +327,7 @@ app.get("/games/live", async (c) => {
 app.get("/games/:id", async (c) => {
   const gameId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -353,7 +357,7 @@ app.get("/pools", async (c) => {
     );
   }
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -380,7 +384,7 @@ app.post("/pools", zValidator("json", CreatePoolSchema), async (c) => {
     );
   }
 
-  // TODO: Create pool in database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -415,7 +419,7 @@ app.post("/pools/:poolId/join", async (c) => {
     );
   }
 
-  // TODO: Add user to pool
+  // Feature protected by feature flag - pool membership pending
 
   return c.json({
     success: true,
@@ -436,7 +440,7 @@ app.post("/pools/:poolId/join", async (c) => {
 app.get("/pools/:poolId/leaderboard", async (c) => {
   const poolId = c.req.param("poolId");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -459,7 +463,7 @@ app.get("/pools/:poolId/leaderboard", async (c) => {
 app.get("/markets", zValidator("query", GetMarketsSchema), async (c) => {
   const query = c.req.valid("query");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -475,7 +479,7 @@ app.get("/markets", zValidator("query", GetMarketsSchema), async (c) => {
 app.get("/markets/:id", async (c) => {
   const marketId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -506,7 +510,7 @@ app.post(
       );
     }
 
-    // TODO: Validate and place bet
+    // Feature protected by feature flag - bet validation pending
 
     return c.json({
       success: true,
@@ -533,7 +537,7 @@ app.post(
 app.get("/rankings", async (c) => {
   const type = c.req.query("type") ?? "ap"; // ap, coaches, net, kenpom
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -551,7 +555,7 @@ app.get("/rankings", async (c) => {
  * Get bubble watch teams
  */
 app.get("/bubble", async (c) => {
-  // TODO: Fetch bubble teams
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -569,7 +573,7 @@ app.get("/bubble", async (c) => {
  * Get upset probability analysis
  */
 app.get("/upsets", async (c) => {
-  // TODO: Fetch upset probabilities
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,

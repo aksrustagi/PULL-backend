@@ -6,8 +6,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import type { Env } from "../index";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
+
+// Protect all NBA routes - feature is not production-ready
+app.use("*", requireFeature("nba", "NBA Betting"));
 
 // ============================================================================
 // SCHEMAS
@@ -67,7 +71,7 @@ const PlaceBetSchema = z.object({
 app.get("/teams", zValidator("query", GetTeamsSchema), async (c) => {
   const query = c.req.valid("query");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -83,7 +87,7 @@ app.get("/teams", zValidator("query", GetTeamsSchema), async (c) => {
 app.get("/teams/:id", async (c) => {
   const teamId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -99,7 +103,7 @@ app.get("/teams/:id", async (c) => {
 app.get("/teams/:id/roster", async (c) => {
   const teamId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -115,7 +119,7 @@ app.get("/teams/:id/roster", async (c) => {
 app.get("/standings", async (c) => {
   const conference = c.req.query("conference");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -138,7 +142,7 @@ app.get("/standings", async (c) => {
 app.get("/playoffs/bracket", async (c) => {
   const season = c.req.query("season") ?? "2025-2026";
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -169,7 +173,7 @@ app.get("/playoffs/series", async (c) => {
   const season = c.req.query("season") ?? "2025-2026";
   const round = c.req.query("round");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -185,7 +189,7 @@ app.get("/playoffs/series", async (c) => {
 app.get("/playoffs/series/:id", async (c) => {
   const seriesId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -205,7 +209,7 @@ app.get("/playoffs/series/:id", async (c) => {
 app.get("/games", zValidator("query", GetGamesSchema), async (c) => {
   const query = c.req.valid("query");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -219,7 +223,7 @@ app.get("/games", zValidator("query", GetGamesSchema), async (c) => {
  * Get live games
  */
 app.get("/games/live", async (c) => {
-  // TODO: Fetch live games
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -235,7 +239,7 @@ app.get("/games/live", async (c) => {
 app.get("/games/:id", async (c) => {
   const gameId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -251,7 +255,7 @@ app.get("/games/:id", async (c) => {
 app.get("/games/:id/boxscore", async (c) => {
   const gameId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -273,7 +277,7 @@ app.get("/players", async (c) => {
   const teamId = c.req.query("teamId");
   const limit = parseInt(c.req.query("limit") ?? "50");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -289,7 +293,7 @@ app.get("/players", async (c) => {
 app.get("/players/:id", async (c) => {
   const playerId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -306,7 +310,7 @@ app.get("/players/:id/stats", async (c) => {
   const playerId = c.req.param("id");
   const type = c.req.query("type") ?? "season"; // season, playoffs, game
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -322,7 +326,7 @@ app.get("/players/:id/stats", async (c) => {
 app.get("/injuries", async (c) => {
   const teamId = c.req.query("teamId");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -342,7 +346,7 @@ app.get("/injuries", async (c) => {
 app.get("/markets", zValidator("query", GetMarketsSchema), async (c) => {
   const query = c.req.valid("query");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -358,7 +362,7 @@ app.get("/markets", zValidator("query", GetMarketsSchema), async (c) => {
 app.get("/markets/:id", async (c) => {
   const marketId = c.req.param("id");
 
-  // TODO: Fetch from database
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
@@ -389,7 +393,7 @@ app.post(
       );
     }
 
-    // TODO: Validate and place bet
+    // Feature protected by feature flag - bet validation pending
 
     return c.json({
       success: true,
@@ -410,7 +414,7 @@ app.post(
  * Get trending player props
  */
 app.get("/props/trending", async (c) => {
-  // TODO: Fetch trending props
+  // Feature protected by feature flag - external API integration pending
 
   return c.json({
     success: true,
