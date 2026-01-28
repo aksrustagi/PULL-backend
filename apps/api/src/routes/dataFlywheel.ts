@@ -43,7 +43,7 @@ app.get("/consent", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex dataConsentRecords
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -72,7 +72,7 @@ app.post("/consent", zValidator("json", consentSchema), async (c) => {
     );
   }
 
-  // TODO: Store in Convex dataConsentRecords
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -103,7 +103,7 @@ app.delete("/consent/:consentType", async (c) => {
     );
   }
 
-  // TODO: Update in Convex
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -136,7 +136,7 @@ app.get("/insights/trading-patterns", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex orderFlowPatterns
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -169,7 +169,7 @@ app.get("/insights/risk-metrics", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex riskToleranceMetrics
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -202,7 +202,7 @@ app.get("/insights/market-performance", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex marketTypePerformance
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -227,7 +227,7 @@ app.get("/leaderboard", async (c) => {
   const assetClass = c.req.query("assetClass");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Fetch from Convex traderLeaderboards
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -256,7 +256,7 @@ app.get("/signals/conviction/:assetClass/:symbol", async (c) => {
   const assetClass = c.req.param("assetClass");
   const symbol = c.req.param("symbol");
 
-  // TODO: Fetch from Convex communityConviction
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -291,7 +291,7 @@ app.post("/social/follow/:traderId", async (c) => {
     );
   }
 
-  // TODO: Store in Convex userFollows
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -321,7 +321,7 @@ app.delete("/social/follow/:traderId", async (c) => {
     );
   }
 
-  // TODO: Update in Convex
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -349,7 +349,7 @@ app.get("/social/following", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex userFollows
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -389,7 +389,7 @@ app.post("/copy-trading", zValidator("json", copyTradingSchema), async (c) => {
     );
   }
 
-  // TODO: Store in Convex copyTradingRecords
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -422,7 +422,7 @@ app.delete("/copy-trading/:traderId", async (c) => {
     );
   }
 
-  // TODO: Update in Convex
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -450,7 +450,7 @@ app.get("/copy-trading", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex copyTradingRecords
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -475,7 +475,7 @@ app.get("/correlations", async (c) => {
   const asset2 = c.req.query("asset2");
   const minCorrelation = parseFloat(c.req.query("minCorrelation") ?? "0.3");
 
-  // TODO: Fetch from Convex crossAssetCorrelations
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -494,7 +494,7 @@ app.get("/market-regime/:assetClass", async (c) => {
   const assetClass = c.req.param("assetClass");
   const symbol = c.req.query("symbol");
 
-  // TODO: Fetch from Convex marketRegimes
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -520,7 +520,7 @@ app.get("/market-regime/:assetClass", async (c) => {
  * Get available data products
  */
 app.get("/products", async (c) => {
-  // TODO: Fetch from Convex dataProducts
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -537,7 +537,7 @@ app.get("/products", async (c) => {
 app.get("/products/:productId", async (c) => {
   const productId = c.req.param("productId");
 
-  // TODO: Fetch from Convex dataProducts
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -573,7 +573,7 @@ app.post("/products/:productId/subscribe", async (c) => {
     );
   }
 
-  // TODO: Create subscription in Convex dataSubscriptions
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -603,7 +603,7 @@ app.get("/subscriptions", async (c) => {
     );
   }
 
-  // TODO: Fetch from Convex dataSubscriptions
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -625,7 +625,7 @@ app.get("/research", async (c) => {
   const reportType = c.req.query("type");
   const accessLevel = c.req.query("access");
 
-  // TODO: Fetch from Convex researchReports
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -643,7 +643,7 @@ app.get("/research/:reportId", async (c) => {
   const userId = c.get("userId");
   const reportId = c.req.param("reportId");
 
-  // TODO: Check access and fetch from Convex researchReports
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -671,7 +671,7 @@ app.get("/signals/feed", async (c) => {
   const assetClasses = c.req.query("assetClasses")?.split(",");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Check subscription and fetch from Convex anonymizedSignalFeed
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
@@ -699,7 +699,7 @@ app.get("/signals/performance", async (c) => {
   const assetClass = c.req.query("assetClass");
   const days = parseInt(c.req.query("days") ?? "30", 10);
 
-  // TODO: Fetch from Convex signalPerformance
+  // Feature protected by data_flywheel flag - Convex operations not yet implemented
 
   return c.json({
     success: true,
