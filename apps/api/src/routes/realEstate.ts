@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { Env } from "../index";
+import { api } from "@pull/db/convex/_generated/api";
+import { toUserId } from "../lib/convex-types";
+import { requireFeature } from "../lib/feature-flags";
 
 const app = new Hono<Env>();
 
@@ -114,7 +117,8 @@ const whiteLabelConfigSchema = z.object({
 /**
  * Get real estate prediction events
  */
-app.get("/events", async (c) => {
+app.get("/events", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const status = c.req.query("status") ?? "open";
   const category = c.req.query("category");
   const geographicScope = c.req.query("scope");
@@ -122,11 +126,18 @@ app.get("/events", async (c) => {
   const city = c.req.query("city");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Fetch from Convex realEstate.getEvents
+  const events = await convex.query(api.realEstate.getEvents, {
+    status,
+    category: category || undefined,
+    geographicScope: geographicScope || undefined,
+    state: state || undefined,
+    city: city || undefined,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: events,
     filters: {
       status,
       category,
@@ -137,8 +148,8 @@ app.get("/events", async (c) => {
     pagination: {
       page: 1,
       pageSize: limit,
-      totalItems: 0,
-      totalPages: 0,
+      totalItems: events.length,
+      totalPages: 1,
       hasNextPage: false,
       hasPreviousPage: false,
     },
@@ -149,34 +160,19 @@ app.get("/events", async (c) => {
 /**
  * Get event by ticker
  */
-app.get("/events/:ticker", async (c) => {
+app.get("/events/:ticker", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const ticker = c.req.param("ticker");
 
-  // TODO: Fetch from Convex realEstate.getEventByTicker
+  const event = await convex.query(api.realEstate.getEventByTicker, { ticker });
+
+  if (!event) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Event not found" } }, 404);
+  }
 
   return c.json({
     success: true,
-    data: {
-      ticker,
-      title: "Will median home price in Miami exceed $600K by Q2 2025?",
-      description: "Prediction market for Miami-Dade County median home prices",
-      category: "median_price",
-      status: "open",
-      geographicScope: "city",
-      state: "FL",
-      city: "Miami",
-      targetMetric: "median_home_price",
-      targetValue: 600000,
-      comparisonOperator: "gt",
-      currentValue: 580000,
-      yesPrice: 0.65,
-      noPrice: 0.35,
-      totalVolume: 125000,
-      openInterest: 45000,
-      resolutionSource: "zillow",
-      resolutionDate: "2025-06-30T23:59:59Z",
-      dataPoints: [],
-    },
+    data: event,
     timestamp: new Date().toISOString(),
   });
 });
@@ -184,17 +180,23 @@ app.get("/events/:ticker", async (c) => {
 /**
  * Search events
  */
-app.get("/search", async (c) => {
+app.get("/search", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const query = c.req.query("q") ?? "";
   const category = c.req.query("category");
   const geographicScope = c.req.query("scope");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Search via Convex realEstate.searchEvents
+  const events = await convex.query(api.realEstate.searchEvents, {
+    query,
+    category: category || undefined,
+    geographicScope: geographicScope || undefined,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: events,
     query,
     timestamp: new Date().toISOString(),
   });
@@ -203,15 +205,19 @@ app.get("/search", async (c) => {
 /**
  * Get trending markets
  */
-app.get("/trending", async (c) => {
+app.get("/trending", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const category = c.req.query("category");
   const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
-  // TODO: Fetch from Convex realEstate.getTrendingMarkets
+  const markets = await convex.query(api.realEstate.getTrendingMarkets, {
+    category: category || undefined,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: markets,
     timestamp: new Date().toISOString(),
   });
 });
@@ -219,17 +225,23 @@ app.get("/trending", async (c) => {
 /**
  * Get markets by location
  */
-app.get("/markets/location", async (c) => {
+app.get("/markets/location", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const geographicScope = c.req.query("scope") ?? "city";
   const state = c.req.query("state");
   const city = c.req.query("city");
   const status = c.req.query("status") ?? "open";
 
-  // TODO: Fetch from Convex realEstate.getEventsByLocation
+  const events = await convex.query(api.realEstate.getEventsByLocation, {
+    geographicScope,
+    state: state || undefined,
+    city: city || undefined,
+    status: status || undefined,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: events,
     filters: {
       geographicScope,
       state,
@@ -265,17 +277,41 @@ app.get("/categories", async (c) => {
 /**
  * Create a new prediction event (admin only)
  */
-app.post("/events", zValidator("json", createEventSchema), async (c) => {
+app.post("/events", requireFeature("real_estate"), zValidator("json", createEventSchema), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const body = c.req.valid("json");
 
-  // TODO: Create via Convex realEstate.createEvent
-  // TODO: Check admin permissions
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  const eventId = await convex.mutation(api.realEstate.createEvent, {
+    ticker: body.ticker,
+    title: body.title,
+    description: body.description,
+    category: body.category,
+    geographicScope: body.geographicScope,
+    country: "US",
+    state: body.state,
+    metro: body.metro,
+    city: body.city,
+    zipCode: body.zipCode,
+    targetMetric: body.targetMetric,
+    targetValue: body.targetValue,
+    comparisonOperator: body.comparisonOperator,
+    resolutionSource: body.resolutionSource,
+    resolutionDate: new Date(body.resolutionDate).getTime(),
+    openTime: new Date(body.openTime).getTime(),
+    closeTime: new Date(body.closeTime).getTime(),
+    tags: body.tags,
+    imageUrl: body.imageUrl,
+  });
 
   return c.json({
     success: true,
     data: {
-      id: "re_event_" + Date.now(),
+      id: eventId,
       ticker: body.ticker,
       status: "draft",
       createdAt: new Date().toISOString(),
@@ -291,34 +327,47 @@ app.post("/events", zValidator("json", createEventSchema), async (c) => {
 /**
  * Get market sentiment for a location
  */
-app.get("/sentiment", async (c) => {
+app.get("/sentiment", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const geographicScope = c.req.query("scope") ?? "city";
   const location = c.req.query("location") ?? "";
 
-  // TODO: Fetch from Convex realEstate.getMarketSentiment
+  const sentiment = await convex.query(api.realEstate.getMarketSentiment, {
+    geographicScope,
+    location,
+  });
+
+  if (!sentiment) {
+    // Return default values if no sentiment data exists
+    return c.json({
+      success: true,
+      data: {
+        geographicScope,
+        location,
+        overallSentiment: 50,
+        buyerSentiment: 50,
+        sellerSentiment: 50,
+        investorSentiment: 50,
+        priceUpProbability: 0.5,
+        priceDownProbability: 0.5,
+        inventoryUpProbability: 0.5,
+        ratesDownProbability: 0.5,
+        predictionVolume: 0,
+        activeMarkets: 0,
+        uniqueTraders: 0,
+        sentimentTrend: "neutral",
+        trendStrength: 0,
+        weekOverWeekChange: 0,
+        monthOverMonthChange: 0,
+        calculatedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   return c.json({
     success: true,
-    data: {
-      geographicScope,
-      location,
-      overallSentiment: 65,
-      buyerSentiment: 58,
-      sellerSentiment: 72,
-      investorSentiment: 61,
-      priceUpProbability: 0.62,
-      priceDownProbability: 0.38,
-      inventoryUpProbability: 0.45,
-      ratesDownProbability: 0.55,
-      predictionVolume: 1250000,
-      activeMarkets: 24,
-      uniqueTraders: 3420,
-      sentimentTrend: "bullish",
-      trendStrength: 72,
-      weekOverWeekChange: 3.5,
-      monthOverMonthChange: 8.2,
-      calculatedAt: new Date().toISOString(),
-    },
+    data: sentiment,
     timestamp: new Date().toISOString(),
   });
 });
@@ -326,45 +375,39 @@ app.get("/sentiment", async (c) => {
 /**
  * Get PULL Real Estate Index
  */
-app.get("/index", async (c) => {
+app.get("/index", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const ticker = c.req.query("ticker");
   const geographicScope = c.req.query("scope");
   const location = c.req.query("location");
   const includeHistory = c.req.query("history") === "true";
 
-  // TODO: Fetch from Convex realEstate.getPullIndex
+  const index = await convex.query(api.realEstate.getPullIndex, {
+    ticker: ticker || undefined,
+    geographicScope: geographicScope || undefined,
+    location: location || undefined,
+  });
+
+  if (!index) {
+    return c.json({
+      success: false,
+      error: { code: "NOT_FOUND", message: "Index not found" },
+    }, 404);
+  }
+
+  let history = undefined;
+  if (includeHistory) {
+    history = await convex.query(api.realEstate.getPullIndexHistory, {
+      indexId: index._id,
+      limit: 365,
+    });
+  }
 
   return c.json({
     success: true,
     data: {
-      name: "PULL Real Estate Index - National",
-      ticker: "PULL-RE-US",
-      geographicScope: "national",
-      location: "US",
-      value: 1245.67,
-      previousValue: 1232.45,
-      change: 13.22,
-      changePercent: 1.07,
-      trend: "up",
-      trendStrength: 68,
-      components: [
-        { category: "median_price", weight: 0.25, currentValue: 68, previousValue: 65, change: 3, changePercent: 4.6, sentiment: "bullish" },
-        { category: "mortgage_rates", weight: 0.20, currentValue: 45, previousValue: 48, change: -3, changePercent: -6.25, sentiment: "bearish" },
-        { category: "housing_inventory", weight: 0.15, currentValue: 52, previousValue: 50, change: 2, changePercent: 4.0, sentiment: "neutral" },
-        { category: "home_sales_volume", weight: 0.15, currentValue: 55, previousValue: 54, change: 1, changePercent: 1.85, sentiment: "neutral" },
-        { category: "days_on_market", weight: 0.10, currentValue: 62, previousValue: 60, change: 2, changePercent: 3.33, sentiment: "bullish" },
-        { category: "new_construction", weight: 0.15, currentValue: 48, previousValue: 47, change: 1, changePercent: 2.13, sentiment: "neutral" },
-      ],
-      marketSentiment: 65,
-      volatility: 12.5,
-      tradingVolume: 5420000,
-      activeMarkets: 156,
-      high52Week: 1312.45,
-      low52Week: 1089.23,
-      high52WeekDate: "2024-08-15T00:00:00Z",
-      low52WeekDate: "2024-02-10T00:00:00Z",
-      calculatedAt: new Date().toISOString(),
-      history: includeHistory ? [] : undefined,
+      ...index,
+      history,
     },
     timestamp: new Date().toISOString(),
   });
@@ -397,22 +440,28 @@ app.get("/indices", async (c) => {
 /**
  * Get brokerages
  */
-app.get("/brokerages", async (c) => {
+app.get("/brokerages", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const status = c.req.query("status") ?? "active";
   const tier = c.req.query("tier");
   const state = c.req.query("state");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Fetch from Convex realEstate.getBrokerages
+  const brokerages = await convex.query(api.realEstate.getBrokerages, {
+    status,
+    tier: tier || undefined,
+    state: state || undefined,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: brokerages,
     pagination: {
       page: 1,
       pageSize: limit,
-      totalItems: 0,
-      totalPages: 0,
+      totalItems: brokerages.length,
+      totalPages: 1,
       hasNextPage: false,
       hasPreviousPage: false,
     },
@@ -423,23 +472,21 @@ app.get("/brokerages", async (c) => {
 /**
  * Get brokerage by ID
  */
-app.get("/brokerages/:id", async (c) => {
+app.get("/brokerages/:id", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const brokerageId = c.req.param("id");
 
-  // TODO: Fetch from Convex realEstate.getBrokerageById
+  const brokerage = await convex.query(api.realEstate.getBrokerageById, {
+    id: brokerageId as any,
+  });
+
+  if (!brokerage) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Brokerage not found" } }, 404);
+  }
 
   return c.json({
     success: true,
-    data: {
-      id: brokerageId,
-      name: "Example Realty",
-      status: "active",
-      tier: "growth",
-      agentCount: 45,
-      activeAgentCount: 42,
-      totalReferrals: 1250,
-      totalVolume: 125000000,
-    },
+    data: brokerage,
     timestamp: new Date().toISOString(),
   });
 });
@@ -447,15 +494,32 @@ app.get("/brokerages/:id", async (c) => {
 /**
  * Register a new brokerage
  */
-app.post("/brokerages", zValidator("json", createBrokerageSchema), async (c) => {
+app.post("/brokerages", requireFeature("real_estate"), zValidator("json", createBrokerageSchema), async (c) => {
+  const convex = c.get("convex");
   const body = c.req.valid("json");
 
-  // TODO: Create via Convex realEstate.createBrokerage
+  const brokerageId = await convex.mutation(api.realEstate.createBrokerage, {
+    name: body.name,
+    legalName: body.legalName,
+    email: body.email,
+    phone: body.phone,
+    website: body.website,
+    address: body.address,
+    city: body.city,
+    state: body.state,
+    zipCode: body.zipCode,
+    country: "US",
+    licenseNumber: body.licenseNumber,
+    licenseState: body.licenseState,
+    licenseExpiry: new Date(body.licenseExpiry).getTime(),
+    logoUrl: body.logoUrl,
+    primaryColor: body.primaryColor,
+  });
 
   return c.json({
     success: true,
     data: {
-      id: "brk_" + Date.now(),
+      id: brokerageId,
       name: body.name,
       status: "pending",
       createdAt: new Date().toISOString(),
@@ -467,15 +531,19 @@ app.post("/brokerages", zValidator("json", createBrokerageSchema), async (c) => 
 /**
  * Search brokerages
  */
-app.get("/brokerages/search", async (c) => {
+app.get("/brokerages/search", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const query = c.req.query("q") ?? "";
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Search via Convex realEstate.searchBrokerages
+  const brokerages = await convex.query(api.realEstate.searchBrokerages, {
+    query,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: brokerages,
     query,
     timestamp: new Date().toISOString(),
   });
@@ -484,21 +552,26 @@ app.get("/brokerages/search", async (c) => {
 /**
  * Get brokerage agents
  */
-app.get("/brokerages/:id/agents", async (c) => {
+app.get("/brokerages/:id/agents", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const brokerageId = c.req.param("id");
   const status = c.req.query("status");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Fetch from Convex realEstate.getAgentsByBrokerage
+  const agents = await convex.query(api.realEstate.getAgentsByBrokerage, {
+    brokerageId: brokerageId as any,
+    status: status || undefined,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: agents,
     pagination: {
       page: 1,
       pageSize: limit,
-      totalItems: 0,
-      totalPages: 0,
+      totalItems: agents.length,
+      totalPages: 1,
       hasNextPage: false,
       hasPreviousPage: false,
     },
@@ -509,23 +582,41 @@ app.get("/brokerages/:id/agents", async (c) => {
 /**
  * Get/update brokerage white-label config
  */
-app.get("/brokerages/:id/whitelabel", async (c) => {
+app.get("/brokerages/:id/whitelabel", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const brokerageId = c.req.param("id");
 
-  // TODO: Fetch from Convex realEstate.getWhiteLabelConfig
+  const config = await convex.query(api.realEstate.getWhiteLabelConfig, {
+    brokerageId: brokerageId as any,
+  });
 
   return c.json({
     success: true,
-    data: null,
+    data: config,
     timestamp: new Date().toISOString(),
   });
 });
 
-app.put("/brokerages/:id/whitelabel", zValidator("json", whiteLabelConfigSchema), async (c) => {
+app.put("/brokerages/:id/whitelabel", requireFeature("real_estate"), zValidator("json", whiteLabelConfigSchema), async (c) => {
+  const convex = c.get("convex");
   const brokerageId = c.req.param("id");
   const body = c.req.valid("json");
 
-  // TODO: Update via Convex realEstate.upsertWhiteLabelConfig
+  await convex.mutation(api.realEstate.upsertWhiteLabelConfig, {
+    brokerageId: brokerageId as any,
+    appName: body.appName,
+    logoUrl: body.logoUrl,
+    faviconUrl: body.faviconUrl,
+    primaryColor: body.primaryColor,
+    secondaryColor: body.secondaryColor,
+    accentColor: body.accentColor,
+    customDomain: body.customDomain,
+    enabledFeatures: body.enabledFeatures,
+    disabledMarketCategories: body.disabledMarketCategories,
+    termsUrl: body.termsUrl,
+    privacyUrl: body.privacyUrl,
+    disclaimerText: body.disclaimerText,
+  });
 
   return c.json({
     success: true,
@@ -545,14 +636,21 @@ app.put("/brokerages/:id/whitelabel", zValidator("json", whiteLabelConfigSchema)
 /**
  * Get current user's agent profile
  */
-app.get("/agents/me", async (c) => {
+app.get("/agents/me", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
 
-  // TODO: Fetch from Convex realEstate.getAgentByUserId
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  const agent = await convex.query(api.realEstate.getAgentByUserId, {
+    userId: toUserId(userId),
+  });
 
   return c.json({
     success: true,
-    data: null,
+    data: agent,
     timestamp: new Date().toISOString(),
   });
 });
@@ -560,19 +658,38 @@ app.get("/agents/me", async (c) => {
 /**
  * Register as an agent
  */
-app.post("/agents/register", zValidator("json", registerAgentSchema), async (c) => {
+app.post("/agents/register", requireFeature("real_estate"), zValidator("json", registerAgentSchema), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const body = c.req.valid("json");
 
-  // TODO: Create via Convex realEstate.registerAgent
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  const agentId = await convex.mutation(api.realEstate.registerAgent, {
+    userId: toUserId(userId),
+    brokerageId: body.brokerageId as any,
+    firstName: body.firstName,
+    lastName: body.lastName,
+    email: body.email,
+    phone: body.phone,
+    licenseNumber: body.licenseNumber,
+    licenseState: body.licenseState,
+    licenseExpiry: new Date(body.licenseExpiry).getTime(),
+    specializations: body.specializations,
+    serviceAreas: body.serviceAreas,
+    yearsExperience: body.yearsExperience,
+    photoUrl: body.photoUrl,
+    bio: body.bio,
+  });
 
   return c.json({
     success: true,
     data: {
-      id: "agt_" + Date.now(),
+      id: agentId,
       userId,
       status: "pending_verification",
-      referralCode: "AGT-" + Date.now().toString(36).toUpperCase(),
       createdAt: new Date().toISOString(),
     },
     timestamp: new Date().toISOString(),
@@ -582,23 +699,26 @@ app.post("/agents/register", zValidator("json", registerAgentSchema), async (c) 
 /**
  * Get agent by referral code (public)
  */
-app.get("/agents/referral/:code", async (c) => {
+app.get("/agents/referral/:code", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const referralCode = c.req.param("code");
 
-  // TODO: Fetch from Convex realEstate.getAgentByReferralCode
+  const agent = await convex.query(api.realEstate.getAgentByReferralCode, {
+    referralCode,
+  });
+
+  if (!agent) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Agent not found" } }, 404);
+  }
 
   return c.json({
     success: true,
     data: {
-      referralCode,
-      displayName: "John Smith",
-      photoUrl: null,
-      brokerage: {
-        name: "Example Realty",
-        logoUrl: null,
-      },
-      predictionAccuracy: 72.5,
-      totalReferrals: 45,
+      referralCode: agent.referralCode,
+      displayName: agent.displayName,
+      photoUrl: agent.photoUrl,
+      predictionAccuracy: agent.predictionAccuracy,
+      totalReferrals: agent.totalReferrals,
     },
     timestamp: new Date().toISOString(),
   });
@@ -607,16 +727,21 @@ app.get("/agents/referral/:code", async (c) => {
 /**
  * Get top performing agents
  */
-app.get("/agents/leaderboard", async (c) => {
+app.get("/agents/leaderboard", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const brokerageId = c.req.query("brokerage");
   const sortBy = c.req.query("sortBy") ?? "predictionAccuracy";
   const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
-  // TODO: Fetch from Convex realEstate.getTopAgents
+  const agents = await convex.query(api.realEstate.getTopAgents, {
+    brokerageId: brokerageId ? (brokerageId as any) : undefined,
+    sortBy,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: agents,
     sortBy,
     timestamp: new Date().toISOString(),
   });
@@ -625,16 +750,21 @@ app.get("/agents/leaderboard", async (c) => {
 /**
  * Search agents
  */
-app.get("/agents/search", async (c) => {
+app.get("/agents/search", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const query = c.req.query("q") ?? "";
   const brokerageId = c.req.query("brokerage");
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
 
-  // TODO: Search via Convex realEstate.searchAgents
+  const agents = await convex.query(api.realEstate.searchAgents, {
+    query,
+    brokerageId: brokerageId ? (brokerageId as any) : undefined,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: agents,
     query,
     timestamp: new Date().toISOString(),
   });
@@ -643,21 +773,45 @@ app.get("/agents/search", async (c) => {
 /**
  * Get agent's referrals
  */
-app.get("/agents/me/referrals", async (c) => {
+app.get("/agents/me/referrals", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const status = c.req.query("status");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Get agent ID from user, then fetch referrals
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  // First get agent profile
+  const agent = await convex.query(api.realEstate.getAgentByUserId, {
+    userId: toUserId(userId),
+  });
+
+  if (!agent) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Agent not found" } }, 404);
+  }
+
+  const referrals = await convex.query(api.realEstate.getAgentReferrals, {
+    agentId: agent._id,
+    status: status || undefined,
+    limit,
+  });
+
+  // Calculate stats
+  const total = referrals.length;
+  const active = referrals.filter((r) => r.status === "active_trader").length;
+  const pending = referrals.filter((r) => r.status === "pending" || r.status === "signed_up").length;
+  const totalEarnings = referrals.reduce((sum, r) => sum + (r.totalReferralEarnings ?? 0), 0);
 
   return c.json({
     success: true,
-    data: [],
+    data: referrals,
     stats: {
-      total: 0,
-      active: 0,
-      pending: 0,
-      totalEarnings: 0,
+      total,
+      active,
+      pending,
+      totalEarnings,
     },
     timestamp: new Date().toISOString(),
   });
@@ -666,17 +820,33 @@ app.get("/agents/me/referrals", async (c) => {
 /**
  * Get agent's points balance
  */
-app.get("/agents/me/points", async (c) => {
+app.get("/agents/me/points", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
 
-  // TODO: Fetch from Convex realEstate.getAgentPointsBalance
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  // First get agent profile
+  const agent = await convex.query(api.realEstate.getAgentByUserId, {
+    userId: toUserId(userId),
+  });
+
+  if (!agent) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Agent not found" } }, 404);
+  }
+
+  const balance = await convex.query(api.realEstate.getAgentPointsBalance, {
+    agentId: agent._id,
+  });
 
   return c.json({
     success: true,
     data: {
-      balance: 0,
+      balance: balance ?? 0,
       pendingPoints: 0,
-      lifetimeEarnings: 0,
+      lifetimeEarnings: balance ?? 0,
     },
     timestamp: new Date().toISOString(),
   });
@@ -685,35 +855,56 @@ app.get("/agents/me/points", async (c) => {
 /**
  * Get agent's points history
  */
-app.get("/agents/me/points/history", async (c) => {
+app.get("/agents/me/points/history", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Fetch from Convex realEstate.getAgentPointsHistory
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  // First get agent profile
+  const agent = await convex.query(api.realEstate.getAgentByUserId, {
+    userId: toUserId(userId),
+  });
+
+  if (!agent) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Agent not found" } }, 404);
+  }
+
+  const history = await convex.query(api.realEstate.getAgentPointsHistory, {
+    agentId: agent._id,
+    limit,
+  });
 
   return c.json({
     success: true,
-    data: [],
+    data: history,
     timestamp: new Date().toISOString(),
   });
 });
 
 /**
  * Invite a client
+ * NOTE: Email invitation requires additional setup
  */
-app.post("/agents/me/invite", zValidator("json", inviteClientSchema), async (c) => {
+app.post("/agents/me/invite", requireFeature("real_estate"), zValidator("json", inviteClientSchema), async (c) => {
   const userId = c.get("userId");
   const body = c.req.valid("json");
 
-  // TODO: Create invitation, send email/SMS
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
 
+  // Email invitation to be implemented
   return c.json({
     success: true,
     data: {
       invitationId: "inv_" + Date.now(),
       email: body.email,
-      status: "sent",
-      sentAt: new Date().toISOString(),
+      status: "pending",
+      message: "Email invitation feature coming soon",
     },
     timestamp: new Date().toISOString(),
   }, 201);
@@ -722,20 +913,43 @@ app.post("/agents/me/invite", zValidator("json", inviteClientSchema), async (c) 
 /**
  * Get agent's leads (from lead scoring)
  */
-app.get("/agents/me/leads", async (c) => {
+app.get("/agents/me/leads", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const userId = c.get("userId");
-  const tier = c.req.query("tier"); // hot, warm, cold
+  const tier = c.req.query("tier");
   const limit = parseInt(c.req.query("limit") ?? "50", 10);
 
-  // TODO: Fetch from Convex realEstate.getAgentLeads
+  if (!userId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  // First get agent profile
+  const agent = await convex.query(api.realEstate.getAgentByUserId, {
+    userId: toUserId(userId),
+  });
+
+  if (!agent) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Agent not found" } }, 404);
+  }
+
+  const leads = await convex.query(api.realEstate.getAgentLeads, {
+    agentId: agent._id,
+    tier: tier || undefined,
+    limit,
+  });
+
+  // Calculate stats by tier
+  const hot = leads.filter((l) => l.leadTier === "hot").length;
+  const warm = leads.filter((l) => l.leadTier === "warm").length;
+  const cold = leads.filter((l) => l.leadTier === "cold").length;
 
   return c.json({
     success: true,
-    data: [],
+    data: leads,
     stats: {
-      hot: 0,
-      warm: 0,
-      cold: 0,
+      hot,
+      warm,
+      cold,
     },
     timestamp: new Date().toISOString(),
   });
@@ -772,16 +986,31 @@ app.get("/agents/me/insights", async (c) => {
 /**
  * Get lead score for a user (agent-only)
  */
-app.get("/leads/:userId", async (c) => {
+app.get("/leads/:userId", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const targetUserId = c.req.param("userId");
   const requestingUserId = c.get("userId");
 
-  // TODO: Check if requesting user is an agent with access to this lead
-  // TODO: Fetch from Convex realEstate.getLeadScore
+  if (!requestingUserId) {
+    return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } }, 401);
+  }
+
+  // Verify requesting user is an agent
+  const agent = await convex.query(api.realEstate.getAgentByUserId, {
+    userId: toUserId(requestingUserId),
+  });
+
+  if (!agent) {
+    return c.json({ success: false, error: { code: "FORBIDDEN", message: "Only agents can view lead scores" } }, 403);
+  }
+
+  const leadScore = await convex.query(api.realEstate.getLeadScore, {
+    userId: toUserId(targetUserId),
+  });
 
   return c.json({
     success: true,
-    data: null,
+    data: leadScore,
     timestamp: new Date().toISOString(),
   });
 });
@@ -793,14 +1022,17 @@ app.get("/leads/:userId", async (c) => {
 /**
  * Get white-label config by domain (public, for white-label apps)
  */
-app.get("/whitelabel/domain/:domain", async (c) => {
+app.get("/whitelabel/domain/:domain", requireFeature("real_estate"), async (c) => {
+  const convex = c.get("convex");
   const domain = c.req.param("domain");
 
-  // TODO: Fetch from Convex realEstate.getWhiteLabelConfigByDomain
+  const config = await convex.query(api.realEstate.getWhiteLabelConfigByDomain, {
+    domain,
+  });
 
   return c.json({
     success: true,
-    data: null,
+    data: config,
     timestamp: new Date().toISOString(),
   });
 });
