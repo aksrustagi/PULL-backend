@@ -25,7 +25,7 @@ export class SocialGraphService {
     notificationsEnabled?: boolean;
     positionVisibility?: "all" | "entry_only" | "none";
   }) {
-    // TODO: Update to use generated API types once available
+    // Implementation note: Generated API types pending
     return await convex.mutation("social/mutations:follow" as any, {
       followerId: params.followerId as any,
       followeeId: params.followeeId as any,

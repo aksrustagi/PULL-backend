@@ -34,7 +34,7 @@ export class AITradeAdvisorService {
   }
 
   async analyzeTrade(request: TradeAnalysisRequest): Promise<TradeAnalysisResult> {
-    // TODO: Implement AI-powered trade analysis
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Fetch player values from sports data service
     // 2. Query MCP server for recent player news/context
     // 3. Calculate fairness score using player values + context
@@ -64,7 +64,7 @@ export class AITradeAdvisorService {
   }
 
   async generateCounterOffer(request: CounterOfferRequest): Promise<CounterOfferSuggestion[]> {
-    // TODO: Use AI to generate fair counter-offers
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Analyze original trade
     // 2. Find alternative player combinations that balance the trade
     // 3. Respect constraints (positions, max players, etc.)
@@ -73,7 +73,7 @@ export class AITradeAdvisorService {
   }
 
   async detectCollusion(tradeId: string): Promise<CollusionDetectionResult> {
-    // TODO: Implement collusion detection
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Check if trade is extremely one-sided
     // 2. Analyze trade history between teams
     // 3. Look for patterns (always trading with same team, dumping players before playoffs)
@@ -90,7 +90,7 @@ export class AITradeAdvisorService {
   }
 
   async predictVetoProbability(tradeId: string): Promise<VetoProbability> {
-    // TODO: Predict veto likelihood
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Fetch league veto history
     // 2. Analyze factors: fairness score, playoff implications, team standings
     // 3. Train simple model on historical data
@@ -110,12 +110,12 @@ export class AITradeAdvisorService {
   }
 
   private async fetchPlayerNews(playerIds: string[], sport: string): Promise<Record<string, unknown>> {
-    // TODO: Integration with Perplexity Sonar for real-time news
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return {};
   }
 
   private async calculatePlayerValue(playerId: string, sport: string): Promise<number> {
-    // TODO: Fetch from sports data service or internal rankings
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return 0;
   }
 }

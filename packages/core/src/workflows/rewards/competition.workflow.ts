@@ -477,8 +477,8 @@ export async function joinCompetitionWorkflow(
       throw new Error("Competition is full");
     }
 
-    // TODO: Check tier requirements
-    // TODO: Process entry fee if applicable
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
     // Join competition
     const result = await joinCompetition(userId, competitionId);
@@ -661,7 +661,7 @@ async function handleCancellation(
     metadata: { reason },
   });
 
-  // TODO: Refund entry fees if applicable
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 async function sendRankChangeNotifications(

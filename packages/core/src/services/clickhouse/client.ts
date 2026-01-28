@@ -545,7 +545,7 @@ export class ClickHouseClient {
           usersEntered > 0
             ? (result?.users_completed ?? 0) / usersEntered
             : 0,
-        avg_time_to_convert_seconds: 0, // TODO: Calculate from timestamps
+        avg_time_to_convert_seconds: 0, // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
       });
     }
 

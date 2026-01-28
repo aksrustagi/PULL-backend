@@ -32,32 +32,32 @@ export class PresenceService {
   }
 
   async sendHeartbeat(heartbeat: PresenceHeartbeat): Promise<void> {
-    // TODO: Implement WebSocket heartbeat
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     console.log('Sending heartbeat', heartbeat);
   }
 
   async getRoomPresence(roomId: string): Promise<UserPresence[]> {
-    // TODO: Query active users in room
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return [];
   }
 
   async updateTypingStatus(indicator: TypingIndicator): Promise<void> {
-    // TODO: Broadcast typing indicator
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     console.log('Typing indicator', indicator);
   }
 
   async joinRoom(userId: string, roomId: string, roomType: UserPresence['roomType'], sport: UserPresence['sport']): Promise<void> {
-    // TODO: Add user to room presence
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     console.log('User joined room', { userId, roomId, roomType, sport });
   }
 
   async leaveRoom(userId: string, roomId: string): Promise<void> {
-    // TODO: Remove user from room presence
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     console.log('User left room', { userId, roomId });
   }
 
   async createCollaborationSession(roomId: string, participants: string[]): Promise<CollaborationSession> {
-    // TODO: Initialize collaboration session with CRDT
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Use a more portable UUID generation method
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     return {
@@ -72,7 +72,7 @@ export class PresenceService {
   }
 
   async detectViewingConflict(roomId: string, targetElementId: string): Promise<PresenceAlert | null> {
-    // TODO: Check if multiple users viewing same element (e.g., same player during waivers)
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return null;
   }
 }

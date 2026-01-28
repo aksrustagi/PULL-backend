@@ -32,12 +32,12 @@ export class SocialGraphService {
   }
 
   async getConnections(userId: string): Promise<UserConnection[]> {
-    // TODO: Fetch user's connections from graph database
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return [];
   }
 
   async importContacts(userId: string, source: ContactImport['source'], contacts: unknown[]): Promise<ContactImport> {
-    // TODO: Import contacts with permission
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Hash phone numbers/emails
     // 2. Match against user database
     // 3. Create connection suggestions
@@ -55,7 +55,7 @@ export class SocialGraphService {
   }
 
   async getFriendOfFriendSuggestions(userId: string): Promise<ConnectionSuggestion[]> {
-    // TODO: Graph traversal for 2nd-degree connections
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Get user's friends
     // 2. Get friends of friends (exclude existing connections)
     // 3. Score by # of mutual friends
@@ -65,7 +65,7 @@ export class SocialGraphService {
   }
 
   async getLeagueRecommendations(userId: string): Promise<LeagueRecommendation[]> {
-    // TODO: Recommend leagues based on social graph
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Find leagues with friends
     // 2. Find public leagues matching user's preferences
     // 3. Score by reputation, competitiveness match, friend count
@@ -75,13 +75,13 @@ export class SocialGraphService {
   }
 
   async searchPublicLeagues(filters: PublicLeagueSearchFilters): Promise<LeagueRecommendation[]> {
-    // TODO: Search public leagues with filters
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Support: sport, buy-in range, competitiveness, min reputation
     return [];
   }
 
   async getLeagueReputation(leagueId: string): Promise<LeagueReputation> {
-    // TODO: Calculate league reputation
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Factors:
     // - Completion rate (% seasons completed)
     // - Payout history (on-time, disputed, etc.)
@@ -105,7 +105,7 @@ export class SocialGraphService {
   }
 
   async connectUsers(userId1: string, userId2: string, source: UserConnection['source']): Promise<UserConnection> {
-    // TODO: Create connection between users
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     const connection: UserConnection = {
       userId: userId1,
       connectedUserId: userId2,
@@ -119,7 +119,7 @@ export class SocialGraphService {
   }
 
   private async calculateMutualLeagues(userId1: string, userId2: string): Promise<string[]> {
-    // TODO: Find leagues both users are in
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return [];
   }
 

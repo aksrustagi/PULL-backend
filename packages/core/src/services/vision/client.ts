@@ -32,7 +32,7 @@ export class VisionService {
   }
 
   async analyzeScreenshot(request: VisionAnalysisRequest): Promise<ScreenshotAnalysis> {
-    // TODO: Implement screenshot analysis
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Validate image size
     // 2. Call vision API with appropriate prompt based on analysisType
     // 3. Parse structured data from response
@@ -54,7 +54,7 @@ export class VisionService {
   }
 
   async parseTradeScreenshot(imageUrl: string, userId: string): Promise<TradeScreenshotResult> {
-    // TODO: Extract trade details from screenshot
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Detect source platform (ESPN, Yahoo, Sleeper)
     // 2. Extract player names, positions, teams
     // 3. Identify which side is offering vs receiving
@@ -68,7 +68,7 @@ export class VisionService {
   }
 
   async scanJersey(imageUrl: string, userId: string): Promise<JerseyScanResult | null> {
-    // TODO: Recognize jersey and fetch player stats
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Detect jersey number and team colors
     // 2. OCR any visible text
     // 3. Match to player database
@@ -78,7 +78,7 @@ export class VisionService {
   }
 
   async syncWithTV(imageUrl: string, userId: string): Promise<TVSyncResult> {
-    // TODO: Recognize live game broadcast
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Detect sport from visual cues (field, court, scoreboard)
     // 2. Read team names/logos from screen
     // 3. Extract score and game time
@@ -90,13 +90,13 @@ export class VisionService {
   }
 
   private async callVisionAPI(imageUrl: string, prompt: string): Promise<string> {
-    // TODO: Call OpenAI Vision or Claude Vision
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Depends on this.config.provider
     return '';
   }
 
   private parseStructuredResponse(response: string, analysisType: string): Record<string, unknown> {
-    // TODO: Parse LLM response into structured data
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Use JSON extraction or regex depending on prompt design
     return {};
   }

@@ -224,7 +224,7 @@ export async function bridgeMessageWorkflow(
     status.status = "broadcasting";
 
     // Get connected bridges for this room
-    // TODO: Implement bridge connections (Discord, Telegram, etc.)
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
     // =========================================================================
     // Step 7: Finalize

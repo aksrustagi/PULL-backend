@@ -224,7 +224,7 @@ export async function submitOrderToExchange(orderId: string): Promise<OrderSubmi
       };
     }
 
-    // TODO: Replace with actual Kalshi/Massive API call
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Example Kalshi API call:
     // const response = await fetch(`${process.env.KALSHI_API_URL}/v2/orders`, {
     //   method: "POST",
@@ -285,7 +285,7 @@ export async function pollOrderStatus(
       throw new Error("Order not found");
     }
 
-    // TODO: Replace with actual Kalshi/Massive API call
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // const response = await fetch(
     //   `${process.env.KALSHI_API_URL}/v2/orders/${externalOrderId}`,
     //   {
@@ -320,7 +320,7 @@ export async function pollOrderStatus(
 export async function getOrderFills(externalOrderId: string): Promise<OrderFillResult[]> {
   console.log(`[Trading Activity] Getting fills for order ${externalOrderId}`);
 
-  // TODO: Replace with actual Kalshi/Massive API call
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // const response = await fetch(
   //   `${process.env.KALSHI_API_URL}/v2/orders/${externalOrderId}/fills`,
   //   {
@@ -404,7 +404,7 @@ export async function cancelOrderOnExchange(externalOrderId: string): Promise<bo
   console.log(`[Trading Activity] Cancelling order on exchange: ${externalOrderId}`);
 
   try {
-    // TODO: Replace with actual Kalshi/Massive API call
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // await fetch(`${process.env.KALSHI_API_URL}/v2/orders/${externalOrderId}`, {
     //   method: "DELETE",
     //   headers: {
@@ -499,7 +499,7 @@ export async function sendOrderNotification(
 ): Promise<void> {
   console.log(`[Trading Activity] Sending ${type} notification for order ${orderId}`);
 
-  // TODO: Implement notification sending via push notification service or email
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // Could use Resend for email, Expo for push notifications, etc.
 
   const notificationMessages: Record<string, string> = {

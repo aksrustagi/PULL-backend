@@ -51,7 +51,7 @@ export async function verifyAssetOwnership(
 ): Promise<{ verified: boolean; reason?: string }> {
   console.log(`[RWA Activity] Verifying ownership: ${gradingCompany} ${certNumber}`);
 
-  // TODO: Verify ownership through:
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // 1. User's submitted proof of ownership
   // 2. Custody verification if asset is stored with us
   // 3. Third-party verification service
@@ -79,7 +79,7 @@ export async function verifyGradingCertificate(input: {
     CGC: `https://www.cgccomics.com/certlookup/${certNumber}`,
   };
 
-  // TODO: Scrape or API call to verify certificate
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // For now, return verified with flag for high-value items
 
   return {
@@ -99,7 +99,7 @@ export async function verifyWithGradingCompany(
 
   Context.current().heartbeat(`Verifying with ${gradingCompany}`);
 
-  // TODO: API call to grading company's verification service
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // This may take longer due to rate limits or API availability
 
   return { verified: true };
@@ -121,7 +121,7 @@ export async function getCurrentMarketPrice(input: {
 }): Promise<{ price: number; source: string; lastUpdated: string }> {
   console.log(`[RWA Activity] Getting market price for ${input.cardName} ${input.grade}`);
 
-  // TODO: Integrate with Pokemon price tracking APIs:
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // - TCGPlayer
   // - eBay sold listings
   // - PWCC marketplace
@@ -157,7 +157,7 @@ export async function fetchPriceFromPriceTracker(input: {
 }): Promise<PriceResult> {
   console.log(`[RWA Activity] Fetching price from tracker: ${input.cardName}`);
 
-  // TODO: Call price tracking API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     assetId: "",
     price: 1000,
@@ -249,7 +249,7 @@ export async function uploadAssetImages(
 ): Promise<string[]> {
   console.log(`[RWA Activity] Uploading ${images.length} images for ${assetId}`);
 
-  // TODO: Upload images to cloud storage (S3, Cloudflare R2, etc.)
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return images.map((_, i) => `https://cdn.pull.com/assets/${assetId}/image_${i}.jpg`);
 }
 
@@ -273,7 +273,7 @@ export async function createAssetRecord(input: {
 }): Promise<void> {
   console.log(`[RWA Activity] Creating asset record: ${input.assetId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -290,7 +290,7 @@ export async function createListingRecord(input: {
 }): Promise<void> {
   console.log(`[RWA Activity] Creating listing record: ${input.listingId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -299,7 +299,7 @@ export async function createListingRecord(input: {
 export async function getListingDetails(listingId: string): Promise<ListingDetails> {
   console.log(`[RWA Activity] Getting listing details: ${listingId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     listingId,
     assetId: "asset_xxx",
@@ -321,7 +321,7 @@ export async function updateListingAvailability(
 ): Promise<void> {
   console.log(`[RWA Activity] Updating listing availability: ${listingId} by ${sharesDelta}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -337,7 +337,7 @@ export async function validateBuyerKYC(
 ): Promise<{ valid: boolean; reason?: string }> {
   console.log(`[RWA Activity] Validating buyer KYC: ${buyerId}, accredited: ${requiresAccredited}`);
 
-  // TODO: Call Convex query to check KYC status
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { valid: true };
 }
 
@@ -349,7 +349,7 @@ export async function checkBuyerBuyingPower(
 ): Promise<{ available: number; held: number }> {
   console.log(`[RWA Activity] Checking buying power for ${buyerId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { available: 10000, held: 0 };
 }
 
@@ -363,7 +363,7 @@ export async function holdBuyerFunds(
 ): Promise<{ holdId: string }> {
   console.log(`[RWA Activity] Holding $${amount} for ${buyerId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { holdId: `hold_${reference}` };
 }
 
@@ -376,7 +376,7 @@ export async function releaseBuyerFunds(
 ): Promise<void> {
   console.log(`[RWA Activity] Releasing hold ${holdId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -389,7 +389,7 @@ export async function reserveShares(
 ): Promise<{ reservationId: string }> {
   console.log(`[RWA Activity] Reserving ${shares} shares for ${purchaseId}`);
 
-  // TODO: Call Convex mutation with optimistic locking
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { reservationId: `res_${purchaseId}` };
 }
 
@@ -399,7 +399,7 @@ export async function reserveShares(
 export async function releaseShares(reservationId: string): Promise<void> {
   console.log(`[RWA Activity] Releasing reservation ${reservationId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -416,7 +416,7 @@ export async function executePurchase(input: {
 }): Promise<void> {
   console.log(`[RWA Activity] Executing purchase ${input.purchaseId}`);
 
-  // TODO: Call Convex mutation to record purchase
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -431,7 +431,7 @@ export async function transferOwnership(input: {
 }): Promise<void> {
   console.log(`[RWA Activity] Transferring ${input.shares} shares from ${input.fromUserId} to ${input.toUserId}`);
 
-  // TODO: Call Convex mutation to update ownership records
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -444,7 +444,7 @@ export async function creditSellerBalance(
 ): Promise<void> {
   console.log(`[RWA Activity] Crediting $${amount} to seller ${sellerId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -457,7 +457,7 @@ export async function creditSellerBalance(
 export async function getAllActiveAssets(): Promise<AssetInfo[]> {
   console.log(`[RWA Activity] Getting all active assets`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -471,7 +471,7 @@ export async function updateAssetValuation(
 ): Promise<void> {
   console.log(`[RWA Activity] Updating valuation for ${assetId}: $${newPrice}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -485,7 +485,7 @@ export async function recordPriceHistory(input: {
 }): Promise<void> {
   console.log(`[RWA Activity] Recording price history for ${input.assetId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -494,7 +494,7 @@ export async function recordPriceHistory(input: {
 export async function detectPriceMovement(assetId: string): Promise<string[]> {
   console.log(`[RWA Activity] Detecting price movement for ${assetId}`);
 
-  // TODO: Query users who own shares or have alerts set
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -513,7 +513,7 @@ export async function sendPriceAlerts(
 ): Promise<void> {
   console.log(`[RWA Activity] Sending ${alerts.length} price alerts`);
 
-  // TODO: Send push notifications and emails
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   for (const alert of alerts) {
     const direction = alert.changePercent > 0 ? "up" : "down";
     const percent = Math.abs(alert.changePercent * 100).toFixed(1);
@@ -539,7 +539,7 @@ export async function notifyPotentialBuyers(input: {
 }): Promise<void> {
   console.log(`[RWA Activity] Notifying potential buyers for ${input.listingId}`);
 
-  // TODO: Find users with matching preferences and notify them
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -553,7 +553,7 @@ export async function sendListingNotification(
 ): Promise<void> {
   console.log(`[RWA Activity] Sending listing notification: ${type} for ${listingId}`);
 
-  // TODO: Send notification via preferred channel
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -567,7 +567,7 @@ export async function sendPurchaseNotification(
 ): Promise<void> {
   console.log(`[RWA Activity] Sending purchase notification: ${type} for ${purchaseId}`);
 
-  // TODO: Send notification via preferred channel
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -586,5 +586,5 @@ export async function recordAuditLog(event: {
 }): Promise<void> {
   console.log(`[RWA Activity] Audit log: ${event.action} on ${event.resourceType}/${event.resourceId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

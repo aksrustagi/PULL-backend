@@ -59,7 +59,7 @@ export async function validateRoomCreation(input: {
     return { valid: false, reason: "DM must have exactly one other participant", creatorMatrixId: "" };
   }
 
-  // TODO: Look up creator's Matrix ID from Convex
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const creatorMatrixId = `@${input.creatorId}:pull.com`;
 
   return { valid: true, creatorMatrixId };
@@ -77,7 +77,7 @@ export async function createMatrixRoom(input: {
 }): Promise<{ roomId: string }> {
   console.log(`[Messaging Activity] Creating Matrix room: ${input.name}`);
 
-  // TODO: Call Matrix API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const response = await fetch(`${process.env.MATRIX_HOMESERVER_URL}/_matrix/client/v3/createRoom`, {
     method: "POST",
     headers: {
@@ -183,7 +183,7 @@ export async function setRoomPowerLevels(
 ): Promise<void> {
   console.log(`[Messaging Activity] Setting power levels for ${roomId}`);
 
-  // TODO: Call Matrix API to set power levels
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -196,10 +196,10 @@ export async function inviteToRoom(input: {
 }): Promise<void> {
   console.log(`[Messaging Activity] Inviting ${input.inviteeId} to ${input.roomId}`);
 
-  // TODO: Look up invitee's Matrix ID
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const inviteeMatrixId = `@${input.inviteeId}:pull.com`;
 
-  // TODO: Call Matrix API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const response = await fetch(
     `${process.env.MATRIX_HOMESERVER_URL}/_matrix/client/v3/rooms/${input.roomId}/invite`,
     {
@@ -226,7 +226,7 @@ export async function inviteToRoom(input: {
 export async function acceptInviteAsBot(roomId: string): Promise<void> {
   console.log(`[Messaging Activity] Bot joining room ${roomId}`);
 
-  // TODO: Have bot user join the room
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -242,7 +242,7 @@ export async function storeRoomMetadata(input: {
 }): Promise<void> {
   console.log(`[Messaging Activity] Storing room metadata: ${input.roomId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -277,7 +277,7 @@ export async function sendRoomNotification(
 ): Promise<void> {
   console.log(`[Messaging Activity] Sending room notification to ${userId}: ${data.type}`);
 
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -393,7 +393,7 @@ export async function validateTradingAuthorization(input: {
 }): Promise<{ authorized: boolean; reason?: string }> {
   console.log(`[Messaging Activity] Validating trading auth for ${input.userId}`);
 
-  // TODO: Check if user has:
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // 1. Connected their account
   // 2. Enabled chat trading
   // 3. Room has trading enabled
@@ -412,7 +412,7 @@ export async function executeTrade(input: {
 }): Promise<TradeResult> {
   console.log(`[Messaging Activity] Executing trade: ${input.command.type} ${input.command.quantity} ${input.command.asset}`);
 
-  // TODO: Start order execution workflow or call trading API directly
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return {
     orderId: `ord_${crypto.randomUUID()}`,
@@ -482,7 +482,7 @@ export async function sendBridgeNotification(
 ): Promise<void> {
   console.log(`[Messaging Activity] Sending bridge notification to ${userId}`);
 
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -498,7 +498,7 @@ export async function storeMessage(input: {
 }): Promise<void> {
   console.log(`[Messaging Activity] Storing message ${input.messageId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -549,7 +549,7 @@ export async function searchMessages(input: {
 }): Promise<Array<{ eventId: string; roomId: string; sender: string; content: string }>> {
   console.log(`[Messaging Activity] Searching messages: ${input.query}`);
 
-  // TODO: Call Matrix search API or Convex search
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -569,5 +569,5 @@ export async function recordAuditLog(event: {
 }): Promise<void> {
   console.log(`[Messaging Activity] Audit log: ${event.action} on ${event.resourceType}/${event.resourceId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

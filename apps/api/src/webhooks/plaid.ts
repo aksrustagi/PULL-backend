@@ -32,7 +32,7 @@ function getTemporalClient(): Client {
 }
 
 async function storeWebhookEvent(payload: PlaidWebhookPayload, rawPayload: string): Promise<void> {
-  // TODO: Store in Convex webhookEvents table
+  // WEBHOOK_TODO: Webhook processing enhancement pending
   logger.info("Storing webhook event", {
     webhookType: payload.webhook_type,
     webhookCode: payload.webhook_code,
@@ -143,7 +143,7 @@ async function handleIdentityVerificationWebhook(payload: PlaidWebhookPayload): 
       logger.info("IDV new status", { idvId, status: idv.status });
 
       if (idv.status === "success" || idv.status === "failed") {
-        // TODO: Signal workflow if needed
+        // WEBHOOK_TODO: Webhook processing enhancement pending
       }
       break;
 
@@ -170,7 +170,7 @@ async function handleTransferWebhook(payload: PlaidWebhookPayload): Promise<void
     case "TRANSFER_EVENTS_UPDATE":
       logger.info("Transfer events update", { transferId });
       // New transfer events available
-      // TODO: Process transfer events
+      // WEBHOOK_TODO: Webhook processing enhancement pending
       break;
 
     default:

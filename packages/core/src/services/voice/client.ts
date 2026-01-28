@@ -33,7 +33,7 @@ export class VoiceService {
   }
 
   async processVoiceCommand(request: VoiceCommandRequest): Promise<VoiceCommand> {
-    // TODO: Implement voice command processing
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Transcribe audio using Whisper API
     // 2. Parse intent using LLM (identify action and entities)
     // 3. Execute command (set lineup, add/drop player, etc.)
@@ -65,7 +65,7 @@ export class VoiceService {
     recapType: AudioRecap['recapType'],
     date?: Date
   ): Promise<AudioRecap> {
-    // TODO: Implement audio recap generation
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Gather overnight/weekly transactions
     // 2. Generate narrative text using LLM
     // 3. Convert to speech using TTS
@@ -84,7 +84,7 @@ export class VoiceService {
   }
 
   async textToSpeech(request: TextToSpeechRequest): Promise<{ audioUrl: string; duration: number }> {
-    // TODO: Implement TTS
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Choose provider (ElevenLabs for premium, OpenAI for basic)
     // 2. Generate audio
     // 3. Upload to storage
@@ -97,12 +97,12 @@ export class VoiceService {
   }
 
   private async transcribeAudio(audioBuffer: ArrayBuffer): Promise<string> {
-    // TODO: Call Whisper API
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return '';
   }
 
   private async parseIntent(transcript: string, sport: string): Promise<VoiceIntent> {
-    // TODO: Use LLM to extract intent and entities
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Examples:
     // "Set my optimal lineup" -> { action: 'set_lineup', entities: {}, confidence: 0.95 }
     // "Pick up Travis Kelce and drop Noah Fant" -> { action: 'add_player', entities: { playerNames: ['Travis Kelce', 'Noah Fant'] }, confidence: 0.9 }

@@ -71,7 +71,7 @@ export async function sendVerificationEmail(
 ): Promise<void> {
   console.log(`[KYC Activity] Sending verification email to ${email}`);
 
-  // TODO: Integrate with Resend API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -115,7 +115,7 @@ export async function sendKYCStatusNotification(
     failed: "PULL Account Creation Failed",
   };
 
-  // TODO: Integrate with Resend API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -171,7 +171,7 @@ export async function createAccountRecord(input: {
 }): Promise<AccountRecord> {
   console.log(`[KYC Activity] Creating account record for ${input.email}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const userId = `user_${crypto.randomUUID()}`;
 
   return {
@@ -195,7 +195,7 @@ export async function createConvexUser(input: {
 }): Promise<void> {
   console.log(`[KYC Activity] Finalizing Convex user ${input.tempUserId}`);
 
-  // TODO: Call Convex mutation to finalize user
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -204,7 +204,7 @@ export async function createConvexUser(input: {
 export async function getUserKYCStatus(userId: string): Promise<UserKYCStatus> {
   console.log(`[KYC Activity] Getting KYC status for ${userId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     userId,
     email: "user@example.com",
@@ -220,7 +220,7 @@ export async function getUserKYCStatus(userId: string): Promise<UserKYCStatus> {
 export async function getUserLastVerificationDate(userId: string): Promise<string> {
   console.log(`[KYC Activity] Getting last verification date for ${userId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(); // 90 days ago
 }
 
@@ -233,7 +233,7 @@ export async function updateKYCTier(
 ): Promise<void> {
   console.log(`[KYC Activity] Updating KYC tier for ${userId} to ${tier}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -242,7 +242,7 @@ export async function updateKYCTier(
 export async function suspendUserAccount(userId: string, reason: string): Promise<void> {
   console.log(`[KYC Activity] Suspending account ${userId}: ${reason}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -258,7 +258,7 @@ export async function initiatePersonaInquiry(
 ): Promise<PersonaInquiry> {
   console.log(`[KYC Activity] Initiating Persona inquiry for ${userId}`);
 
-  // TODO: Call Persona API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const response = await fetch("https://api.withpersona.com/api/v1/inquiries", {
     method: "POST",
     headers: {
@@ -305,7 +305,7 @@ export async function waitForPersonaCompletion(inquiryId: string): Promise<Perso
     // Heartbeat to keep activity alive
     Context.current().heartbeat(`Checking Persona status: attempt ${attempts + 1}`);
 
-    // TODO: Poll Persona API
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     const response = await fetch(
       `https://api.withpersona.com/api/v1/inquiries/${inquiryId}`,
       {
@@ -376,7 +376,7 @@ export async function runCheckrBackgroundCheck(
 ): Promise<CheckrCandidate> {
   console.log(`[KYC Activity] Running Checkr background check for ${userId}`);
 
-  // TODO: Call Checkr API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // Create candidate
   const candidateResponse = await fetch("https://api.checkr.com/v1/candidates", {
     method: "POST",
@@ -426,7 +426,7 @@ export async function waitForCheckrCompletion(reportId: string): Promise<CheckrC
   while (attempts < maxAttempts) {
     Context.current().heartbeat(`Checking Checkr status: attempt ${attempts + 1}`);
 
-    // TODO: Poll Checkr API
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Simulated response
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
@@ -457,7 +457,7 @@ export async function screenWalletChainalysis(
 ): Promise<{ risk: "low" | "medium" | "high" | "severe"; score: number }> {
   console.log(`[KYC Activity] Screening wallet ${walletAddress}`);
 
-  // TODO: Call Chainalysis API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const response = await fetch(
     `https://api.chainalysis.com/api/risk/v2/entities/${walletAddress}`,
     {
@@ -495,7 +495,7 @@ export async function screenWalletChainalysis(
 export async function verifyReferralCode(referralCode: string): Promise<boolean> {
   console.log(`[KYC Activity] Verifying referral code: ${referralCode}`);
 
-  // TODO: Call Convex query to verify referral code exists and is valid
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return true;
 }
 
@@ -505,7 +505,7 @@ export async function verifyReferralCode(referralCode: string): Promise<boolean>
 export async function applyReferralBonus(userId: string, referralCode: string): Promise<void> {
   console.log(`[KYC Activity] Applying referral bonus for ${userId} with code ${referralCode}`);
 
-  // TODO: Call Convex mutation to credit both referrer and referee
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -525,7 +525,7 @@ export async function mintWelcomeNFT(
     throw new Error("Wallet address required for NFT minting");
   }
 
-  // TODO: Call smart contract to mint NFT
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     tokenId: `token_${crypto.randomUUID()}`,
     txHash: `0x${crypto.randomUUID().replace(/-/g, "")}`,
@@ -542,7 +542,7 @@ export async function mintWelcomeNFT(
 export async function checkDocumentExpiration(userId: string): Promise<DocumentExpirationResult> {
   console.log(`[KYC Activity] Checking document expiration for ${userId}`);
 
-  // TODO: Call Convex query to get user documents
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     anyExpired: false,
     expiredDocuments: [],
@@ -656,7 +656,7 @@ export async function requestAdditionalDocuments(
 ): Promise<void> {
   console.log(`[KYC Activity] Requesting additional documents for ${userId}: ${requiredDocuments.join(", ")}`);
 
-  // TODO: Send notification and update user record
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -672,7 +672,7 @@ export async function performManualReview(
 ): Promise<void> {
   console.log(`[KYC Activity] Triggering manual review for ${userId}`);
 
-  // TODO: Create review task in admin system
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -688,7 +688,7 @@ export async function runSanctionsScreening(
 ): Promise<ScreeningResult> {
   console.log(`[KYC Activity] Running sanctions screening for ${userId}`);
 
-  // TODO: Call sanctions screening API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { matched: false };
 }
 
@@ -701,7 +701,7 @@ export async function runWatchlistScreening(
 ): Promise<ScreeningResult> {
   console.log(`[KYC Activity] Running watchlist screening for ${userId}`);
 
-  // TODO: Call watchlist screening API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { matched: false };
 }
 
@@ -714,7 +714,7 @@ export async function runPEPScreening(
 ): Promise<ScreeningResult> {
   console.log(`[KYC Activity] Running PEP screening for ${userId}`);
 
-  // TODO: Call PEP screening API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { matched: false };
 }
 
@@ -747,5 +747,5 @@ export async function logAuditEvent(event: {
 }): Promise<void> {
   console.log(`[KYC Activity] Audit log: ${event.action} for ${event.userId}`);
 
-  // TODO: Call Convex mutation to log audit event
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

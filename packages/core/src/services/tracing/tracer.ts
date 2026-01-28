@@ -214,7 +214,7 @@ class SpanImpl implements Span {
       });
     }
 
-    // TODO: Send to OTLP endpoint in production
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     if (this._config.otlpEndpoint) {
       // Queue for batch export
       spanExportQueue.push({

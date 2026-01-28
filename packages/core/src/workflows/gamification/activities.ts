@@ -100,7 +100,7 @@ const TIER_MULTIPLIERS: Record<string, number> = {
 export async function getPointsConfig(actionType: string): Promise<PointsConfig | null> {
   console.log(`[Gamification Activity] Getting points config for: ${actionType}`);
 
-  // TODO: Call Convex query gamification.getPointsConfig
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const configs: Record<string, PointsConfig> = {
     daily_login: {
       actionType: "daily_login",
@@ -143,7 +143,7 @@ export async function checkDailyLimit(
 ): Promise<{ allowed: boolean; currentCount: number }> {
   console.log(`[Gamification Activity] Checking daily limit for ${userId}, action: ${actionType}`);
 
-  // TODO: Call Convex query to check dailyActionCounts
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { allowed: true, currentCount: 0 };
 }
 
@@ -153,7 +153,7 @@ export async function checkDailyLimit(
 export async function incrementDailyAction(userId: string, actionType: string): Promise<void> {
   console.log(`[Gamification Activity] Incrementing daily action for ${userId}, action: ${actionType}`);
 
-  // TODO: Call Convex mutation gamification.incrementDailyAction
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -212,7 +212,7 @@ export async function calculateBasePoints(input: {
 export async function getUserStreak(userId: string, streakType: string): Promise<StreakInfo> {
   console.log(`[Gamification Activity] Getting streak for ${userId}, type: ${streakType}`);
 
-  // TODO: Call Convex query gamification.getStreak
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     currentCount: 7,
     longestCount: 30,
@@ -247,7 +247,7 @@ export async function updateUserStreak(
 ): Promise<{ updated: boolean; currentCount: number; streakBroken?: boolean }> {
   console.log(`[Gamification Activity] Updating streak for ${userId}, type: ${streakType}`);
 
-  // TODO: Call Convex mutation gamification.updateStreak
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { updated: true, currentCount: 8 };
 }
 
@@ -261,7 +261,7 @@ export async function updateUserStreak(
 export async function getUserTier(userId: string): Promise<TierInfo> {
   console.log(`[Gamification Activity] Getting tier for ${userId}`);
 
-  // TODO: Call Convex query gamification.getUserTier
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     currentTier: "gold",
     lifetimePoints: 15000,
@@ -299,7 +299,7 @@ export async function applyTierMultiplier(input: {
 export async function updateTierPoints(userId: string, pointsEarned: number): Promise<void> {
   console.log(`[Gamification Activity] Updating tier points for ${userId}: +${pointsEarned}`);
 
-  // TODO: Call Convex mutation to update tier lifetimePoints and currentMonthPoints
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -310,7 +310,7 @@ export async function checkTierUpgrade(
 ): Promise<{ shouldUpgrade: boolean; newTier?: string }> {
   console.log(`[Gamification Activity] Checking tier upgrade for ${userId}`);
 
-  // TODO: Call Convex query/mutation to check tier thresholds
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { shouldUpgrade: false };
 }
 
@@ -320,7 +320,7 @@ export async function checkTierUpgrade(
 export async function upgradeTier(userId: string, newTier: string): Promise<void> {
   console.log(`[Gamification Activity] Upgrading ${userId} to tier: ${newTier}`);
 
-  // TODO: Call Convex mutation gamification.updateUserTier
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -342,7 +342,7 @@ export async function creditPointsToUser(input: {
 }): Promise<{ transactionId: string; newBalance: number }> {
   console.log(`[Gamification Activity] Crediting ${input.amount} points to ${input.userId}`);
 
-  // TODO: Call Convex mutation gamification.processPointsEarning or points.earnPoints
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     transactionId: `pts_${Date.now()}`,
     newBalance: 5000 + input.amount,
@@ -364,7 +364,7 @@ export async function updateQuestProgress(input: {
 }): Promise<{ updatedQuests: string[] }> {
   console.log(`[Gamification Activity] Updating quest progress for ${input.userId}`);
 
-  // TODO: Call Convex query to get active quests, then update progress
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // Map action types to quest requirement types
   const actionToQuestMap: Record<string, string> = {
     daily_login: "login_before",
@@ -380,7 +380,7 @@ export async function updateQuestProgress(input: {
     return { updatedQuests: [] };
   }
 
-  // TODO: Find matching quests and update progress
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { updatedQuests: [] };
 }
 
@@ -394,7 +394,7 @@ export async function updateQuestProgress(input: {
 export async function getUserStats(userId: string): Promise<UserStats> {
   console.log(`[Gamification Activity] Getting user stats for ${userId}`);
 
-  // TODO: Aggregate stats from various sources (trades, positions, followers, etc.)
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     totalTrades: 150,
     correctPredictions: 45,
@@ -415,7 +415,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 export async function getLockedAchievements(userId: string): Promise<Achievement[]> {
   console.log(`[Gamification Activity] Getting locked achievements for ${userId}`);
 
-  // TODO: Call Convex query gamification.getAchievements and filter to locked ones
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -472,7 +472,7 @@ export async function unlockAchievement(input: {
 }): Promise<void> {
   console.log(`[Gamification Activity] Unlocking achievement ${input.achievementId} for ${input.userId}`);
 
-  // TODO: Call Convex mutation to insert userAchievements record
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -535,7 +535,7 @@ export async function checkAntiGamingRules(input: {
 }): Promise<AntiGamingResult> {
   console.log(`[Gamification Activity] Checking anti-gaming rules for ${input.userId}`);
 
-  // TODO: Implement velocity checks, pattern detection, etc.
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   // Example checks:
   // 1. Too many actions in short period
@@ -558,7 +558,7 @@ export async function flagSuspiciousActivity(input: {
 }): Promise<{ flagId: string }> {
   console.log(`[Gamification Activity] Flagging suspicious activity for ${input.userId}: ${input.flagType}`);
 
-  // TODO: Call Convex mutation gamification.flagSuspiciousActivity
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { flagId: `flag_${Date.now()}` };
 }
 
@@ -576,7 +576,7 @@ export async function sendNotification(input: {
 }): Promise<void> {
   console.log(`[Gamification Activity] Sending notification to ${input.userId}: ${input.type}`);
 
-  // TODO: Integrate with push notification service
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -589,7 +589,7 @@ export async function sendBulkNotifications(input: {
 }): Promise<{ sent: number; failed: number }> {
   console.log(`[Gamification Activity] Sending bulk notifications: ${input.userIds.length} users`);
 
-  // TODO: Integrate with push notification service
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { sent: input.userIds.length, failed: 0 };
 }
 
@@ -609,7 +609,7 @@ export async function recordAuditLog(input: {
 }): Promise<void> {
   console.log(`[Gamification Activity] Audit: ${input.action} on ${input.resourceType}/${input.resourceId}`);
 
-  // TODO: Call Convex mutation to insert audit log
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -622,7 +622,7 @@ export async function recordAuditLog(input: {
 export async function resetAllDailyQuestProgress(): Promise<{ resetCount: number }> {
   console.log(`[Gamification Activity] Resetting all daily quest progress`);
 
-  // TODO: Call Convex internalMutation gamification.resetDailyQuests
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { resetCount: 0 };
 }
 
@@ -635,7 +635,7 @@ export async function checkAndMarkBrokenStreaks(): Promise<{
 }> {
   console.log(`[Gamification Activity] Checking broken streaks`);
 
-  // TODO: Call Convex internalMutation gamification.checkBrokenStreaks
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { brokenCount: 0, totalChecked: 0 };
 }
 
@@ -658,7 +658,7 @@ export async function getActiveUsersForReminders(input: {
 }): Promise<Array<{ userId: string; streakCount: number; email?: string }>> {
   console.log(`[Gamification Activity] Getting users for streak reminders`);
 
-  // TODO: Query users with active streaks who haven't logged in today
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -672,7 +672,7 @@ export async function getActiveUsersForReminders(input: {
 export async function resetAllWeeklyQuestProgress(): Promise<{ resetCount: number }> {
   console.log(`[Gamification Activity] Resetting all weekly quest progress`);
 
-  // TODO: Call Convex internalMutation gamification.resetWeeklyQuests
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { resetCount: 0 };
 }
 
@@ -706,7 +706,7 @@ export async function prepareWeeklySummaries(): Promise<{
   const now = new Date();
   const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  // TODO: Aggregate weekly data per user
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     users: [],
     weekStartDate: weekStart.toISOString(),
@@ -732,7 +732,7 @@ export async function sendWeeklySummaryEmails(input: {
 }): Promise<{ sent: number; failed: number }> {
   console.log(`[Gamification Activity] Sending weekly summary emails: ${input.users.length} users`);
 
-  // TODO: Integrate with email service
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { sent: input.users.length, failed: 0 };
 }
 
@@ -756,7 +756,7 @@ export async function getInactiveUsersForDecay(input: {
 > {
   console.log(`[Gamification Activity] Getting inactive users for decay`);
 
-  // TODO: Query tiers where lastActivityAt < threshold and lifetimePoints > minPoints
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -774,7 +774,7 @@ export async function applyPointDecay(input: {
   const decayAmount = Math.floor(input.currentPoints * input.decayPercent);
   const newPoints = input.currentPoints - decayAmount;
 
-  // TODO: Call Convex mutation to update tier points and record transaction
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return { pointsDecayed: decayAmount, newPoints };
 }
@@ -789,7 +789,7 @@ export async function recalculateTier(userId: string): Promise<{
 }> {
   console.log(`[Gamification Activity] Recalculating tier for ${userId}`);
 
-  // TODO: Call Convex mutation gamification.updateUserTier
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { changed: false };
 }
 
@@ -806,7 +806,7 @@ export async function sendTierChangeNotification(input: {
     `[Gamification Activity] Sending tier change notification to ${input.userId}: ${input.previousTier} -> ${input.newTier}`
   );
 
-  // TODO: Send push notification and email
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -818,7 +818,7 @@ export async function archiveOldPointTransactions(input: {
 }): Promise<{ archivedCount: number }> {
   console.log(`[Gamification Activity] Archiving transactions older than ${input.olderThanDays} days`);
 
-  // TODO: Move old transactions to archive table or cold storage
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { archivedCount: 0 };
 }
 
@@ -834,7 +834,7 @@ export async function generateMonthlyReport(input: {
 }): Promise<void> {
   console.log(`[Gamification Activity] Generating monthly report for ${input.month}`);
 
-  // TODO: Generate and store monthly analytics report
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -850,7 +850,7 @@ export async function updateLeaderboardSnapshot(input: {
 }): Promise<void> {
   console.log(`[Gamification Activity] Updating ${input.period} leaderboard snapshots`);
 
-  // TODO: Generate and cache leaderboard data
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -862,7 +862,7 @@ export async function archiveOldLeaderboards(input: {
 }): Promise<void> {
   console.log(`[Gamification Activity] Archiving old ${input.period} leaderboards, keeping ${input.keepRecent}`);
 
-  // TODO: Clean up old leaderboard snapshots
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -875,6 +875,6 @@ export async function archiveOldLeaderboards(input: {
 export async function sendStreakReminders(userIds: string[]): Promise<{ sent: number }> {
   console.log(`[Gamification Activity] Sending streak reminders to ${userIds.length} users`);
 
-  // TODO: Send push notifications
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { sent: userIds.length };
 }

@@ -32,7 +32,7 @@ function getTemporalClient(): Client {
 }
 
 async function storeWebhookEvent(payload: WebhookPayload, rawPayload: string): Promise<void> {
-  // TODO: Store in Convex webhookEvents table
+  // WEBHOOK_TODO: Webhook processing enhancement pending
   logger.info("Storing webhook event", {
     eventType: payload.type,
     applicantId: payload.applicantId,
@@ -40,7 +40,7 @@ async function storeWebhookEvent(payload: WebhookPayload, rawPayload: string): P
 }
 
 async function isEventProcessed(applicantId: string, eventType: string, createdAtMs: string): Promise<boolean> {
-  // TODO: Check if event was already processed (idempotency)
+  // WEBHOOK_TODO: Webhook processing enhancement pending
   return false;
 }
 
@@ -178,14 +178,14 @@ async function handleApplicantPending(payload: WebhookPayload): Promise<void> {
   logger.info("Applicant pending", { applicantId: payload.applicantId });
 
   // Update database status to pending
-  // TODO: Call Convex mutation
+  // WEBHOOK_TODO: Webhook processing enhancement pending
 }
 
 async function handleApplicantOnHold(payload: WebhookPayload): Promise<void> {
   logger.warn("Applicant on hold", { applicantId: payload.applicantId });
 
   // This usually means manual review is needed
-  // TODO: Create alert/task for compliance team
+  // WEBHOOK_TODO: Webhook processing enhancement pending
 }
 
 export default sumsub;

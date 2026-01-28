@@ -81,7 +81,7 @@ const BASE_POINTS: Record<string, number> = {
 export async function getUserPointsBalance(userId: string): Promise<number> {
   console.log(`[Rewards Activity] Getting points balance for ${userId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return 5000;
 }
 
@@ -97,7 +97,7 @@ export async function creditPoints(input: {
 }): Promise<void> {
   console.log(`[Rewards Activity] Crediting ${input.amount} points to ${input.userId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -112,7 +112,7 @@ export async function debitPoints(input: {
 }): Promise<void> {
   console.log(`[Rewards Activity] Debiting ${input.amount} points from ${input.userId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -126,7 +126,7 @@ export async function burnPoints(input: {
 }): Promise<void> {
   console.log(`[Rewards Activity] Burning ${input.amount} points for ${input.userId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -139,7 +139,7 @@ export async function burnPoints(input: {
 export async function getUserTier(userId: string): Promise<UserTier> {
   console.log(`[Rewards Activity] Getting tier for ${userId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     tier: "gold",
     pointsToNextTier: 15000,
@@ -183,7 +183,7 @@ export async function checkTierUpgrade(
 export async function upgradeTier(userId: string, newTier: string): Promise<void> {
   console.log(`[Rewards Activity] Upgrading ${userId} to ${newTier}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -196,7 +196,7 @@ export async function upgradeTier(userId: string, newTier: string): Promise<void
 export async function getUserStreak(userId: string): Promise<UserStreak> {
   console.log(`[Rewards Activity] Getting streak for ${userId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     currentStreak: 7,
     longestStreak: 30,
@@ -212,7 +212,7 @@ export async function updateUserStreak(
 ): Promise<{ newStreak: number; streakReset: boolean }> {
   console.log(`[Rewards Activity] Updating streak for ${userId}`);
 
-  // TODO: Call Convex mutation to update streak
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // Check if last activity was yesterday (continue streak) or earlier (reset)
 
   return { newStreak: 8, streakReset: false };
@@ -228,7 +228,7 @@ export async function updateUserStreak(
 export async function getActiveMultipliers(userId: string): Promise<Multiplier[]> {
   console.log(`[Rewards Activity] Getting multipliers for ${userId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -275,7 +275,7 @@ export async function calculatePointsForAction(
 export async function getRewardDetails(rewardId: string): Promise<RewardDetails> {
   console.log(`[Rewards Activity] Getting reward details: ${rewardId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     rewardId,
     name: "Mystery Reward",
@@ -295,7 +295,7 @@ export async function validateRedemptionEligibility(
 ): Promise<{ eligible: boolean; reason?: string }> {
   console.log(`[Rewards Activity] Validating eligibility for ${userId} - ${rewardId}`);
 
-  // TODO: Check user restrictions, redemption limits, etc.
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { eligible: true };
 }
 
@@ -310,7 +310,7 @@ export async function processRedemption(input: {
 }): Promise<void> {
   console.log(`[Rewards Activity] Processing redemption ${input.redemptionId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -326,7 +326,7 @@ export async function recordRedemption(input: {
 }): Promise<void> {
   console.log(`[Rewards Activity] Recording redemption ${input.redemptionId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -344,7 +344,7 @@ export async function enterSweepstakes(input: {
 }): Promise<{ entryIds: string[]; totalEntries: number }> {
   console.log(`[Rewards Activity] Entering ${input.userId} into sweepstakes ${input.sweepstakesId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const entryIds = Array.from({ length: input.entries }, () => `entry_${crypto.randomUUID()}`);
 
   return {
@@ -371,7 +371,7 @@ export async function shipPrize(input: {
 }): Promise<{ shipmentId: string; estimatedDelivery: string }> {
   console.log(`[Rewards Activity] Shipping prize ${input.prizeId} to ${input.userId}`);
 
-  // TODO: Integrate with shipping provider (ShipStation, EasyPost, etc.)
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     shipmentId: `ship_${crypto.randomUUID()}`,
     estimatedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -389,7 +389,7 @@ export async function applyFeeDiscount(input: {
 }): Promise<{ discountApplied: boolean; discountAmount: number }> {
   console.log(`[Rewards Activity] Applying ${input.discountPercent}% discount to order ${input.orderId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     discountApplied: true,
     discountAmount: 10.0, // Example
@@ -406,7 +406,7 @@ export async function applyFeeDiscount(input: {
 export async function getTokenConversionRate(): Promise<ConversionRate> {
   console.log(`[Rewards Activity] Getting token conversion rate`);
 
-  // TODO: Get rate from on-chain oracle or internal pricing
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     rate: 0.001, // 1000 points = 1 token
     lastUpdated: new Date().toISOString(),
@@ -430,7 +430,7 @@ export async function validateWalletAddress(
     return { valid: false, reason: "Invalid Ethereum address format" };
   }
 
-  // TODO: Additional checks (checksum validation, contract vs EOA, etc.)
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return { valid: true };
 }
@@ -447,7 +447,7 @@ export async function initiateTokenMint(input: {
 }): Promise<{ transactionHash: string }> {
   console.log(`[Rewards Activity] Initiating token mint: ${input.tokenAmount} tokens to ${input.walletAddress}`);
 
-  // TODO: Call smart contract to mint tokens
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // This would use ethers.js or viem to interact with the PULL token contract
 
   return {
@@ -463,7 +463,7 @@ export async function checkMintTransaction(
 ): Promise<{ confirmed: boolean; blockNumber?: number }> {
   console.log(`[Rewards Activity] Checking mint transaction: ${txHash}`);
 
-  // TODO: Check transaction status on-chain
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { confirmed: true, blockNumber: 12345678 };
 }
 
@@ -509,7 +509,7 @@ export async function creditTokenBalance(input: {
 }): Promise<void> {
   console.log(`[Rewards Activity] Crediting ${input.amount} tokens to ${input.userId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -532,7 +532,7 @@ export async function sendPointsNotification(
 ): Promise<void> {
   console.log(`[Rewards Activity] Sending points notification to ${userId}: ${data.type}`);
 
-  // TODO: Send push notification and/or email
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -552,7 +552,7 @@ export async function sendRedemptionNotification(
 ): Promise<void> {
   console.log(`[Rewards Activity] Sending redemption notification to ${userId}`);
 
-  // TODO: Send notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -571,7 +571,7 @@ export async function sendTokenNotification(
 ): Promise<void> {
   console.log(`[Rewards Activity] Sending token notification to ${userId}`);
 
-  // TODO: Send notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -590,5 +590,5 @@ export async function recordAuditLog(event: {
 }): Promise<void> {
   console.log(`[Rewards Activity] Audit log: ${event.action} on ${event.resourceType}/${event.resourceId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

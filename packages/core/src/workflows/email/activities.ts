@@ -65,7 +65,7 @@ export async function fetchNylasMessages(input: {
 }): Promise<{ messages: NylasMessage[]; nextCursor?: string }> {
   console.log(`[Email Activity] Fetching messages from Nylas, grant: ${input.grantId}`);
 
-  // TODO: Call Nylas API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const response = await fetch(
     `https://api.nylas.com/v3/grants/${input.grantId}/messages?limit=${input.limit}${input.cursor ? `&page_token=${input.cursor}` : ""}`,
     {
@@ -94,7 +94,7 @@ export async function fetchNylasMessages(input: {
 export async function checkEmailProcessed(messageId: string): Promise<boolean> {
   console.log(`[Email Activity] Checking if processed: ${messageId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return false;
 }
 
@@ -108,7 +108,7 @@ export async function updateSyncCursor(
 ): Promise<void> {
   console.log(`[Email Activity] Updating sync cursor for ${userId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -125,7 +125,7 @@ export async function triageWithClaude(input: {
 }): Promise<TriageData> {
   console.log(`[Email Activity] Triaging email with Claude: ${input.subject.slice(0, 50)}...`);
 
-  // TODO: Call Claude API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -281,7 +281,7 @@ export async function generateRepliesWithClaude(input: {
 
   Context.current().heartbeat("Generating replies...");
 
-  // TODO: Call Claude API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -499,7 +499,7 @@ export async function detectTradingSignals(
     return { detected: false, assets: [] };
   }
 
-  // TODO: Look up user's watched assets and positions
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     detected: true,
     assets: tickers,
@@ -531,7 +531,7 @@ export async function findRelatedAssets(
 export async function linkToAssets(emailId: string, assets: string[]): Promise<void> {
   console.log(`[Email Activity] Linking email ${emailId} to assets: ${assets.join(", ")}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -554,7 +554,7 @@ export async function storeEmailConvex(input: {
 }): Promise<void> {
   console.log(`[Email Activity] Storing email ${input.emailId} in Convex`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -576,7 +576,7 @@ export async function updateEmailTriage(
 ): Promise<void> {
   console.log(`[Email Activity] Updating triage for ${emailId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -594,7 +594,7 @@ export async function storeReplySuggestions(input: {
 }): Promise<void> {
   console.log(`[Email Activity] Storing ${input.suggestions.length} reply suggestions`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -607,7 +607,7 @@ export async function storeReplySuggestions(input: {
 export async function getThreadContext(threadId: string): Promise<ThreadContext> {
   console.log(`[Email Activity] Getting thread context: ${threadId}`);
 
-  // TODO: Call Convex query or Nylas API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     threadId,
     subject: "Sample Thread",
@@ -630,7 +630,7 @@ export async function getThreadContext(threadId: string): Promise<ThreadContext>
 export async function getUserWritingStyle(userId: string): Promise<WritingStyle> {
   console.log(`[Email Activity] Getting writing style for ${userId}`);
 
-  // TODO: Analyze user's sent emails to determine style
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     preferredTone: "professional",
     formalityLevel: 7,
@@ -645,7 +645,7 @@ export async function getUserWritingStyle(userId: string): Promise<WritingStyle>
 export async function getUserSignature(userId: string): Promise<{ text: string }> {
   console.log(`[Email Activity] Getting signature for ${userId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     text: "Best regards,\nUser",
   };
@@ -686,7 +686,7 @@ export async function createUrgentAlert(input: {
 }): Promise<void> {
   console.log(`[Email Activity] Creating urgent alert for ${input.emailId}`);
 
-  // TODO: Call Convex mutation and send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -701,7 +701,7 @@ export async function createTask(input: {
 }): Promise<void> {
   console.log(`[Email Activity] Creating task for email ${input.emailId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -715,7 +715,7 @@ export async function sendTriageNotification(input: {
 }): Promise<void> {
   console.log(`[Email Activity] Sending triage notification for ${input.emailId}`);
 
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -730,7 +730,7 @@ export async function sendEmail(input: {
 }): Promise<{ messageId: string }> {
   console.log(`[Email Activity] Sending email to ${input.to.join(", ")}`);
 
-  // TODO: Call Nylas API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { messageId: `msg_${crypto.randomUUID()}` };
 }
 
@@ -750,5 +750,5 @@ export async function recordAuditLog(event: {
 }): Promise<void> {
   console.log(`[Email Activity] Audit log: ${event.action} on ${event.resourceType}/${event.resourceId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

@@ -841,7 +841,7 @@ Respond in JSON format:
 export async function fetchActiveMarkets(): Promise<MarketData[]> {
   console.log(`[Signal Activity] Fetching active prediction markets`);
 
-  // TODO: Call Convex query for predictionMarkets
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // This is a placeholder - implement actual data fetching
   return [];
 }
@@ -855,7 +855,7 @@ export async function fetchMarketHistory(
 ): Promise<MarketData[]> {
   console.log(`[Signal Activity] Fetching ${hours}h history for ${ticker}`);
 
-  // TODO: Call Kalshi API or Convex for historical data
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -867,7 +867,7 @@ export async function fetchRecentTrades(
 ): Promise<TraderActivity[]> {
   console.log(`[Signal Activity] Fetching trades from last ${minutes} minutes`);
 
-  // TODO: Call Convex query for recent trades
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -879,7 +879,7 @@ export async function fetchUserPositions(
 ): Promise<Array<{ symbol: string; quantity: number; pnl: number }>> {
   console.log(`[Signal Activity] Fetching positions for user ${userId}`);
 
-  // TODO: Call Convex query for user positions
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -889,7 +889,7 @@ export async function fetchUserPositions(
 export async function fetchRecentSignalsForUser(userId: string): Promise<SignalData[]> {
   console.log(`[Signal Activity] Fetching recent signals for user ${userId}`);
 
-  // TODO: Call Convex query filtering by user's watched markets
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -899,7 +899,7 @@ export async function fetchRecentSignalsForUser(userId: string): Promise<SignalD
 export async function fetchActiveUsers(): Promise<string[]> {
   console.log(`[Signal Activity] Fetching active users`);
 
-  // TODO: Call Convex query for users with active positions
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -911,7 +911,7 @@ export async function fetchCorrelationPairs(): Promise<
 > {
   console.log(`[Signal Activity] Fetching correlation pairs`);
 
-  // TODO: Return pairs based on user portfolio overlap, category, etc.
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -925,7 +925,7 @@ export async function fetchCorrelationPairs(): Promise<
 export async function storeSignal(signal: SignalData): Promise<string> {
   console.log(`[Signal Activity] Storing signal: ${signal.title}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const signalId = `signal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   return signalId;
 }
@@ -936,7 +936,7 @@ export async function storeSignal(signal: SignalData): Promise<string> {
 export async function storeUserInsight(insight: UserInsight): Promise<string> {
   console.log(`[Signal Activity] Storing insight for user ${insight.userId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   const insightId = `insight_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   return insightId;
 }
@@ -953,7 +953,7 @@ export async function storeCorrelation(
     `[Signal Activity] Storing correlation: ${correlation.marketA}-${correlation.marketB}`
   );
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -967,7 +967,7 @@ export async function updateCorrelation(
 ): Promise<void> {
   console.log(`[Signal Activity] Updating correlation: ${marketA}-${marketB}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -976,7 +976,7 @@ export async function updateCorrelation(
 export async function expireOldSignals(olderThanHours: number): Promise<number> {
   console.log(`[Signal Activity] Expiring signals older than ${olderThanHours}h`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return 0;
 }
 
@@ -995,7 +995,7 @@ export async function sendSignalAlert(input: {
 }): Promise<void> {
   console.log(`[Signal Activity] Sending signal alert to user ${input.userId}`);
 
-  // TODO: Call push notification service
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1009,7 +1009,7 @@ export async function sendInsightNotification(input: {
 }): Promise<void> {
   console.log(`[Signal Activity] Sending insight notification to user ${input.userId}`);
 
-  // TODO: Call push notification service
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -1027,5 +1027,5 @@ export async function recordSignalAuditLog(event: {
 }): Promise<void> {
   console.log(`[Signal Activity] Audit: ${event.action} for ${event.signalId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

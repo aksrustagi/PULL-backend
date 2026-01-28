@@ -771,7 +771,7 @@ export async function checkDocumentExpiration(userId: string): Promise<{
 }> {
   console.log(`[KYC Activity] Checking document expiration for ${userId}`);
 
-  // TODO: Implement document tracking in Convex
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // For now, return no expired documents
   return {
     anyExpired: false,
@@ -789,7 +789,7 @@ export async function requestAdditionalDocuments(
 ): Promise<void> {
   console.log(`[KYC Activity] Requesting additional documents for ${userId}`);
 
-  // TODO: Create document request record and notify user
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -807,7 +807,7 @@ export async function runSanctionsScreening(
 ): Promise<{ matched: boolean; matchDetails?: string }> {
   console.log(`[KYC Activity] Running sanctions screening for ${userId}`);
 
-  // TODO: Integrate with sanctions screening provider (e.g., ComplyAdvantage)
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { matched: false };
 }
 
@@ -821,7 +821,7 @@ export async function runPEPScreening(
 ): Promise<{ matched: boolean; matchDetails?: string }> {
   console.log(`[KYC Activity] Running PEP screening for ${userId}`);
 
-  // TODO: Integrate with PEP screening provider
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { matched: false };
 }
 

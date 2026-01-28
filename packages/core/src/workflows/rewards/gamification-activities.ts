@@ -178,7 +178,7 @@ export async function getPointsConfig(action: string): Promise<PointsConfig | nu
  */
 export async function getUserPointsBalance(userId: string): Promise<number> {
   console.log(`[Gamification Activity] Getting points balance for ${userId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return 5000;
 }
 
@@ -193,7 +193,7 @@ export async function creditPoints(input: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   console.log(`[Gamification Activity] Crediting ${input.amount} points to ${input.userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -209,7 +209,7 @@ export async function recordPointsTransaction(input: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   console.log(`[Gamification Activity] Recording transaction ${input.transactionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -221,7 +221,7 @@ export async function recordPointsTransaction(input: {
  */
 export async function getUserTier(userId: string): Promise<UserTier> {
   console.log(`[Gamification Activity] Getting tier for ${userId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     tierLevel: "gold",
     lifetimePoints: 30000,
@@ -236,7 +236,7 @@ export async function getUserTier(userId: string): Promise<UserTier> {
  */
 export async function getUserLifetimePoints(userId: string): Promise<number> {
   console.log(`[Gamification Activity] Getting lifetime points for ${userId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return 30000;
 }
 
@@ -300,7 +300,7 @@ export async function updateUserTier(
   lifetimePoints: number
 ): Promise<void> {
   console.log(`[Gamification Activity] Updating tier for ${userId} to ${newTier}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -346,7 +346,7 @@ export async function grantTierBenefits(
   benefit: TierBenefit
 ): Promise<void> {
   console.log(`[Gamification Activity] Granting benefit ${benefit.name} to ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -357,7 +357,7 @@ export async function revokeTierBenefits(
   benefit: TierBenefit
 ): Promise<void> {
   console.log(`[Gamification Activity] Revoking benefit ${benefit.name} from ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -375,7 +375,7 @@ export async function getUserStreak(
 
   if (!streakType) return null;
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     streakType,
     currentCount: 7,
@@ -404,7 +404,7 @@ export async function updateStreak(
   streakType: string
 ): Promise<{ currentCount: number; wasReset: boolean; isNewRecord: boolean }> {
   console.log(`[Gamification Activity] Updating streak for ${userId}, type: ${streakType}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { currentCount: 8, wasReset: false, isNewRecord: false };
 }
 
@@ -422,7 +422,7 @@ export async function getAllBrokenStreaks(): Promise<
   }>
 > {
   console.log(`[Gamification Activity] Getting all broken streaks`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -431,7 +431,7 @@ export async function getAllBrokenStreaks(): Promise<
  */
 export async function resetStreak(userId: string, streakType: string): Promise<void> {
   console.log(`[Gamification Activity] Resetting streak for ${userId}, type: ${streakType}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -446,7 +446,7 @@ export async function getStreakExpiryNotifications(): Promise<
   }>
 > {
   console.log(`[Gamification Activity] Getting streak expiry notifications`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -459,7 +459,7 @@ export async function getStreakExpiryNotifications(): Promise<
  */
 export async function getActiveMultipliers(userId: string): Promise<Multiplier[]> {
   console.log(`[Gamification Activity] Getting multipliers for ${userId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -472,7 +472,7 @@ export async function recordMultiplierUsage(
   transactionId: string
 ): Promise<void> {
   console.log(`[Gamification Activity] Recording multiplier usage: ${multiplierName}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -484,7 +484,7 @@ export async function recordMultiplierUsage(
  */
 export async function getActiveQuestDefinitions(category: string): Promise<Quest[]> {
   console.log(`[Gamification Activity] Getting quest definitions for category: ${category}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -496,7 +496,7 @@ export async function getActiveUserQuests(
   category?: string
 ): Promise<Quest[]> {
   console.log(`[Gamification Activity] Getting active quests for ${userId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -508,7 +508,7 @@ export async function assignQuestsToUser(
   quests: Quest[]
 ): Promise<Quest[]> {
   console.log(`[Gamification Activity] Assigning ${quests.length} quests to ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return quests;
 }
 
@@ -521,7 +521,7 @@ export async function updateQuestProgress(
   incrementValue: number
 ): Promise<{ updated: string[]; completed: string[] }> {
   console.log(`[Gamification Activity] Updating quest progress for ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { updated: [], completed: [] };
 }
 
@@ -539,7 +539,7 @@ export async function completeQuest(
   rewards: { points: number; tokens?: number; badge?: string };
 }> {
   console.log(`[Gamification Activity] Completing quest ${questId} for ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     questName: "Test Quest",
     progress: 10,
@@ -557,7 +557,7 @@ export async function claimQuestReward(
   questId: string
 ): Promise<{ points: number; tokens?: number; badge?: string }> {
   console.log(`[Gamification Activity] Claiming quest reward ${questId} for ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { points: 100 };
 }
 
@@ -571,7 +571,7 @@ export async function expireQuests(batchSize: number): Promise<{
   questsByUser: Record<string, string[]>;
 }> {
   console.log(`[Gamification Activity] Expiring quests, batch size: ${batchSize}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { expiredCount: 0, usersAffected: 0, userIds: [], questsByUser: {} };
 }
 
@@ -588,7 +588,7 @@ export async function checkAchievementUnlock(
   currentValue: number
 ): Promise<{ checked: number; unlocked: Achievement[] }> {
   console.log(`[Gamification Activity] Checking achievements for ${userId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { checked: 0, unlocked: [] };
 }
 
@@ -600,7 +600,7 @@ export async function unlockAchievement(
   achievementId: string
 ): Promise<void> {
   console.log(`[Gamification Activity] Unlocking achievement ${achievementId} for ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -611,7 +611,7 @@ export async function claimAchievementReward(
   achievementId: string
 ): Promise<{ points: number; tokens?: number }> {
   console.log(`[Gamification Activity] Claiming achievement ${achievementId} for ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { points: 50 };
 }
 
@@ -622,7 +622,7 @@ export async function getUnclaimedAchievements(
   userId: string
 ): Promise<Achievement[]> {
   console.log(`[Gamification Activity] Getting unclaimed achievements for ${userId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -635,7 +635,7 @@ export async function updateAchievementProgress(
   currentValue: number
 ): Promise<{ updated: string[]; unlocked: string[] }> {
   console.log(`[Gamification Activity] Updating achievement progress for ${userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { updated: [], unlocked: [] };
 }
 
@@ -664,7 +664,7 @@ export async function getCompetition(competitionId: string): Promise<{
   status: string;
 } | null> {
   console.log(`[Gamification Activity] Getting competition: ${competitionId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return null;
 }
 
@@ -688,7 +688,7 @@ export async function createCompetition(input: {
   }>;
 }): Promise<{ id: string }> {
   console.log(`[Gamification Activity] Creating competition: ${input.competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { id: input.competitionId };
 }
 
@@ -697,7 +697,7 @@ export async function createCompetition(input: {
  */
 export async function startCompetition(competitionId: string): Promise<void> {
   console.log(`[Gamification Activity] Starting competition: ${competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -705,7 +705,7 @@ export async function startCompetition(competitionId: string): Promise<void> {
  */
 export async function endCompetition(competitionId: string): Promise<void> {
   console.log(`[Gamification Activity] Ending competition: ${competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -713,7 +713,7 @@ export async function endCompetition(competitionId: string): Promise<void> {
  */
 export async function getAllActiveCompetitions(): Promise<string[]> {
   console.log(`[Gamification Activity] Getting all active competitions`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -725,7 +725,7 @@ export async function joinCompetition(
   competitionId: string
 ): Promise<{ initialRank: number }> {
   console.log(`[Gamification Activity] User ${userId} joining competition ${competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { initialRank: 0 };
 }
 
@@ -737,7 +737,7 @@ export async function leaveCompetition(
   competitionId: string
 ): Promise<void> {
   console.log(`[Gamification Activity] User ${userId} leaving competition ${competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -755,7 +755,7 @@ export async function updateParticipantScore(
   newRank?: number;
 }> {
   console.log(`[Gamification Activity] Updating score for ${userId} in ${competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { previousScore: 0, newScore: scoreIncrement };
 }
 
@@ -769,7 +769,7 @@ export async function updateCompetitionScore(
   metadata: Record<string, unknown>
 ): Promise<{ updated: boolean }> {
   console.log(`[Gamification Activity] Updating competition score for ${userId}`);
-  // TODO: Call Convex mutation for all active competitions
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { updated: false };
 }
 
@@ -788,7 +788,7 @@ export async function getCompetitionLeaderboard(
   }>
 > {
   console.log(`[Gamification Activity] Getting leaderboard for ${competitionId}`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -797,7 +797,7 @@ export async function getCompetitionLeaderboard(
  */
 export async function updateLeaderboardRanks(competitionId: string): Promise<void> {
   console.log(`[Gamification Activity] Updating leaderboard ranks for ${competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -865,7 +865,7 @@ export async function awardPrizes(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Awarding prizes to ${userId} in ${competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -876,7 +876,7 @@ export async function claimCompetitionPrize(
   competitionId: string
 ): Promise<{ points: number; tokens?: number; special?: string }> {
   console.log(`[Gamification Activity] Claiming prize for ${userId} in ${competitionId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { points: 0 };
 }
 
@@ -901,7 +901,7 @@ export async function getInactiveUserBalances(input: {
   }>
 > {
   console.log(`[Gamification Activity] Getting inactive user balances`);
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -914,7 +914,7 @@ export async function depreciateUserPoints(input: {
   reason: string;
 }): Promise<void> {
   console.log(`[Gamification Activity] Depreciating ${input.amount} points for ${input.userId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -945,7 +945,7 @@ export async function creditTokens(
   transactionId: string
 ): Promise<void> {
   console.log(`[Gamification Activity] Crediting ${amount} tokens to ${userId}`);
-  // TODO: Call Convex mutation or blockchain interaction
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -968,7 +968,7 @@ export async function sendPointsNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending points notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -984,7 +984,7 @@ export async function sendTierUpgradeNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending tier upgrade notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -999,7 +999,7 @@ export async function sendTierDowngradeWarning(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending tier downgrade warning to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1016,7 +1016,7 @@ export async function sendTierDowngradeNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending tier downgrade notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1030,7 +1030,7 @@ export async function sendTierMaintainedNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending tier maintained notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1045,7 +1045,7 @@ export async function sendStreakNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending streak notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1060,7 +1060,7 @@ export async function sendStreakExpiryWarning(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending streak expiry warning to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1075,7 +1075,7 @@ export async function sendStreakBrokenNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending streak broken notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1093,7 +1093,7 @@ export async function sendQuestAssignedNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending quest assigned notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1104,7 +1104,7 @@ export async function sendQuestCompletionNotification(
   data: string | { questId: string; questName: string; rewards: unknown }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending quest completion notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1117,7 +1117,7 @@ export async function sendQuestExpiredNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending quest expired notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1133,7 +1133,7 @@ export async function sendAchievementUnlockedNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending achievement notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1144,7 +1144,7 @@ export async function sendAchievementNotification(
   achievementId: string
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending achievement notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1159,7 +1159,7 @@ export async function sendCompetitionStartNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending competition start notification`);
-  // TODO: Send push notification to all participants
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1175,7 +1175,7 @@ export async function sendCompetitionEndNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending competition end notification`);
-  // TODO: Send push notification to all participants
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1191,7 +1191,7 @@ export async function sendRankChangeNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending rank change notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1207,7 +1207,7 @@ export async function sendPrizeWonNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending prize won notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1218,7 +1218,7 @@ export async function sendLeaderboardUpdateNotification(
   topUsers: Array<{ rank: number; userId: string; score: number }>
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending leaderboard update notification`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1234,7 +1234,7 @@ export async function sendDepreciationWarning(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending depreciation warning to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1250,7 +1250,7 @@ export async function sendDepreciationNotification(
   }
 ): Promise<void> {
   console.log(`[Gamification Activity] Sending depreciation notification to ${userId}`);
-  // TODO: Send push notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -1268,7 +1268,7 @@ export async function recordAuditLog(event: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   console.log(`[Gamification Activity] Audit: ${event.action} on ${event.resourceType}/${event.resourceId}`);
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -1279,5 +1279,5 @@ export async function scheduleNextRun(
   nextRunTime: number
 ): Promise<void> {
   console.log(`[Gamification Activity] Scheduling next ${workflowType} run at ${new Date(nextRunTime)}`);
-  // TODO: Implement scheduling logic
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

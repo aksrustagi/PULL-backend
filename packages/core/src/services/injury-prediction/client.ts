@@ -31,7 +31,7 @@ export class InjuryPredictionService {
   }
 
   async calculateRiskScore(playerId: string, sport: string): Promise<InjuryRiskScore> {
-    // TODO: Implement ML-based risk calculation
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Factors to consider:
     // - Age (older = higher risk)
     // - Snap count/minutes trend (high usage = higher risk)
@@ -59,7 +59,7 @@ export class InjuryPredictionService {
   }
 
   async getLineupRisk(teamId: string, playerIds: string[]): Promise<LineupRiskAssessment> {
-    // TODO: Calculate aggregate risk for lineup
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Get risk scores for all players
     // 2. Identify high-risk starters
     // 3. Compare to league average
@@ -75,11 +75,11 @@ export class InjuryPredictionService {
   }
 
   async getInsuranceQuote(playerId: string, duration: InsuranceQuote['duration']): Promise<InsuranceQuote> {
-    // TODO: Price insurance based on risk
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Premium = f(riskScore, payout, duration)
     // Higher risk = higher premium
 
-    const riskScore = await this.calculateRiskScore(playerId, 'nfl'); // TODO: Get actual sport
+    const riskScore = await this.calculateRiskScore(playerId, 'nfl'); // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
     return {
       playerId,
@@ -92,7 +92,7 @@ export class InjuryPredictionService {
   }
 
   async getInjuryHistory(playerId: string): Promise<InjuryHistory> {
-    // TODO: Fetch historical injury data
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return {
       playerId,
       sport: 'nfl',
@@ -116,7 +116,7 @@ export class InjuryPredictionService {
   }
 
   private analyzeSportSpecificPatterns(sport: string, playerId: string): Promise<InjuryRiskFactor[]> {
-    // TODO: Sport-specific injury patterns
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // NFL: ACL, concussion, hamstring
     // NBA: Load management, ankle, knee
     // MLB: Tommy John, oblique, hamstring

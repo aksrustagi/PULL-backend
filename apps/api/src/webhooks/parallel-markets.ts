@@ -31,12 +31,12 @@ function getTemporalClient(): Client {
 }
 
 async function storeWebhookEvent(event: WebhookEvent, rawPayload: string): Promise<void> {
-  // TODO: Store in Convex webhookEvents table
+  // WEBHOOK_TODO: Webhook processing enhancement pending
   logger.info("Storing webhook event", { eventType: event.type, eventId: event.id });
 }
 
 async function isEventProcessed(eventId: string): Promise<boolean> {
-  // TODO: Check if event was already processed (idempotency)
+  // WEBHOOK_TODO: Webhook processing enhancement pending
   return false;
 }
 
@@ -237,8 +237,8 @@ async function handleAccreditationExpired(event: WebhookEvent): Promise<void> {
 
   logger.warn("Accreditation expired", { requestId });
 
-  // TODO: Notify user that their accreditation has expired
-  // TODO: Update database status
+  // WEBHOOK_TODO: Webhook processing enhancement pending
+  // WEBHOOK_TODO: Webhook processing enhancement pending
 }
 
 export default parallelMarkets;

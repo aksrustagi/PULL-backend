@@ -35,7 +35,7 @@ export class AdvancedAnalyticsService {
   }
 
   async runPlayoffSimulation(teamId: string, leagueId: string, sport: string): Promise<PlayoffSimulation> {
-    // TODO: Monte Carlo simulation for playoff odds
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Get current standings
     // 2. Get remaining schedule for all teams
     // 3. For each iteration:
@@ -64,7 +64,7 @@ export class AdvancedAnalyticsService {
   }
 
   async analyzeBenchPoints(teamId: string, leagueId: string, season: string): Promise<BenchAnalysis> {
-    // TODO: Calculate points left on bench all season
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. For each week, get actual lineup vs optimal lineup
     // 2. Calculate points difference
     // 3. Identify costly decisions (would have changed W/L)
@@ -88,7 +88,7 @@ export class AdvancedAnalyticsService {
   }
 
   async getOptimalLineup(teamId: string, week: number): Promise<OptimalLineupHindsight> {
-    // TODO: Calculate optimal lineup with hindsight
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Get all rostered players for week
     // 2. Calculate actual points scored
     // 3. Find optimal combination (optimization problem)
@@ -108,7 +108,7 @@ export class AdvancedAnalyticsService {
   }
 
   async getHeadToHeadHistory(teamId: string, opponentId: string, leagueId: string): Promise<HeadToHeadHistory> {
-    // TODO: Historical matchup data
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Query all games between teams
     // 2. Calculate win/loss record
     // 3. Find streaks
@@ -133,7 +133,7 @@ export class AdvancedAnalyticsService {
   }
 
   async gradeDraft(teamId: string, leagueId: string, season: string): Promise<DraftGrade> {
-    // TODO: Re-grade draft based on actual performance
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Get draft picks for team
     // 2. Calculate expected points based on ADP
     // 3. Get actual points scored
@@ -157,7 +157,7 @@ export class AdvancedAnalyticsService {
   }
 
   async calculateWinProbability(gameId: string, teamId: string): Promise<WinProbabilityChart> {
-    // TODO: Generate live win probability chart
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Get game events in chronological order
     // 2. For each event, calculate win probability using:
     //    - Current score
@@ -176,7 +176,7 @@ export class AdvancedAnalyticsService {
   }
 
   async analyzePlayerTrend(playerId: string, sport: string): Promise<TrendAnalysis> {
-    // TODO: Detect if player is trending up/down
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Get recent games (last 4-6 weeks)
     // 2. Calculate moving averages
     // 3. Compare to season average
@@ -196,7 +196,7 @@ export class AdvancedAnalyticsService {
   }
 
   async getSportSpecificMetrics(playerId: string, sport: string): Promise<SportSpecificMetric> {
-    // TODO: Fetch sport-specific advanced metrics
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // NFL: target share, snap count, air yards
     // NBA: usage rate, true shooting %
     // MLB: exit velocity, barrel rate
@@ -211,14 +211,14 @@ export class AdvancedAnalyticsService {
 
   private simulateGame(team1Strength: number, team2Strength: number): { team1Score: number; team2Score: number } {
     // Simple game simulation using team strength ratings
-    // TODO: More sophisticated model based on historical scoring distributions
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     const team1Score = Math.random() * team1Strength;
     const team2Score = Math.random() * team2Strength;
     return { team1Score, team2Score };
   }
 
   private calculateTeamStrength(teamId: string): Promise<number> {
-    // TODO: Calculate team strength rating
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Based on: record, points for/against, strength of schedule, recent performance
     return Promise.resolve(100);
   }

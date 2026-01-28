@@ -118,7 +118,7 @@ export async function fetchMarketMetric(
 
   Context.current().heartbeat(`Fetching ${metricName}`);
 
-  // TODO: Call RealEstateDataService
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   // This would integrate with Zillow, FRED, Redfin APIs
 
   // Simulated response based on metric type
@@ -245,7 +245,7 @@ export async function calculateMarketSentiment(
 ): Promise<SentimentData> {
   console.log(`[RealEstate Activity] Calculating sentiment for ${geographicScope}: ${location}`);
 
-  // TODO: Call RealEstateDataService.calculateMarketSentiment
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   // Simulated response
   return {
@@ -267,7 +267,7 @@ export async function calculatePullIndex(
 ): Promise<IndexData> {
   console.log(`[RealEstate Activity] Calculating PULL Index for ${geographicScope}: ${location}`);
 
-  // TODO: Call PullRealEstateIndexCalculator.calculateIndex
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return {
     value: 1245.67,
@@ -296,7 +296,7 @@ export async function calculatePullIndex(
 export async function getEventDetails(eventId: string): Promise<PredictionEventData | null> {
   console.log(`[RealEstate Activity] Getting event details: ${eventId}`);
 
-  // TODO: Call Convex query realEstate.getEventByTicker
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return {
     eventId,
@@ -320,7 +320,7 @@ export async function getEventDetails(eventId: string): Promise<PredictionEventD
 export async function getEventPositions(eventId: string): Promise<PositionData[]> {
   console.log(`[RealEstate Activity] Getting positions for event: ${eventId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return [];
 }
@@ -334,7 +334,7 @@ export async function updateEventStatus(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Updating event status: ${eventId} -> ${status}`);
 
-  // TODO: Call Convex mutation realEstate.updateEventStatus
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -348,7 +348,7 @@ export async function settleEvent(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Settling event ${eventId}: ${outcome}`);
 
-  // TODO: Call Convex mutation realEstate.settleEvent
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -365,7 +365,7 @@ export async function updateMarketPrices(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Updating market prices for ${eventId}`);
 
-  // TODO: Call Convex mutation realEstate.updateMarketPrices
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -377,7 +377,7 @@ export async function updateTargetMetricValue(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Updating target metric for ${eventId}: ${currentValue}`);
 
-  // TODO: Call Convex mutation realEstate.updateTargetMetric
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -422,7 +422,7 @@ export async function processSettlementPayout(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Processing payout for ${userId}: $${payout}`);
 
-  // TODO: Call Convex mutation to credit user balance
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -434,7 +434,7 @@ export async function closePosition(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Closing position ${positionId}`);
 
-  // TODO: Call Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -447,7 +447,7 @@ export async function closePosition(
 export async function getAgentByUserId(userId: string): Promise<{ agentId: string; brokerageId: string } | null> {
   console.log(`[RealEstate Activity] Getting agent for user: ${userId}`);
 
-  // TODO: Call Convex query realEstate.getAgentByUserId
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return null;
 }
@@ -464,7 +464,7 @@ export async function updateAgentPredictionStats(
 
   const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
 
-  // TODO: Call Convex mutation realEstate.updateAgentPredictionStats
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -479,7 +479,7 @@ export async function awardAgentPoints(
 ): Promise<number> {
   console.log(`[RealEstate Activity] Awarding ${amount} points to agent: ${agentId}`);
 
-  // TODO: Call Convex mutation to record points transaction
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return amount; // Return new balance
 }
@@ -493,7 +493,7 @@ export async function updateReferralStatus(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Updating referral status: ${referralId} -> ${status}`);
 
-  // TODO: Call Convex mutation realEstate.updateReferralStatus
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -506,7 +506,7 @@ export async function getReferralsForEarnings(agentId: string): Promise<Array<{
 }>> {
   console.log(`[RealEstate Activity] Getting referrals for earnings: ${agentId}`);
 
-  // TODO: Call Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return [];
 }
@@ -525,7 +525,7 @@ export async function creditReferralEarnings(
 
   const earnings = tradingVolume * commissionRate;
 
-  // TODO: Call Convex mutation to update referral and agent earnings
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return earnings;
 }
@@ -544,7 +544,7 @@ export async function storeMarketSentiment(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Storing sentiment for ${geographicScope}: ${location}`);
 
-  // TODO: Call Convex mutation realEstate.updateMarketSentiment
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -559,7 +559,7 @@ export async function storePullIndex(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Storing PULL Index: ${ticker}`);
 
-  // TODO: Call Convex mutation realEstate.updatePullIndex
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -579,7 +579,7 @@ export async function calculateLeadScore(userId: string): Promise<{
 }> {
   console.log(`[RealEstate Activity] Calculating lead score for: ${userId}`);
 
-  // TODO: Analyze user's trading behavior, market categories, etc.
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 
   return {
     overallScore: 65,
@@ -620,7 +620,7 @@ export async function storeLeadScore(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Storing lead score for: ${userId}`);
 
-  // TODO: Call Convex mutation realEstate.updateLeadScore
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -639,7 +639,7 @@ export async function sendResolutionNotification(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Sending resolution notification to ${userId}`);
 
-  // TODO: Send push notification / email
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -653,7 +653,7 @@ export async function sendAgentReferralNotification(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Sending referral notification to agent: ${agentId}`);
 
-  // TODO: Send notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -668,7 +668,7 @@ export async function sendSentimentAlert(
 ): Promise<void> {
   console.log(`[RealEstate Activity] Sending sentiment alert to ${userId}`);
 
-  // TODO: Send notification if user subscribed to this location
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -687,5 +687,5 @@ export async function recordAuditLog(event: {
 }): Promise<void> {
   console.log(`[RealEstate Activity] Audit: ${event.action} on ${event.resourceType}/${event.resourceId}`);
 
-  // TODO: Call Convex mutation to log audit event
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

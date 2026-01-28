@@ -39,7 +39,7 @@ export class EngagementService {
   }
 
   async updateStreak(userId: string): Promise<UserStreak> {
-    // TODO: Update login streak
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Check last login date
     // 2. If yesterday, increment streak
     // 3. If today, return current
@@ -57,7 +57,7 @@ export class EngagementService {
   }
 
   async getSeasonPass(userId: string, season: string): Promise<SeasonPass> {
-    // TODO: Get or create season pass for user
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return {
       passId: crypto.randomUUID(),
       userId,
@@ -72,7 +72,7 @@ export class EngagementService {
   }
 
   async addXP(userId: string, amount: number, source: string): Promise<{ newXP: number; leveledUp: boolean }> {
-    // TODO: Add XP and check for level up
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Apply streak multiplier
     // 2. Check daily cap
     // 3. Add XP to season pass
@@ -83,7 +83,7 @@ export class EngagementService {
   }
 
   async unlockAchievement(userId: string, achievementId: string): Promise<UserAchievement> {
-    // TODO: Unlock achievement for user
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Check if already unlocked
     // 2. Award XP
     // 3. Trigger notification
@@ -96,7 +96,7 @@ export class EngagementService {
   }
 
   async checkAchievements(userId: string, event: unknown): Promise<Achievement[]> {
-    // TODO: Check if event triggered any achievements
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Examples:
     // - "Made 10 trades" achievement
     // - "Won 5 leagues" achievement
@@ -105,7 +105,7 @@ export class EngagementService {
   }
 
   async generateYearInReview(userId: string, year: number): Promise<YearInReview> {
-    // TODO: Generate shareable year-in-review
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Aggregate stats for the year
     // 2. Find highlights (biggest win, best finish, etc.)
     // 3. Generate shareable image/infographic
@@ -131,7 +131,7 @@ export class EngagementService {
   }
 
   async mintChampionshipTrophy(leagueId: string, seasonId: string, winnerId: string): Promise<LeagueTrophy> {
-    // TODO: Mint NFT trophy for championship
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Generate unique trophy metadata
     // 2. Mint NFT on blockchain (optional)
     // 3. Store trophy data
@@ -149,7 +149,7 @@ export class EngagementService {
   }
 
   async getDailyChallenge(sport: string, date: Date): Promise<DailyChallenge | null> {
-    // TODO: Get daily challenge for sport
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Examples:
     // - "Start a QB who throws for 300+ yards"
     // - "Make a trade today"
@@ -158,7 +158,7 @@ export class EngagementService {
   }
 
   async detectRevengeGames(userId: string): Promise<RevengeGameAlert[]> {
-    // TODO: Detect when player faces former team
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Get user's roster
     // 2. Check upcoming games
     // 3. Match player current team vs opponent

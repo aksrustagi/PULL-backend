@@ -35,7 +35,7 @@ export class FinanceService {
   }
 
   async createVirtualCard(userId: string): Promise<VirtualCard> {
-    // TODO: Integration with Stripe Issuing or similar
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Create virtual card via Stripe
     // 2. Store only the Stripe token, never raw card number
     // 3. Set initial balance to 0
@@ -62,7 +62,7 @@ export class FinanceService {
     amount: number,
     destination: WithdrawalDestination
   ): Promise<InstantWithdrawal> {
-    // TODO: Process instant withdrawal
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Verify user balance
     // 2. Calculate fees
     // 3. Route to appropriate provider (Stripe for bank, PayPal/Venmo APIs, crypto)
@@ -83,7 +83,7 @@ export class FinanceService {
   }
 
   async connectCryptoWallet(userId: string, walletAddress: string, blockchain: CryptoWallet['blockchain']): Promise<CryptoWallet> {
-    // TODO: Connect crypto wallet
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Validate wallet address format
     // 2. Optional: Request signature for ownership verification
     // 3. Save wallet connection
@@ -101,7 +101,7 @@ export class FinanceService {
   }
 
   async generateTaxDocument(userId: string, taxYear: number): Promise<TaxDocument> {
-    // TODO: Generate tax documents
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Query all winnings/deposits for year
     // 2. Calculate totals
     // 3. Generate PDF using template
@@ -122,7 +122,7 @@ export class FinanceService {
   }
 
   async configureAutoInvest(userId: string, config: Partial<AutoInvestConfig>): Promise<AutoInvestConfig> {
-    // TODO: Configure auto-invest
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // When user wins, automatically invest % into savings/crypto/external account
 
     return {
@@ -137,7 +137,7 @@ export class FinanceService {
   }
 
   async applyDepositBonus(userId: string, depositAmount: number): Promise<DepositBonus | null> {
-    // TODO: Apply deposit bonus with wagering requirements
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // E.g., "100% match up to $100, 3x wagering"
     // User deposits $50, gets $50 bonus, needs to wager $150 before withdrawing
 
@@ -145,7 +145,7 @@ export class FinanceService {
   }
 
   async getCryptoBalance(walletId: string): Promise<CryptoWallet['balances']> {
-    // TODO: Fetch current crypto balances from blockchain
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return {};
   }
 

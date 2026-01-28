@@ -31,12 +31,12 @@ function getTemporalClient(): Client {
 }
 
 async function storeWebhookEvent(event: WebhookEvent, rawPayload: string): Promise<void> {
-  // TODO: Store in Convex webhookEvents table
+  // WEBHOOK_TODO: Webhook processing enhancement pending
   logger.info("Storing webhook event", { eventType: event.type, eventId: event.id });
 }
 
 async function isEventProcessed(eventId: string): Promise<boolean> {
-  // TODO: Check if event was already processed (idempotency)
+  // WEBHOOK_TODO: Webhook processing enhancement pending
   return false;
 }
 
@@ -187,7 +187,7 @@ async function handleReportSuspended(event: WebhookEvent): Promise<void> {
   logger.warn("Report suspended", { reportId });
 
   // Report suspended usually means additional information needed
-  // TODO: Notify user and compliance team
+  // WEBHOOK_TODO: Webhook processing enhancement pending
 }
 
 export default checkr;

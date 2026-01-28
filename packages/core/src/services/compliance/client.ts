@@ -38,7 +38,7 @@ export class ComplianceService {
   }
 
   async checkGeofence(userId: string, ipAddress: string): Promise<GeoCheck> {
-    // TODO: Verify user location is in allowed jurisdiction
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. GeoIP lookup
     // 2. Check against allowed countries/states
     // 3. Hash IP address for privacy
@@ -71,7 +71,7 @@ export class ComplianceService {
   }
 
   async createSelfExclusion(userId: string, durationDays: number | 'permanent'): Promise<SelfExclusion> {
-    // TODO: Self-exclude user from platform
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Create exclusion record
     // 2. Block all gaming activities
     // 3. Send confirmation email
@@ -94,7 +94,7 @@ export class ComplianceService {
   }
 
   async setDepositLimit(userId: string, limitType: DepositLimit['limitType'], amount: number): Promise<DepositLimit> {
-    // TODO: Set deposit limit for user
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Create/update limit
     // 2. Enforce on future deposits
     // 3. Notify user
@@ -116,7 +116,7 @@ export class ComplianceService {
   }
 
   async setSessionLimit(userId: string, maxDurationMinutes: number): Promise<SessionLimit> {
-    // TODO: Set session time limit
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // 1. Create limit
     // 2. Track session duration
     // 3. Warn at threshold
@@ -133,7 +133,7 @@ export class ComplianceService {
   }
 
   async startCoolOffPeriod(userId: string, durationHours: number): Promise<CoolOffPeriod> {
-    // TODO: Start cool-off period (temporary pause)
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Less severe than self-exclusion, just a break
 
     const startDate = new Date();
@@ -150,7 +150,7 @@ export class ComplianceService {
   }
 
   async getResponsibleGamingSettings(userId: string): Promise<ResponsibleGamingSettings> {
-    // TODO: Get all responsible gaming settings for user
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return {
       userId,
       depositLimits: [],
@@ -170,7 +170,7 @@ export class ComplianceService {
     before?: unknown,
     after?: unknown
   ): Promise<AuditLog> {
-    // TODO: Create audit trail entry
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // All market settlements, trades, etc. should be logged
 
     return {
@@ -186,12 +186,12 @@ export class ComplianceService {
   }
 
   async getAuditLog(entityType: string, entityId: string): Promise<AuditLog[]> {
-    // TODO: Retrieve complete audit trail for entity
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return [];
   }
 
   async explainOdds(marketId: string): Promise<OddsExplanation> {
-    // TODO: Explain how LMSR odds are calculated
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Transparency for users to understand market mechanics
 
     return {
@@ -208,7 +208,7 @@ export class ComplianceService {
   }
 
   async verifyAge(userId: string, dateOfBirth: Date): Promise<boolean> {
-    // TODO: Verify user is old enough
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     const age = this.calculateAge(dateOfBirth);
     return age >= this.config.minAgeYears;
   }

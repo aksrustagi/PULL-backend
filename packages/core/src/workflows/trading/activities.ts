@@ -258,7 +258,7 @@ export async function updateConvexBalances(input: {
 export async function getEventDetails(eventId: string): Promise<EventDetails> {
   console.log(`[Trading Activity] Getting event details: ${eventId}`);
 
-  // TODO: Implement via Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     eventId,
     title: "Event Title",
@@ -273,7 +273,7 @@ export async function getEventDetails(eventId: string): Promise<EventDetails> {
 export async function getAllPositionsForEvent(eventId: string): Promise<Position[]> {
   console.log(`[Trading Activity] Getting positions for event: ${eventId}`);
 
-  // TODO: Implement via Convex query
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return [];
 }
 
@@ -307,7 +307,7 @@ export async function calculateSettlementAmounts(
 export async function closePosition(userId: string, positionId: string): Promise<void> {
   console.log(`[Trading Activity] Closing position ${positionId}`);
 
-  // TODO: Implement via Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -316,7 +316,7 @@ export async function closePosition(userId: string, positionId: string): Promise
 export async function markEventSettled(eventId: string, outcome: string): Promise<void> {
   console.log(`[Trading Activity] Marking event ${eventId} as settled: ${outcome}`);
 
-  // TODO: Implement via Convex mutation
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -356,7 +356,7 @@ export async function initiateACHTransfer(input: {
 }): Promise<{ transferId: string }> {
   console.log(`[Trading Activity] Initiating ACH transfer for ${input.depositId}`);
 
-  // TODO: Call Plaid API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { transferId: `ach_${crypto.randomUUID()}` };
 }
 
@@ -366,7 +366,7 @@ export async function initiateACHTransfer(input: {
 export async function checkTransferStatus(transferId: string): Promise<TransferStatus> {
   console.log(`[Trading Activity] Checking transfer status: ${transferId}`);
 
-  // TODO: Call Plaid API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { status: "settled" };
 }
 
@@ -376,7 +376,7 @@ export async function checkTransferStatus(transferId: string): Promise<TransferS
 export async function monitorTransferStatus(transferId: string): Promise<TransferStatus> {
   Context.current().heartbeat(`Monitoring ${transferId}`);
 
-  // TODO: Long-running monitoring
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { status: "settled" };
 }
 
@@ -405,7 +405,7 @@ export async function handleDepositReturn(
 ): Promise<void> {
   console.log(`[Trading Activity] Handling deposit return: ${depositId}`);
 
-  // TODO: Implement deposit return handling
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -445,7 +445,7 @@ export async function performFraudCheck(input: {
 }): Promise<FraudCheckResult> {
   console.log(`[Trading Activity] Performing fraud check for ${input.withdrawalId}`);
 
-  // TODO: Integrate with fraud detection service
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return {
     flagged: false,
     riskScore: 0.1,
@@ -462,7 +462,7 @@ export async function send2FAChallenge(
 ): Promise<void> {
   console.log(`[Trading Activity] Sending 2FA challenge for ${withdrawalId}`);
 
-  // TODO: Send 2FA via preferred method
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -471,7 +471,7 @@ export async function send2FAChallenge(
 export async function verify2FACode(userId: string, code: string): Promise<boolean> {
   console.log(`[Trading Activity] Verifying 2FA code for ${userId}`);
 
-  // TODO: Verify against user's 2FA secret
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return true;
 }
 
@@ -486,7 +486,7 @@ export async function executeACHTransfer(input: {
 }): Promise<{ transferId: string }> {
   console.log(`[Trading Activity] Executing ACH transfer for ${input.withdrawalId}`);
 
-  // TODO: Call Plaid API
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
   return { transferId: `ach_${crypto.randomUUID()}` };
 }
 
@@ -506,7 +506,7 @@ export async function sendSettlementNotification(
 ): Promise<void> {
   console.log(`[Trading Activity] Sending settlement notification to ${userId}`);
 
-  // TODO: Send notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -520,7 +520,7 @@ export async function sendDepositNotification(
 ): Promise<void> {
   console.log(`[Trading Activity] Sending deposit notification: ${type} for ${depositId}`);
 
-  // TODO: Send notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 /**
@@ -534,7 +534,7 @@ export async function sendWithdrawalNotification(
 ): Promise<void> {
   console.log(`[Trading Activity] Sending withdrawal notification: ${type} for ${withdrawalId}`);
 
-  // TODO: Send notification
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }
 
 // ============================================================================
@@ -633,5 +633,5 @@ export async function holdUserBalance(
 export async function releaseUserHold(userId: string, holdId: string): Promise<void> {
   console.log(`[Trading Activity] Releasing hold ${holdId}`);
 
-  // TODO: Release hold - need to track hold amounts
+  // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
 }

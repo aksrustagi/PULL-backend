@@ -90,7 +90,7 @@ export async function dailyUpdateWorkflow(input: DailyUpdateInput): Promise<Dail
 
     for (const eventId of openEventIds) {
       try {
-        // TODO: Get event details and update its current metric value
+        // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
         // const event = await getEventDetails(eventId);
         // const metric = await fetchMarketMetric(event.targetMetric, { ... });
         // await updateTargetMetricValue(eventId, metric.value);

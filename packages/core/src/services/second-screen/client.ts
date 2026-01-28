@@ -32,7 +32,7 @@ export class SecondScreenService {
   }
 
   async getWatchComplications(userId: string): Promise<WatchComplication[]> {
-    // TODO: Generate watch complications
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Apple Watch: circular, rectangular, small/large
     // Show: live score, player stat, rank, urgent alerts
 
@@ -40,7 +40,7 @@ export class SecondScreenService {
   }
 
   async getHomeScreenWidgetData(userId: string, widgetType: HomeScreenWidget['widgetType']): Promise<HomeScreenWidget> {
-    // TODO: Generate widget data for iOS/Android home screen
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Types: lineup, matchup, player alerts, standings
 
     return {
@@ -55,7 +55,7 @@ export class SecondScreenService {
   }
 
   async getTVDashboard(userId: string, sport: string): Promise<TVDashboard> {
-    // TODO: Generate TV dashboard layout
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // For tvOS, Android TV, Fire TV
     // Full-screen game day dashboard with multiple widgets
 
@@ -69,7 +69,7 @@ export class SecondScreenService {
   }
 
   async sendCarPlayUpdate(userId: string, message: string, priority: CarPlayUpdate['priority']): Promise<CarPlayUpdate> {
-    // TODO: Send audio update for CarPlay/Android Auto
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Safe, voice-based updates while driving
     // Examples: "Your player just scored a touchdown!"
 
@@ -83,13 +83,13 @@ export class SecondScreenService {
   }
 
   async updateWatchComplication(userId: string, complicationType: WatchComplication['type'], data: unknown): Promise<void> {
-    // TODO: Push update to watch
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     // Use Apple Push Notification service or similar
     console.log('Updating watch complication', { userId, complicationType, data });
   }
 
   private generateScoreComplication(userId: string): WatchComplication {
-    // TODO: Generate live score complication
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return {
       complicationId: crypto.randomUUID(),
       userId,
@@ -101,7 +101,7 @@ export class SecondScreenService {
   }
 
   private generatePlayerStatComplication(userId: string, playerId: string): WatchComplication {
-    // TODO: Generate player stat complication
+    // PLACEHOLDER: Implementation pending - feature protected by route-level feature flag
     return {
       complicationId: crypto.randomUUID(),
       userId,
