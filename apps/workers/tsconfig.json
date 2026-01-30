@@ -7,7 +7,10 @@
     "paths": {
       "@/*": ["./src/*"],
       "@pull/types": ["../../packages/types/src"]
-    }
+    },
+    "exactOptionalPropertyTypes": false,
+    "skipLibCheck": true,
+    "noImplicitAny": false
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

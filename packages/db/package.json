@@ -5,6 +5,11 @@
   "type": "module",
   "main": "./convex/_generated/api.js",
   "types": "./convex/_generated/api.d.ts",
+  "exports": {
+    ".": "./convex/_generated/api.js",
+    "./convex/_generated/api": "./convex/_generated/api.js",
+    "./convex/_generated/dataModel": "./convex/_generated/dataModel.js"
+  },
   "scripts": {
     "dev": "convex dev",
     "db:push": "convex deploy",

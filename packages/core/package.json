@@ -7,8 +7,12 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./services": "./src/services/index.ts",
     "./services/*": "./src/services/*.ts",
-    "./utils/*": "./src/utils/*.ts"
+    "./utils/*": "./src/utils/*.ts",
+    "./activities/*": "./src/activities/*.ts",
+    "./workflows/*": "./src/workflows/*/index.ts",
+    "./workflows/*/activities": "./src/workflows/*/activities.ts"
   },
   "scripts": {
     "lint": "eslint src/",

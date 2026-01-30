@@ -242,6 +242,45 @@ export async function recordTrade(orderId: string, fill: OrderFill): Promise<voi
 }
 
 /**
+ * Update order status in Convex
+ */
+export async function updateOrderStatus(
+  orderId: string,
+  status: string,
+  externalOrderId?: string,
+  filledQuantity?: number,
+  averagePrice?: number
+): Promise<void> {
+  console.log(`Updating order ${orderId} status to ${status}`);
+
+  try {
+    await convex.mutation(api.orders.update, {
+      id: orderId as any,
+      status: status as any,
+      ...(externalOrderId && { externalOrderId }),
+      ...(filledQuantity !== undefined && { filledQuantity }),
+      ...(averagePrice !== undefined && { averagePrice }),
+    });
+  } catch (error) {
+    console.error("[Trading Activity] Update order status error:", error);
+  }
+}
+
+/**
+ * Send order notification to user
+ */
+export async function sendOrderNotification(
+  userId: string,
+  orderId: string,
+  type: "submitted" | "filled" | "partial" | "cancelled" | "rejected",
+  details: Record<string, unknown>
+): Promise<void> {
+  console.log(`Sending ${type} notification for order ${orderId} to user ${userId}`);
+
+  // PLACEHOLDER: Implementation pending - would integrate with push/email notification service
+}
+
+/**
  * Update user balance
  */
 export async function updateBalance(
