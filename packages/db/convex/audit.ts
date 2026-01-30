@@ -1,6 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
-import { authenticatedQuery, systemMutation } from "./lib/auth";
+import { authenticatedQuery, adminQuery, systemMutation } from "./lib/auth";
 import { Id } from "./_generated/dataModel";
 
 /**
@@ -41,11 +40,10 @@ export const getByUser = authenticatedQuery({
   },
 });
 
-// TODO: Restrict to admin users
 /**
- * Get audit logs by resource
+ * Get audit logs by resource - Admin only
  */
-export const getByResource = query({
+export const getByResource = adminQuery({
   args: {
     resourceType: v.string(),
     resourceId: v.string(),
@@ -62,34 +60,32 @@ export const getByResource = query({
   },
 });
 
-// TODO: Restrict to admin users
 /**
- * Get audit logs by action type
+ * Get audit logs by action type - Admin only
  */
-export const getByAction = query({
+export const getByAction = adminQuery({
   args: {
     action: v.string(),
     limit: v.optional(v.number()),
     startDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db
+    let dbQuery = ctx.db
       .query("auditLog")
       .withIndex("by_action", (q) => q.eq("action", args.action));
 
     if (args.startDate) {
-      query = query.filter((q) => q.gte(q.field("timestamp"), args.startDate!));
+      dbQuery = dbQuery.filter((q) => q.gte(q.field("timestamp"), args.startDate!));
     }
 
-    return await query.order("desc").take(args.limit ?? 100);
+    return await dbQuery.order("desc").take(args.limit ?? 100);
   },
 });
 
-// TODO: Restrict to admin users
 /**
- * Get audit logs by date range
+ * Get audit logs by date range - Admin only
  */
-export const getByDateRange = query({
+export const getByDateRange = adminQuery({
   args: {
     startDate: v.number(),
     endDate: v.number(),
@@ -122,11 +118,10 @@ export const getByDateRange = query({
   },
 });
 
-// TODO: Restrict to admin users
 /**
- * Get recent activity summary
+ * Get recent activity summary - Admin only
  */
-export const getActivitySummary = query({
+export const getActivitySummary = adminQuery({
   args: {
     hours: v.optional(v.number()),
   },
@@ -176,11 +171,10 @@ export const getActivitySummary = query({
   },
 });
 
-// TODO: Restrict to admin users
 /**
- * Search audit logs
+ * Search audit logs - Admin only
  */
-export const search = query({
+export const search = adminQuery({
   args: {
     query: v.string(),
     limit: v.optional(v.number()),

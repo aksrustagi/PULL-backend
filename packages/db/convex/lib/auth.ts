@@ -53,6 +53,41 @@ export function authenticatedMutation<Args extends Record<string, any>, Output>(
 }
 
 /**
+ * Admin query - requires admin role
+ */
+export function adminQuery<Args extends Record<string, any>, Output>(config: {
+  args: any;
+  handler: (ctx: QueryCtx & { userId: string }, args: Args) => Promise<Output>;
+}) {
+  return baseQuery({
+    args: config.args,
+    handler: async (ctx, args) => {
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) {
+        throw new Error("Authentication required");
+      }
+
+      // Check admin role from user record
+      const userId = identity.subject;
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerkId", (q) => q.eq("clerkId", userId))
+        .first();
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      if (!["admin", "superadmin"].includes(user.role ?? "")) {
+        throw new Error("Forbidden: Admin access required");
+      }
+
+      return config.handler({ ...ctx, userId } as QueryCtx & { userId: string }, args as Args);
+    },
+  });
+}
+
+/**
  * Admin mutation - requires admin role
  */
 export function adminMutation<Args extends Record<string, any>, Output>(config: {
@@ -66,8 +101,22 @@ export function adminMutation<Args extends Record<string, any>, Output>(config: 
       if (!identity) {
         throw new Error("Authentication required");
       }
-      // TODO: Check admin role from user record
+
+      // Check admin role from user record
       const userId = identity.subject;
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerkId", (q) => q.eq("clerkId", userId))
+        .first();
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      if (!["admin", "superadmin"].includes(user.role ?? "")) {
+        throw new Error("Forbidden: Admin access required");
+      }
+
       return config.handler({ ...ctx, userId } as MutationCtx & { userId: string }, args as Args);
     },
   });
@@ -88,7 +137,25 @@ export function systemMutation<Args extends Record<string, any>, Output>(config:
       if (!identity) {
         throw new Error("System authentication required");
       }
-      // TODO: Verify this is a service token with appropriate scope
+
+      // Verify this is a service token with appropriate scope
+      // Service tokens have a specific issuer or tokenUse claim
+      const tokenUse = identity.tokenIdentifier?.includes("service:") ?? false;
+      const isSystemToken = tokenUse || identity.issuer?.includes("system") || false;
+
+      if (!isSystemToken) {
+        // For now, also allow admin users to call system mutations
+        const userId = identity.subject;
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_clerkId", (q) => q.eq("clerkId", userId))
+          .first();
+
+        if (!user || !["admin", "superadmin"].includes(user.role ?? "")) {
+          throw new Error("Forbidden: System or admin access required");
+        }
+      }
+
       return config.handler(ctx, args as Args);
     },
   });
