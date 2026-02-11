@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@pull/types": "workspace:*",
-    "zod": "^3.22.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@pull/config": "workspace:*",
