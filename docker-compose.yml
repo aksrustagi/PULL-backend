@@ -86,6 +86,26 @@ services:
     stdin_open: true
     tty: true
 
+  # TimescaleDB - Time-Series Database for Market Data & Analytics
+  # Runs on port 5433 to avoid conflict with main PostgreSQL on 5432
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: pull-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TIMESCALEDB_USER:-pull_ts}
+      POSTGRES_PASSWORD: ${TIMESCALEDB_PASSWORD:?TIMESCALEDB_PASSWORD must be set in environment}
+      POSTGRES_DB: pull_timeseries
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pull_ts -d pull_timeseries"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # TigerBeetle - Double-Entry Bookkeeping Engine
   # Production: Use managed TigerBeetle cluster. Local: Single-node for dev.
   tigerbeetle:
@@ -141,6 +161,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  timescaledb_data:
   tigerbeetle_data:
   grafana_data:
   prometheus_data:

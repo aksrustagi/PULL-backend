@@ -15,13 +15,13 @@
  *   │  Error Catalog   → Consistent error responses       │
  *   ├─────────────────────────────────────────────────────┤
  *   │               Infrastructure Layer                   │
- *   ├───────┬──────┬──────────┬────────┬─────────────────┤
- *   │NeonDB │Tiger-│  Kafka   │BullMQ  │   Observability │
- *   │(Fin.  │Beetle│  (Event  │(Jobs)  │  Sentry/Grafana │
- *   │Ledger)│(Acct)│   Bus)   │        │  PostHog/OTel   │
- *   ├───────┼──────┼──────────┼────────┼─────────────────┤
- *   │       Convex (Real-time)  │ Redis (Cache/PubSub)   │
- *   └──────────────────────────┴─────────────────────────┘
+ *   ├───────┬──────┬───────────┬────────┬────────────────┤
+ *   │NeonDB │Tiger-│TimescaleDB│ Kafka  │  Observability  │
+ *   │(Fin.  │Beetle│(Time-     │ (Event │ Sentry/Grafana  │
+ *   │Ledger)│(Acct)│ Series)   │  Bus)  │ PostHog/OTel    │
+ *   ├───────┼──────┼───────────┼────────┼────────────────┤
+ *   │  BullMQ (Jobs) │ Convex (Real-time) │ Redis (Cache) │
+ *   └────────────────┴────────────────────┴───────────────┘
  *
  * Data flow for financial operations:
  *   1. API receives order → validates via State Machine
@@ -68,6 +68,14 @@ export async function checkInfraHealth(): Promise<InfraStatus> {
     safeHealthCheck("tigerbeetle", async () => {
       const { healthCheck } = await import("../tigerbeetle/client");
       return healthCheck();
+    })
+  );
+
+  // TimescaleDB health check
+  checks.push(
+    safeHealthCheck("timescaledb", async () => {
+      const { checkTimescaleHealth } = await import("../timescaledb/client");
+      return checkTimescaleHealth();
     })
   );
 
@@ -127,6 +135,7 @@ export async function initializeInfrastructure(): Promise<void> {
   // This function validates that required env vars are present.
   const requiredInProd = [
     "NEON_DATABASE_URL",
+    "TIMESCALEDB_URL",
     "TIGERBEETLE_ADDRESSES",
     "POSTHOG_API_KEY",
     "UPSTASH_KAFKA_URL",
@@ -154,6 +163,15 @@ export async function shutdownInfrastructure(): Promise<void> {
       try {
         const { closeNeonPool } = await import("../neondb/client");
         await closeNeonPool();
+      } catch { /* service may not be initialized */ }
+    })()
+  );
+
+  shutdowns.push(
+    (async () => {
+      try {
+        const { closeTimescalePool } = await import("../timescaledb/client");
+        await closeTimescalePool();
       } catch { /* service may not be initialized */ }
     })()
   );

@@ -1,0 +1,55 @@
+# Grafana Datasource - TimescaleDB Time-Series
+#
+# Auto-provisioned via Grafana's provisioning system.
+#
+# TimescaleDB stores all PULL time-series data: price ticks, OHLCV candles,
+# portfolio snapshots, trading volume, order book depth, user activity,
+# and system metrics.
+#
+# Grafana has native TimescaleDB support via the PostgreSQL datasource
+# with timescaledb: true, enabling time_bucket() and continuous aggregate
+# queries directly in dashboard panels.
+#
+# Environment variables:
+#   TIMESCALEDB_HOST     - TimescaleDB hostname (default: timescaledb for docker)
+#   TIMESCALEDB_PORT     - Port number (default: 5432 inside docker, 5433 externally)
+#   TIMESCALEDB_DB_NAME  - Database name (default: pull_timeseries)
+#   TIMESCALEDB_GRAFANA_USER     - Read-only database user for Grafana
+#   TIMESCALEDB_GRAFANA_PASSWORD - Database password
+#
+# IMPORTANT: Use a read-only database user for Grafana.
+
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: postgres
+    uid: pull-timescaledb
+    access: proxy
+    url: ${TIMESCALEDB_HOST:-timescaledb}:${TIMESCALEDB_PORT:-5432}
+    user: ${TIMESCALEDB_GRAFANA_USER:-grafana_readonly}
+    database: ${TIMESCALEDB_DB_NAME:-pull_timeseries}
+    isDefault: false
+    editable: false
+
+    jsonData:
+      # Connection settings
+      sslmode: ${TIMESCALEDB_SSL_MODE:-disable}
+      maxOpenConns: 10
+      maxIdleConns: 5
+      connMaxLifetime: 14400
+
+      # PostgreSQL version (16.x with TimescaleDB extension)
+      postgresVersion: 1600
+      timescaledb: true
+
+      # Query timeout (seconds)
+      queryTimeout: "60"
+
+      # TLS / SSL
+      tlsAuth: false
+      tlsAuthWithCACert: false
+      tlsSkipVerify: false
+
+    secureJsonData:
+      password: ${TIMESCALEDB_GRAFANA_PASSWORD:-}
