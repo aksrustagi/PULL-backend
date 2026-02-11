@@ -1,11 +1,17 @@
 /**
  * JWT Token Utilities for PULL API
- * Handles access tokens, refresh tokens, and token verification
+ *
+ * RS256 (asymmetric) by default:
+ * - Private key signs tokens (API server only)
+ * - Public key verifies (distributable to any service)
+ * - Falls back to HS256 in development if RS256 keys not configured
  */
 
 import * as jose from "jose";
 import {
-  JWT_SECRET,
+  getSigningKey,
+  getVerificationKey,
+  getAlgorithm,
   JWT_ISSUER,
   JWT_AUDIENCE,
   ACCESS_TOKEN_EXPIRY,
@@ -42,17 +48,19 @@ export async function generateAccessToken(
   userId: string,
   claims?: Partial<Omit<TokenClaims, "sub" | "type">>
 ): Promise<string> {
+  const [signingKey, alg] = await Promise.all([getSigningKey(), getAlgorithm()]);
+
   const token = await new jose.SignJWT({
     sub: userId,
     type: "access",
     ...claims,
   })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg })
     .setIssuedAt()
     .setIssuer(JWT_ISSUER)
     .setAudience(JWT_AUDIENCE)
     .setExpirationTime(ACCESS_TOKEN_EXPIRY)
-    .sign(JWT_SECRET);
+    .sign(signingKey);
 
   return token;
 }
@@ -64,17 +72,19 @@ export async function generateRefreshToken(
   userId: string,
   sessionId?: string
 ): Promise<string> {
+  const [signingKey, alg] = await Promise.all([getSigningKey(), getAlgorithm()]);
+
   const token = await new jose.SignJWT({
     sub: userId,
     type: "refresh",
     sid: sessionId ?? crypto.randomUUID(),
   })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg })
     .setIssuedAt()
     .setIssuer(JWT_ISSUER)
     .setAudience(JWT_AUDIENCE)
     .setExpirationTime(REFRESH_TOKEN_EXPIRY)
-    .sign(JWT_SECRET);
+    .sign(signingKey);
 
   return token;
 }
@@ -111,8 +121,10 @@ export async function verifyAccessToken(
   token: string
 ): Promise<{ userId: string; claims: jose.JWTPayload } | null> {
   try {
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET, {
-      algorithms: ["HS256"],
+    const [verificationKey, alg] = await Promise.all([getVerificationKey(), getAlgorithm()]);
+
+    const { payload } = await jose.jwtVerify(token, verificationKey, {
+      algorithms: [alg],
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     });
@@ -137,8 +149,10 @@ export async function verifyRefreshToken(
   token: string
 ): Promise<{ userId: string; sessionId: string } | null> {
   try {
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET, {
-      algorithms: ["HS256"],
+    const [verificationKey, alg] = await Promise.all([getVerificationKey(), getAlgorithm()]);
+
+    const { payload } = await jose.jwtVerify(token, verificationKey, {
+      algorithms: [alg],
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     });
@@ -167,16 +181,18 @@ export async function generateSpecialToken(
   purpose: "email_verification" | "password_reset" | "wallet_connect",
   expiresIn: string = "1h"
 ): Promise<string> {
+  const [signingKey, alg] = await Promise.all([getSigningKey(), getAlgorithm()]);
+
   const token = await new jose.SignJWT({
     sub: userId,
     purpose,
   })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg })
     .setIssuedAt()
     .setIssuer(JWT_ISSUER)
     .setAudience(JWT_AUDIENCE)
     .setExpirationTime(expiresIn)
-    .sign(JWT_SECRET);
+    .sign(signingKey);
 
   return token;
 }
@@ -189,8 +205,10 @@ export async function verifySpecialToken(
   purpose: "email_verification" | "password_reset" | "wallet_connect"
 ): Promise<{ userId: string } | null> {
   try {
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET, {
-      algorithms: ["HS256"],
+    const [verificationKey, alg] = await Promise.all([getVerificationKey(), getAlgorithm()]);
+
+    const { payload } = await jose.jwtVerify(token, verificationKey, {
+      algorithms: [alg],
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     });

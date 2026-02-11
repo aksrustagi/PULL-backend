@@ -351,6 +351,39 @@ export type {
   Contact as NylasContact,
 } from "./nylas/types";
 
+// Circuit Breaker
+export * as circuitBreaker from "./circuit-breaker";
+export {
+  CircuitBreaker,
+  getCircuitBreaker,
+  createCircuitBreaker,
+  getHealthStatus as getCircuitBreakerHealthStatus,
+  resetAll as resetAllCircuitBreakers,
+  resetService as resetServiceCircuitBreaker,
+  removeCircuitBreaker,
+  getRegisteredServices as getCircuitBreakerServices,
+  getServiceDefaults as getCircuitBreakerDefaults,
+  getAllServiceDefaults as getAllCircuitBreakerDefaults,
+  initializeAll as initializeAllCircuitBreakers,
+  destroyAll as destroyAllCircuitBreakers,
+  checkAllHealth as checkAllCircuitBreakerHealth,
+  setGlobalCallbacks as setCircuitBreakerCallbacks,
+  CircuitBreakerState,
+  CircuitBreakerOpenError,
+  CircuitBreakerTimeoutError,
+} from "./circuit-breaker";
+
+export type {
+  ExternalService,
+  CircuitBreakerConfig,
+  CircuitBreakerCallbacks,
+  CircuitBreakerMetrics,
+  CircuitBreakerExecuteOptions,
+  CircuitBreakerHealth,
+  CircuitBreakerRegistryHealth,
+  ServiceCircuitBreakerDefaults,
+} from "./circuit-breaker";
+
 // ============================================================================
 // 10x Feature Enhancement Services
 // ============================================================================
@@ -398,3 +431,371 @@ export * as secondScreenTypes from "./second-screen/types";
 // Advanced Analytics
 export { advancedAnalyticsService, AdvancedAnalyticsService } from "./analytics/advanced/client";
 export * as advancedAnalyticsTypes from "./analytics/advanced/types";
+
+// PostHog Product Analytics
+export * as posthog from "./posthog";
+export {
+  PostHogClient,
+  initPostHog,
+  createPostHogClient,
+  getPostHogClient,
+  createPostHogMiddleware,
+  getPostHogContext,
+  getPostHogContextSafe,
+  POSTHOG_EVENTS,
+  ONBOARDING_STEPS,
+} from "./posthog";
+
+export type {
+  PostHogConfig,
+  PostHogUserProperties,
+  PostHogBaseEventProperties,
+  PostHogTradeEvent,
+  PostHogPredictionEvent,
+  PostHogOnboardingStep,
+  PostHogRevenueEvent,
+  PostHogGroupType,
+  PostHogGroupProperties,
+  PostHogFeatureFlagResult,
+  PostHogEventName,
+  OnboardingStepName,
+  PostHogMiddlewareOptions,
+  PostHogMiddlewareContext,
+  PostHogContextVariables,
+} from "./posthog";
+
+// ============================================================================
+// NeonDB - Financial System of Record
+// ============================================================================
+
+export * as neondb from "./neondb";
+export {
+  // Clients
+  db as neonDb,
+  poolDb as neonPoolDb,
+  sql as neonSql,
+  getPool as getNeonPool,
+  closeNeonPool,
+  withSerializableTransaction,
+  checkNeonHealth,
+
+  // Schema
+  schema as neonSchema,
+  financialAccounts,
+  ledgerTransactions,
+  ledgerEntries,
+  orders as neonOrders,
+  trades as neonTrades,
+  settlements,
+  balancesSnapshot,
+  idempotencyKeys,
+  auditTrail,
+
+  // Platform account IDs
+  PLATFORM_ACCOUNTS,
+} from "./neondb";
+
+export type {
+  // Core entity types
+  FinancialAccount,
+  LedgerTransaction,
+  LedgerEntry,
+  Order as NeonOrder,
+  Trade as NeonTrade,
+  Settlement,
+  BalanceSnapshot,
+  IdempotencyKey,
+  AuditTrailEntry,
+
+  // Insert types
+  InsertFinancialAccount,
+  InsertLedgerTransaction,
+  InsertLedgerEntry,
+  InsertOrder as InsertNeonOrder,
+  InsertTrade as InsertNeonTrade,
+  InsertSettlement,
+  InsertBalanceSnapshot,
+  InsertIdempotencyKey,
+  InsertAuditTrailEntry,
+
+  // Enum types
+  AccountType,
+  AccountStatus,
+  Currency,
+  TransactionType,
+  TransactionStatus,
+  EntryType,
+  OrderSide,
+  OrderType as NeonOrderType,
+  OrderStatus as NeonOrderStatus,
+  TimeInForce,
+  MarketType,
+  TradeStatus,
+  SettlementType,
+  SettlementStatus,
+  AuditAction,
+
+  // Domain types
+  LedgerTransactionWithEntries,
+  AccountWithBalance,
+  OrderWithTrades as NeonOrderWithTrades,
+  TradeWithOrders as NeonTradeWithOrders,
+  SettlementWithTrades,
+  CreateLedgerTransactionParams,
+  CreateLedgerEntryParams,
+  PlaceOrderParams,
+  ReconciliationResult,
+  NeonHealthCheckResult,
+  NeonHealthStatus,
+} from "./neondb";
+
+export * as neondbTypes from "./neondb/types";
+
+// ============================================================================
+// Kafka Event Bus
+// ============================================================================
+
+export * as kafka from "./kafka";
+export {
+  // Topics
+  TOPICS as KAFKA_TOPICS,
+  ALL_TOPICS as KAFKA_ALL_TOPICS,
+  DLQ_TOPICS as KAFKA_DLQ_TOPICS,
+  getDLQTopic,
+
+  // Producer
+  initKafkaProducer,
+  getKafkaInstance,
+  publishTradeEvent,
+  publishTradeEvents,
+  publishOrderEvent,
+  publishOrderEvents,
+  publishSettlementEvent,
+  publishBalanceEvent,
+  publishKYCEvent,
+  publishAuditEvent,
+  publishUserEvent,
+  publishRewardEvent,
+  publishPredictionEvent,
+  publishNotificationEvent,
+  publishEvent as publishKafkaEvent,
+  publishBatch as publishKafkaBatch,
+
+  // Consumer
+  createConsumer as createKafkaConsumer,
+  createBatchConsumer as createKafkaBatchConsumer,
+} from "./kafka";
+
+export type {
+  Topic as KafkaTopic,
+  KafkaEvent,
+  EventMetadata as KafkaEventMetadata,
+  ProducerConfig as KafkaProducerConfig,
+  ConsumerConfig as KafkaConsumerConfig,
+  Consumer as KafkaConsumer,
+  EventHandler as KafkaEventHandler,
+  BatchEventHandler as KafkaBatchEventHandler,
+  TradeEventPayload,
+  TradeEvent,
+  OrderEventPayload,
+  OrderEvent,
+  SettlementEventPayload as KafkaSettlementEventPayload,
+  SettlementEvent as KafkaSettlementEvent,
+  BalanceEventPayload,
+  BalanceEvent,
+  KYCEventPayload,
+  KYCEvent,
+  AuditEventPayload,
+  AuditEvent as KafkaAuditEvent,
+  UserEventPayload,
+  UserEvent as KafkaUserEvent,
+  RewardEventPayload,
+  RewardEvent,
+  PredictionEventPayload,
+  PredictionEvent,
+  NotificationEventPayload,
+  NotificationEvent as KafkaNotificationEvent,
+} from "./kafka";
+
+// ============================================================================
+// BullMQ Job Queue
+// ============================================================================
+
+export * as bullmq from "./bullmq";
+export {
+  // Initialization
+  initBullMQ,
+
+  // Queue accessors
+  getEmailQueue,
+  getNotificationQueue,
+  getSettlementQueue,
+  getReconciliationQueue,
+  getAnalyticsQueue,
+  getCleanupQueue,
+  getAllQueues,
+  getQueue as getBullMQQueue,
+  closeAllQueues,
+  pauseAllQueues,
+  resumeAllQueues,
+  getQueuesHealth,
+  drainQueue,
+
+  // Worker factories
+  createEmailWorker,
+  createNotificationWorker,
+  createSettlementWorker,
+  createReconciliationWorker,
+  createAnalyticsWorker,
+  createCleanupWorker,
+  closeAllWorkers,
+  pauseAllWorkers,
+  resumeAllWorkers,
+
+  // Scheduler
+  registerAllScheduledJobs,
+  removeAllScheduledJobs,
+  listScheduledJobs,
+  triggerScheduledJob,
+  SCHEDULED_JOBS,
+
+  // Constants
+  QUEUE_NAMES,
+} from "./bullmq";
+
+export type {
+  QueueName,
+  EmailJobData,
+  EmailJobResult,
+  EmailAttachment,
+  NotificationJobData as BullMQNotificationJobData,
+  NotificationJobResult as BullMQNotificationJobResult,
+  SettlementJobData,
+  SettlementJobResult,
+  ReconciliationJobData,
+  ReconciliationJobResult,
+  ReconciliationDiscrepancy,
+  AnalyticsJobData,
+  AnalyticsJobResult,
+  CleanupJobData,
+  CleanupJobResult,
+  JobProcessor,
+  WorkerConfig,
+  ScheduledJob,
+  RedisConnectionConfig as BullMQRedisConfig,
+} from "./bullmq";
+
+// ============================================================================
+// State Machine Library
+// ============================================================================
+
+export * as stateMachine from "./state-machine";
+export {
+  // Core state machine
+  createStateMachine,
+
+  // Order state machine
+  createOrderMachine,
+  restoreOrderMachine,
+  createOrderContext,
+  isTerminalOrderState,
+  isActiveFillState,
+  ORDER_STATES,
+  ORDER_EVENTS,
+
+  // KYC state machine
+  createKycMachine,
+  restoreKycMachine,
+  createKycContext,
+  isTerminalKycState,
+  canTradeInKycState,
+  getKycProgress,
+  KYC_STATES,
+  KYC_EVENTS,
+
+  // Payment state machine
+  createPaymentMachine,
+  restorePaymentMachine,
+  createPaymentContext,
+  isTerminalPaymentState,
+  isRetryablePaymentState,
+  isPaymentSettled,
+  DEFAULT_MAX_RETRIES,
+  PAYMENT_STATES,
+  PAYMENT_EVENTS,
+
+  // Prediction market state machine
+  createPredictionMachine,
+  restorePredictionMachine,
+  createPredictionContext,
+  isTerminalPredictionState,
+  isTradingActive,
+  canOpenPosition,
+  isDisputed,
+  PREDICTION_STATES,
+  PREDICTION_EVENTS,
+} from "./state-machine";
+
+export type {
+  StateMachine,
+  StateMachineConfig,
+  MachineSnapshot,
+  TransitionRecord,
+  TransitionResult,
+  TransitionSuccess,
+  TransitionDenied,
+  TransitionDef,
+  GuardFn,
+  HookFn,
+  MachineHooks,
+  OrderMachine,
+  OrderState,
+  OrderEvent,
+  OrderContext,
+  KycMachine,
+  KycState,
+  KycEvent,
+  KycContext,
+  PaymentMachine,
+  PaymentState,
+  PaymentEvent,
+  PaymentContext,
+  PredictionMachine,
+  PredictionState,
+  PredictionEvent,
+  PredictionContext,
+} from "./state-machine";
+
+// ============================================================================
+// API Error Catalog & Error Handling
+// ============================================================================
+
+export * as errors from "./errors";
+export {
+  // Error catalog
+  ErrorCodes,
+  getErrorByCode,
+  getErrorsByDomain,
+  isRetryable,
+  getHttpStatus,
+
+  // Error class & utilities
+  PullApiError,
+  isPullApiError,
+  toPullApiError,
+  createErrorByCode,
+  AuthErrors,
+  TradeErrors,
+  PaymentErrors,
+  KycErrors,
+  PredictionErrors,
+  SystemErrors,
+} from "./errors";
+
+export type {
+  ErrorEntry,
+  ErrorCodeKey,
+  NumericErrorCode,
+  ErrorHttpStatus,
+  ApiErrorResponse,
+} from "./errors";

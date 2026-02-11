@@ -1,0 +1,52 @@
+# Grafana Datasource - Prometheus
+#
+# Auto-provisioned via Grafana's provisioning system.
+# Mount this file into /etc/grafana/provisioning/datasources/ in the
+# Grafana container.
+#
+# Environment variables:
+#   PROMETHEUS_URL  - Prometheus server URL (default: http://prometheus:9090)
+#   PROMETHEUS_AUTH - "true" to enable basic auth
+#   PROMETHEUS_USER - Basic auth username
+#   PROMETHEUS_PASS - Basic auth password
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: pull-prometheus
+    access: proxy
+    url: ${PROMETHEUS_URL:-http://prometheus:9090}
+    isDefault: true
+    editable: false
+
+    jsonData:
+      # Scrape interval aligned with Prometheus config
+      timeInterval: "15s"
+
+      # HTTP settings
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: "2.53.0"
+
+      # Incremental querying for large time ranges
+      incrementalQuerying: true
+      incrementalQueryOverlapWindow: "10m"
+
+      # Exemplar support (for trace-to-metric correlation)
+      exemplarTraceIdDestinations:
+        - name: traceID
+          datasourceUid: pull-tempo
+          urlDisplayLabel: "View Trace"
+
+      # Recording rule caching
+      cacheLevel: "Low"
+      disableRecordingRules: false
+
+    secureJsonData:
+      basicAuthPassword: ${PROMETHEUS_PASS:-}
+
+    basicAuth: ${PROMETHEUS_AUTH:-false}
+    basicAuthUser: ${PROMETHEUS_USER:-}

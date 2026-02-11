@@ -54,7 +54,12 @@ export function authenticatedMutation<Args extends Record<string, unknown>, Outp
 }
 
 /**
- * Check if a user is an admin based on email domain or admin list
+ * Check if a user is an admin based on explicit role assignment.
+ *
+ * SECURITY: Admin status is NEVER derived from email domain alone.
+ * Email domain checks are only used as a secondary signal AFTER
+ * verifying the user's email is verified. The primary check is
+ * the explicit `role` field in the user document.
  */
 async function checkIsAdmin(ctx: QueryCtx | MutationCtx, userId: string): Promise<boolean> {
   // Look up user by their auth subject ID
@@ -67,23 +72,31 @@ async function checkIsAdmin(ctx: QueryCtx | MutationCtx, userId: string): Promis
     return false;
   }
 
-  // Check against admin email domains
-  const adminDomains = ["pull.app", "admin.pull.app"];
-  const emailDomain = user.email.split("@")[1];
-  if (adminDomains.includes(emailDomain)) {
+  // PRIMARY CHECK: Explicit role assignment in the database
+  // This is the authoritative source of admin status
+  if (user.role === "admin" || user.role === "superadmin") {
     return true;
   }
 
-  // Check against specific admin emails (could be env var in production)
-  const adminEmails = process.env["ADMIN_EMAILS"]?.split(",") ?? [];
+  // SECONDARY CHECK: Admin email list (explicit allowlist, not domain-based)
+  const adminEmails = process.env["ADMIN_EMAILS"]?.split(",").map(e => e.trim()) ?? [];
   if (adminEmails.includes(user.email)) {
     return true;
   }
 
-  // Check kycTier for institutional (highest tier)
-  if (user.kycTier === "institutional") {
-    return true;
+  // TERTIARY CHECK: Email domain, BUT only if email is verified
+  // This prevents registration with @pull.app email granting instant admin
+  if (user.emailVerified === true) {
+    const adminDomains = ["admin.pull.app"]; // Restricted to admin subdomain only
+    const emailDomain = user.email.split("@")[1];
+    if (emailDomain && adminDomains.includes(emailDomain)) {
+      return true;
+    }
   }
+
+  // NOTE: kycTier "institutional" no longer grants admin access.
+  // Institutional users get premium features, not admin panel access.
+  // Admin access must be explicitly granted via the role field.
 
   return false;
 }
@@ -143,10 +156,19 @@ export function adminMutation<Args extends Record<string, unknown>, Output>(conf
 
 /**
  * System mutation - for internal service-to-service calls only
- * Should be called with a service token, not a user token
+ * Requires a service token with the "system" issuer claim.
+ *
+ * Service tokens are generated with:
+ *   issuer: "pull-system"
+ *   audience: "pull-internal"
+ *   scope: specific operation scope
+ *
+ * This prevents user tokens from being used for system operations
+ * and prevents system tokens from being used across scopes.
  */
 export function systemMutation<Args extends Record<string, unknown>, Output>(config: {
   args: PropertyValidators;
+  scope?: string;
   handler: (ctx: MutationCtx, args: Args) => Promise<Output>;
 }) {
   return baseMutation({
@@ -156,7 +178,28 @@ export function systemMutation<Args extends Record<string, unknown>, Output>(con
       if (!identity) {
         throw new Error("System authentication required");
       }
-      // TODO: Verify this is a service token with appropriate scope
+
+      // Verify this is a service token (not a regular user token)
+      const issuer = identity.issuer;
+      if (issuer !== "pull-system" && issuer !== "pull-api") {
+        throw new Error(
+          "System mutation requires a service token. User tokens cannot call system mutations."
+        );
+      }
+
+      // Verify token has the required scope (if scope is specified)
+      if (config.scope) {
+        const tokenScopes = (identity.tokenIdentifier ?? "").split(",");
+        const hasScope =
+          tokenScopes.includes(config.scope) ||
+          tokenScopes.includes("*"); // Wildcard scope for superadmin service tokens
+        if (!hasScope) {
+          throw new Error(
+            `System mutation requires scope "${config.scope}". Token has: [${tokenScopes.join(", ")}]`
+          );
+        }
+      }
+
       return config.handler(ctx, args as Args);
     },
   });

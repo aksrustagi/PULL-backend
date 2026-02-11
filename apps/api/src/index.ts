@@ -1,8 +1,18 @@
 // Validate required environment variables at startup
 const REQUIRED_ENV_VARS = [
-  "JWT_SECRET",
   "CONVEX_URL",
 ] as const;
+
+// RS256 keys required in production, HS256 secret accepted in dev
+const JWT_CONFIGURED =
+  (process.env.JWT_PRIVATE_KEY && process.env.JWT_PUBLIC_KEY) || // RS256
+  process.env.JWT_SECRET; // HS256 fallback
+
+if (!JWT_CONFIGURED) {
+  throw new Error(
+    "FATAL: JWT keys not configured. Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY (RS256) or JWT_SECRET (HS256 dev only)."
+  );
+}
 
 const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 if (missing.length > 0) {
@@ -407,6 +417,12 @@ app.onError((err, c) => {
   );
 });
 
+// Initialize infrastructure layer (NeonDB, TigerBeetle, Kafka, PostHog, etc.)
+import { initializeInfrastructure, shutdownInfrastructure } from "@pull/core/services/infrastructure";
+initializeInfrastructure().catch((err) => {
+  log.warn("Infrastructure initialization warning (non-fatal in dev)", { error: err });
+});
+
 // Start server
 const port = parseInt(process.env.PORT ?? "3001", 10);
 const wsPort = parseInt(process.env.WS_PORT ?? "3002", 10);
@@ -432,22 +448,18 @@ log.info("PULL API server starting", {
 });
 
 // Graceful shutdown handling
-process.on("SIGTERM", async () => {
-  log.info("Received SIGTERM, initiating graceful shutdown");
+async function gracefulShutdown(signal: string) {
+  log.info(`Received ${signal}, initiating graceful shutdown`);
   stopUptime();
   await wsServer.stop();
+  await shutdownInfrastructure();
   // Allow time for final metrics/traces to be exported
   await new Promise((resolve) => setTimeout(resolve, 1000));
   process.exit(0);
-});
+}
 
-process.on("SIGINT", async () => {
-  log.info("Received SIGINT, initiating graceful shutdown");
-  stopUptime();
-  await wsServer.stop();
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-  process.exit(0);
-});
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 export default {
   port,
