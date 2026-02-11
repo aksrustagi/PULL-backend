@@ -1,0 +1,26 @@
+# Grafana Dashboard Provisioning
+#
+# Auto-loads all JSON dashboards from the configured path on startup
+# and watches for changes.
+#
+# Mount this file into /etc/grafana/provisioning/dashboards/ and
+# mount the dashboard JSON files into /var/lib/grafana/dashboards/
+# inside the Grafana container.
+#
+# Docker Compose volume example:
+#   volumes:
+#     - ./infrastructure/grafana/provisioning/dashboards.yaml:/etc/grafana/provisioning/dashboards/pull.yaml
+#     - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards/pull
+
+apiVersion: 1
+
+providers:
+  - name: "PULL Platform Dashboards"
+    orgId: 1
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/pull
+      foldersFromFilesStructure: false

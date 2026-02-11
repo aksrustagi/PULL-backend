@@ -3,24 +3,8 @@ import * as jose from "jose";
 import type { Env } from "../index";
 import { isTokenBlacklisted } from "../lib/redis";
 import { convex, api } from "../lib/convex";
+import { getVerificationKey, getAlgorithm } from "../lib/jwt-config";
 import type { Id } from "@pull/db/convex/_generated/dataModel";
-
-// Fail fast if JWT_SECRET is not configured
-const jwtSecretValue = process.env.JWT_SECRET;
-if (!jwtSecretValue) {
-  throw new Error(
-    "FATAL: JWT_SECRET environment variable is required. " +
-    "Generate one with: openssl rand -base64 32"
-  );
-}
-if (jwtSecretValue.length < 32) {
-  throw new Error("FATAL: JWT_SECRET must be at least 32 characters long");
-}
-const JWT_SECRET = new TextEncoder().encode(jwtSecretValue);
-
-// Token expiry times in seconds
-export const ACCESS_TOKEN_EXPIRY = 15 * 60; // 15 minutes
-export const REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days
 
 export const authMiddleware = createMiddleware<Env>(async (c, next) => {
   const authHeader = c.req.header("Authorization");
@@ -75,8 +59,16 @@ export const authMiddleware = createMiddleware<Env>(async (c, next) => {
       );
     }
 
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET, {
-      algorithms: ["HS256"],
+    // Verify with RS256 public key (or HS256 secret in dev)
+    const [verificationKey, alg] = await Promise.all([
+      getVerificationKey(),
+      getAlgorithm(),
+    ]);
+
+    const { payload } = await jose.jwtVerify(token, verificationKey, {
+      algorithms: [alg],
+      issuer: "pull-api",
+      audience: "pull-app",
     });
 
     if (!payload.sub) {
@@ -182,22 +174,22 @@ export const adminOnly = createMiddleware<Env>(async (c, next) => {
 });
 
 /**
- * Generate a JWT token
- */
-/**
- * Generate a JWT token with proper claims
+ * Generate a JWT token with RS256
  */
 export async function generateToken(
   userId: string,
   expiresIn: string = "15m"
 ): Promise<string> {
+  const { getSigningKey, getAlgorithm: getAlg } = await import("../lib/jwt-config");
+  const [signingKey, alg] = await Promise.all([getSigningKey(), getAlg()]);
+
   const token = await new jose.SignJWT({ sub: userId })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg })
     .setIssuedAt()
     .setIssuer("pull-api")
     .setAudience("pull-app")
     .setExpirationTime(expiresIn)
-    .sign(JWT_SECRET);
+    .sign(signingKey);
 
   return token;
 }
@@ -208,13 +200,16 @@ export async function generateToken(
 export async function generateRefreshToken(
   userId: string
 ): Promise<string> {
+  const { getSigningKey, getAlgorithm: getAlg } = await import("../lib/jwt-config");
+  const [signingKey, alg] = await Promise.all([getSigningKey(), getAlg()]);
+
   const token = await new jose.SignJWT({ sub: userId, type: "refresh" })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg })
     .setIssuedAt()
     .setIssuer("pull-api")
     .setAudience("pull-app")
     .setExpirationTime("7d")
-    .sign(JWT_SECRET);
+    .sign(signingKey);
 
   return token;
 }
@@ -226,7 +221,13 @@ export async function verifyToken(
   token: string
 ): Promise<{ userId: string } | null> {
   try {
-    const { payload } = await jose.jwtVerify(token, JWT_SECRET);
+    const [verificationKey, alg] = await Promise.all([
+      getVerificationKey(),
+      getAlgorithm(),
+    ]);
+    const { payload } = await jose.jwtVerify(token, verificationKey, {
+      algorithms: [alg],
+    });
     return payload.sub ? { userId: payload.sub } : null;
   } catch {
     return null;

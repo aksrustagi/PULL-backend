@@ -1,0 +1,54 @@
+# Grafana Datasource - NeonDB PostgreSQL
+#
+# Auto-provisioned via Grafana's provisioning system.
+# Mount this file into /etc/grafana/provisioning/datasources/ in the
+# Grafana container.
+#
+# NeonDB is the PULL platform's financial system of record.  This
+# datasource allows Grafana dashboards to query PostgreSQL directly
+# for operational and business intelligence queries.
+#
+# Environment variables:
+#   NEON_DB_HOST     - NeonDB hostname (e.g., ep-xyz.us-east-2.aws.neon.tech)
+#   NEON_DB_PORT     - Port number (default: 5432)
+#   NEON_DB_NAME     - Database name (default: pull_production)
+#   NEON_DB_USER     - Read-only database user for Grafana
+#   NEON_DB_PASSWORD - Database password (stored in secureJsonData)
+#
+# IMPORTANT: Use a read-only database user for Grafana to prevent
+# accidental writes from ad-hoc queries.
+
+apiVersion: 1
+
+datasources:
+  - name: NeonDB
+    type: postgres
+    uid: pull-neondb
+    access: proxy
+    url: ${NEON_DB_HOST:-localhost}:${NEON_DB_PORT:-5432}
+    user: ${NEON_DB_USER:-grafana_readonly}
+    database: ${NEON_DB_NAME:-pull_production}
+    isDefault: false
+    editable: false
+
+    jsonData:
+      # Connection settings
+      sslmode: require
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+
+      # PostgreSQL version (16.x)
+      postgresVersion: 1600
+      timescaledb: false
+
+      # Query timeout (seconds) - prevent runaway queries
+      queryTimeout: "30"
+
+      # TLS / SSL
+      tlsAuth: false
+      tlsAuthWithCACert: false
+      tlsSkipVerify: false
+
+    secureJsonData:
+      password: ${NEON_DB_PASSWORD:-}

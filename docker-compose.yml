@@ -86,9 +86,64 @@ services:
     stdin_open: true
     tty: true
 
+  # TigerBeetle - Double-Entry Bookkeeping Engine
+  # Production: Use managed TigerBeetle cluster. Local: Single-node for dev.
+  tigerbeetle:
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.16.11
+    container_name: pull-tigerbeetle
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - tigerbeetle_data:/var/lib/tigerbeetle
+    command: ["start", "--addresses=0.0.0.0:3000", "/var/lib/tigerbeetle/0_0.tigerbeetle"]
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Grafana - Metrics Dashboards
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: pull-grafana
+    user: "472:472"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-pulldev}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - postgres
+
+  # Prometheus - Metrics Collection (for Grafana)
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: pull-prometheus
+    user: "65534:65534"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+
 volumes:
   postgres_data:
   redis_data:
+  tigerbeetle_data:
+  grafana_data:
+  prometheus_data:
 
 networks:
   default:
