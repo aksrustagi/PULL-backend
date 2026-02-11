@@ -12,13 +12,13 @@
   },
   "dependencies": {
     "@pull/types": "workspace:*",
-    "@sentry/node": "^7.100.0",
+    "@sentry/node": "^10.38.0",
     "@temporalio/activity": "^1.9.0",
     "@temporalio/client": "^1.9.0",
     "@temporalio/worker": "^1.9.0",
     "@temporalio/workflow": "^1.9.0",
     "convex": "^1.10.0",
-    "zod": "^3.22.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@pull/config": "workspace:*",
